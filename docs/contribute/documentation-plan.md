@@ -47,8 +47,10 @@ wiki either disabled or reduced to a single page pointing at the site.
 
 ### 0.2 Publishing target
 
-Markdown in `/docs` → **MkDocs Material** → GitHub Pages → CNAME `docs.zeroz4j.com`
-(`www.zeroz4j.com` already exists as a landing page).
+Markdown in `/docs` → **MkDocs Material** → GitHub Pages → CNAME `stack.zeroz4j.com`
+(`www.zeroz4j.com` is the umbrella landing page for the family; ZeroZ DB publishes the same way to
+`db.zeroz4j.com`). The subdomain names the product, not the artefact type, because `zeroz4j.com` is
+the family and not this framework.
 
 Why MkDocs Material over Docusaurus / Starlight / VitePress:
 
@@ -507,7 +509,7 @@ Enforced by the style guide (Part 5):
 
 ### 4.3 `llms.txt`
 
-Add `/llms.txt` (llmstxt.org convention) at the repo root and served at `docs.zeroz4j.com/llms.txt`:
+Add `/llms.txt` (llmstxt.org convention) at the repo root and served at `stack.zeroz4j.com/llms.txt`:
 an H1, a blockquote summary, then curated link lists (Docs / Guides / Decision guides / Reference /
 Examples) with a one-line description each. This serves agents that don't use Context7, and doubles
 as a machine-readable table of contents. Generate it from `mkdocs.yml` nav in CI so it cannot drift.

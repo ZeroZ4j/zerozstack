@@ -2,7 +2,7 @@ site_name: ZeroZ4j
 site_description: >-
   Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a
   persistent WebSocket, and EclipseStore object-graph persistence.
-site_url: https://docs.zeroz4j.com/
+site_url: https://stack.zeroz4j.com/
 repo_url: https://github.com/ZeroZ4j/zerozstack
 repo_name: ZeroZ4j/zerozstack
 edit_uri: edit/main/docs/
@@ -81,6 +81,7 @@ nav:
 
   - Guides:
       - Saving data: guides/persistence.md
+      - Store modes — embedded or hosted: store-modes.md
       - Authentication and authorization: guides/security-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
       - Troubleshooting: guides/troubleshooting.md
