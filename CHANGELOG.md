@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [0.4.0] — Unreleased
+## [0.4.0] — 2026-07-28
 
 The last release was `v0.2.0`. **Version 0.3.0 was never tagged**, so its changes — UUID, `Instant`
 and enum wire support, and per-module serializer registrars — ship as part of this release. If you are
