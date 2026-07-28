@@ -19,6 +19,28 @@ to produce *nothing happening*: no exception, no log line, no clue.
 
 ### Breaking
 
+- **Renamed to ZeroZ Stack.** Every module is now `zerozstack-*` instead of `zeroz4j-*`
+  (`zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`,
+  `zerozstack-ui-components`, `zerozstack-store-eclipsestore`, `zerozstack-apt`, `zerozstack-bom`,
+  `zerozstack-archetype`). The groupId stays `com.zeroz4j`, and Java packages are unchanged.
+  `zeroz4j` is now the family name only — the umbrella over this framework and
+  [ZeroZ DB](https://github.com/ZeroZ4j/zerozdb) — so no product carries it and neither reads as
+  the other's module. The repository moved to `github.com/ZeroZ4j/zerozstack`.
+
+### Added
+
+- **Persistence runs on ZeroZ DB**, bringing transactions, indexes, constraints and an optional
+  network server. Inject `ZeroZDbNode` and send `DbCommand`/`DbQuery`: everything a command
+  enlists commits atomically, and a command that throws persists nothing and restores the objects
+  it touched in memory.
+- **`zeroz4j.store.mode` chooses where data lives** — `EMBEDDED` (default, unchanged behaviour),
+  `AUTO_SERVER` (own the store if free, otherwise join whoever has it, take over if they die), or
+  `CLIENT` (connect to a ZeroZ DB server, so instances hold no data and can be restarted or scaled
+  freely). The same service code runs in all three, so this is a deployment decision rather than an
+  application one. See [docs/store-modes.md](docs/store-modes.md).
+- **`node.localReads()`** for heap-speed reads: the live graph when this process owns the store, a
+  continuously refreshed replica when it does not.
+
 - **`zerozstack-client-wasm` is renamed to `zerozstack-client`.** A module should not be named after its
   compilation backend; the new name stays correct after the eventual move to WasmGC. Update the
   artifactId in your client module. The Java package `com.zeroz4j.client` is unchanged.
@@ -143,6 +165,6 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[0.4.0]: https://github.com/fschoning/zeroz4j/compare/v0.2.0...main
-[0.2.0]: https://github.com/fschoning/zeroz4j/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/fschoning/zeroz4j/releases/tag/v0.1.0
+[0.4.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.2.0...main
+[0.2.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/ZeroZ4j/zerozstack/releases/tag/v0.1.0

@@ -63,34 +63,51 @@ ZeroZ4j is fully modular, allowing developers to pick exactly what they need:
 
 ---
 
-## 5. Using ZeroZ4j via Maven (JitPack)
+## 5. Using ZeroZ Stack via Maven
 
-You can easily include `zeroz4j` in your own Maven projects using [JitPack](https://jitpack.io). Since this repository is hosted on GitHub, JitPack will automatically build and serve the dependency for you.
+Not yet published to a repository. Build and install locally:
 
-Add the JitPack repository to your `pom.xml`:
-
-```xml
-<repositories>
-    <repository>
-        <id>jitpack.io</id>
-        <url>https://jitpack.io</url>
-    </repository>
-</repositories>
+```bash
+git clone https://github.com/ZeroZ4j/zerozstack.git
+cd zerozstack && mvn clean install -DskipTests
 ```
 
-Then, add the dependency pointing to this GitHub repository and the specific release tag (e.g., `v1.0.0` or `main-SNAPSHOT`):
+Then depend on the modules you need. The BOM keeps versions aligned:
 
 ```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-bom</artifactId>
+            <version>0.4.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
 <dependencies>
     <dependency>
-        <groupId>com.github.fschoning</groupId>
-        <artifactId>zeroz4j</artifactId>
-        <version>v1.0.0</version>
+        <groupId>com.zeroz4j</groupId>
+        <artifactId>zerozstack-server-core</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>com.zeroz4j</groupId>
+        <artifactId>zerozstack-store-eclipsestore</artifactId>
     </dependency>
 </dependencies>
 ```
 
----
+Or start from the archetype, which generates the three-module shape for you:
+
+```bash
+mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.4.0
+```
+
+Publication to Maven Central is planned; see
+[ZeroZ DB's RELEASING.md](https://github.com/ZeroZ4j/zerozdb/blob/main/RELEASING.md) for the
+process the family uses.
 
 ## 6. Developer Resources
 

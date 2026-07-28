@@ -25,17 +25,25 @@ import com.zeroz4j.server.RmiRequestContext;
 import com.zeroz4j.server.EventPublisher;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
+import com.zeroz4j.db.net.ZeroZDbNode;
 import java.util.ArrayList;
 import java.util.List;
 
 @ApplicationScoped
 public class ChatServiceImpl implements ChatService {
-    @Inject private EmbeddedStorageManager storage;
+        /**
+     * The database node. Writes go inside a write-block so they commit atomically.
+     *
+     * <p>This example uses {@code db.localDb()}, the in-process engine, which is present because
+     * the example runs {@code zeroz4j.store.mode=EMBEDDED}. That keeps the persistence code short
+     * so it does not obscure what this example is really about. Code that must also run against a
+     * database server sends {@code DbCommand} objects instead - see the inventory-crud example.</p>
+     */
+    @Inject private ZeroZDbNode db;
     @Inject private EventPublisher events;
 
     private DataRoot getRoot() {
-        return (DataRoot) storage.root();
+        return (DataRoot) db.localDb().root();
     }
 
     @Override
@@ -47,15 +55,19 @@ public class ChatServiceImpl implements ChatService {
     public void sendMessage(String text) {
         String sender = RmiRequestContext.getPrincipal() != null ? RmiRequestContext.getPrincipal().getName() : "Anonymous";
         ChatMessage msg = new ChatMessage(sender, text, System.currentTimeMillis());
-        getRoot().getMessages().add(msg);
-        storage.store(getRoot().getMessages());
+        db.localDb().write(ctx -> {
+            ctx.edit(getRoot().getMessages());
+            getRoot().getMessages().add(msg);
+        });
         events.publish(ChatEvents.MESSAGE_POSTED, msg);
     }
 
     @Override
     public void clearHistory() {
-        getRoot().getMessages().clear();
-        storage.store(getRoot().getMessages());
+        db.localDb().write(ctx -> {
+            ctx.edit(getRoot().getMessages());
+            getRoot().getMessages().clear();
+        });
         events.publish(ChatEvents.HISTORY_CLEARED);
     }
 }

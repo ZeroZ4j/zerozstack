@@ -45,17 +45,17 @@ If you want your entities to automatically synchronize memory state between the 
 
 ```java
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
+import com.zeroz4j.db.net.ZeroZDbNode;
 import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class UserServiceImpl implements UserService {
     
     @Inject
-    private EmbeddedStorageManager storage; 
+    private ZeroZDbNode db;
 
     private DataRoot getRoot() {
-        return (DataRoot) storage.root();
+        return (DataRoot) db.localDb().root();
     }
 
     @Override

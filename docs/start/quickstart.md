@@ -17,7 +17,7 @@ JDK 21 is not optional: the server uses virtual threads, and the build targets r
 ## 1. Clone and build
 
 ```bash
-git clone https://github.com/fschoning/zeroz4j.git
+git clone https://github.com/ZeroZ4j/zerozstack.git
 cd zeroz4j
 mvn clean install -DskipTests
 ```

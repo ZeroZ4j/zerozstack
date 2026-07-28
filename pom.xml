@@ -71,7 +71,7 @@
              the Lazy type, and a mismatch surfaces as an obscure "cannot access UsageMarkable" rather
              than a version error. -->
         <eclipsestore.version>4.1.0</eclipsestore.version>
-        <zerozdb.version>0.1.0-SNAPSHOT</zerozdb.version>
+        <zerozdb.version>0.1.0</zerozdb.version>
         <eclipsestore.serializer.version>${eclipsestore.version}</eclipsestore.serializer.version>
         <jakarta.ee.version>10.0.0</jakarta.ee.version>
         <maven.compiler.source>21</maven.compiler.source>

@@ -93,20 +93,20 @@ Implement the service. The method receives the exact object sent from the client
 ```java
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
+import com.zeroz4j.db.net.ZeroZDbNode;
 
 @ApplicationScoped
 public class ChatServiceImpl implements ChatService {
     @Inject
-    private EmbeddedStorageManager storage;
+    private ZeroZDbNode db;
 
     @Override
     public void sendMessage(ChatMessage msg) {
         // Automatically persist or broadcast!
         System.out.println("Received: " + msg.getText());
         
-        // Example: save to your data root graph
-        // DataRoot root = (DataRoot) storage.root();
+        // Example: save to your data root graph, atomically
+        // db.localDb().write(ctx -> { ctx.edit(root.getMessages()); root.getMessages().add(msg); });
         // root.getMessages().add(msg);
         // storage.store(root.getMessages());
     }

@@ -36,11 +36,12 @@ The framework does not know your storage root — implement `LiveMutationListene
 ```java
 @ApplicationScoped
 public class ProfilePersistence implements LiveMutationListener {
-    @Inject EmbeddedStorageManager storage;
+    @Inject ZeroZDbNode db;
 
     @Override
     public void onMutated(Object model, Principal principal) {
-        storage.store(model);
+        // A write-block, so the change commits atomically and is on disk when this returns.
+        db.localDb().write(ctx -> ctx.store(model));
     }
 }
 ```

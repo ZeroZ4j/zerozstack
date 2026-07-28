@@ -17,143 +17,124 @@
  */
 package com.zeroz4j.example.server;
 
+import com.zeroz4j.db.net.ZeroZDbNode;
 import com.zeroz4j.example.model.Product;
 import com.zeroz4j.example.server.store.DataRoot;
-import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Each call to the storage manager is one commit. Writing the product list and the root in two calls
- * meant two commits: a crash in between saved the product and lost the id counter, so the next save
- * reused an id. These tests hold the write to a single call.
+ * Exercises the service against a real store rather than a mock.
+ *
+ * <p>The previous version recorded calls to a fake storage manager and asserted that the product
+ * list and the id counter were written in the <em>same</em> call, because two calls meant two
+ * commits and a crash between them lost the counter. That hazard no longer exists to test for: a
+ * command commits everything it enlists atomically or nothing at all, so the property is now
+ * structural. What is worth testing is the behaviour a user relies on — and this checks it by
+ * reopening the store, which a mock could never do.</p>
  */
 class ProductServiceImplTest {
 
-    /** Records what each persist call wrote, so the number of commits is observable. */
-    private static final class RecordingStorage implements InvocationHandler {
-        final DataRoot root = new DataRoot();
-        final List<List<Object>> commits = new ArrayList<>();
+    @TempDir
+    Path storeDir;
 
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) {
-            switch (method.getName()) {
-                case "root":
-                    return root;
-                case "store":
-                    commits.add(List.of(args[0]));
-                    return 1L;
-                case "storeAll":
-                    Object first = args[0];
-                    commits.add(first instanceof Object[]
-                            ? Arrays.asList((Object[]) first)
-                            : List.of(first));
-                    return new long[0];
-                case "toString":
-                    return "RecordingStorage";
-                case "equals":
-                    return proxy == args[0];
-                case "hashCode":
-                    return System.identityHashCode(proxy);
-                default:
-                    return null;
-            }
-        }
-    }
-
-    private RecordingStorage storage;
+    private ZeroZDbNode db;
     private ProductServiceImpl service;
 
     @BeforeEach
     void setUp() throws Exception {
-        storage = new RecordingStorage();
-        EmbeddedStorageManager proxy = (EmbeddedStorageManager) Proxy.newProxyInstance(
-                EmbeddedStorageManager.class.getClassLoader(),
-                new Class<?>[] {EmbeddedStorageManager.class},
-                storage);
-
+        db = ZeroZDbNode.embedded(storeDir.resolve("store"), DataRoot::new);
         service = new ProductServiceImpl();
-        Field field = ProductServiceImpl.class.getDeclaredField("storage");
+        inject(service, db);
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (db != null) {
+            db.close();
+        }
+    }
+
+    private static void inject(ProductServiceImpl target, ZeroZDbNode node) throws Exception {
+        Field field = ProductServiceImpl.class.getDeclaredField("db");
         field.setAccessible(true);
-        field.set(service, proxy);
+        field.set(target, node);
     }
 
     @Test
-    void savingANewProductWritesTheListAndTheRootInOneCommit() {
-        service.save(new Product(0, "Desk Lamp", "Furniture", 5, 19.99));
-
-        assertEquals(1, storage.commits.size(),
-                "the product and the id counter must be written in a single commit, "
-                + "otherwise a crash between them loses the counter");
-        List<Object> written = storage.commits.get(0);
-        assertTrue(written.contains(storage.root.getProducts()), "the product list must be written");
-        assertTrue(written.contains(storage.root), "the root must be written in the same commit");
+    void listSeedsTheCatalogueOnFirstUseAndNotAgain() {
+        assertEquals(4, service.list().size(), "first call seeds the catalogue");
+        assertEquals(4, service.list().size(), "seeding must not repeat");
     }
 
     @Test
-    void savingANewProductAssignsAnIdAndBumpsTheCounter() {
+    void savingANewProductAssignsAnId() {
+        service.list();
         Product saved = service.save(new Product(0, "Desk Lamp", "Furniture", 5, 19.99));
-
-        assertEquals(1L, saved.getId(), "the first product gets id 1");
-        assertEquals(2L, storage.root.getNextId(), "the counter must advance past it");
-        assertEquals(1, storage.root.getProducts().size());
+        assertNotEquals(0, saved.getId(), "a new product is given an id");
     }
 
     @Test
     void twoSavesDoNotReuseAnId() {
-        // The bug this guards against: with two commits, a crash after the list write and before the
-        // root write left the counter behind, so the next save handed out an id already in use.
-        Product first = service.save(new Product(0, "Desk Lamp", "Furniture", 5, 19.99));
-        Product second = service.save(new Product(0, "Monitor Arm", "Furniture", 3, 89.00));
-
-        assertEquals(1L, first.getId());
-        assertEquals(2L, second.getId());
-        assertEquals(3L, storage.root.getNextId());
+        service.list();
+        long first = service.save(new Product(0, "A", "X", 1, 1.0)).getId();
+        long second = service.save(new Product(0, "B", "X", 1, 1.0)).getId();
+        assertNotEquals(first, second, "the id counter advanced with the insert");
     }
 
     @Test
-    void seedingWritesTheListAndTheRootInOneCommit() {
-        service.list();   // seeds on first read when the store is empty
+    void anUpdateChangesTheProductInPlace() {
+        service.list();
+        Product saved = service.save(new Product(0, "Old name", "X", 1, 1.0));
 
-        assertEquals(1, storage.commits.size(), "seeding must also be a single commit");
-        List<Object> written = storage.commits.get(0);
-        assertTrue(written.contains(storage.root.getProducts()));
-        assertTrue(written.contains(storage.root));
-        assertEquals(4, storage.root.getProducts().size());
-        assertEquals(5L, storage.root.getNextId(), "the counter must follow the seeded products");
+        service.save(new Product(saved.getId(), "New name", "X", 2, 2.0));
+
+        Product found = service.list().stream()
+                .filter(p -> p.getId() == saved.getId())
+                .findFirst().orElseThrow();
+        assertEquals("New name", found.getName());
+        assertEquals(2, found.getQuantity());
     }
 
     @Test
-    void updatingAnExistingProductWritesOnlyTheList() {
-        Product saved = service.save(new Product(0, "Desk Lamp", "Furniture", 5, 19.99));
-        storage.commits.clear();
-
-        service.save(new Product(saved.getId(), "Desk Lamp", "Furniture", 12, 24.99));
-
-        assertEquals(1, storage.commits.size());
-        assertEquals(12, storage.root.getProducts().get(0).getQuantity(), "the update must be applied");
-        assertEquals(2L, storage.root.getNextId(), "an update must not advance the id counter");
-    }
-
-    @Test
-    void deletingWritesOnlyTheList() {
-        Product saved = service.save(new Product(0, "Desk Lamp", "Furniture", 5, 19.99));
-        storage.commits.clear();
+    void deleteRemovesTheProduct() {
+        service.list();
+        Product saved = service.save(new Product(0, "Doomed", "X", 1, 1.0));
 
         service.delete(saved.getId());
 
-        assertEquals(1, storage.commits.size());
-        assertTrue(storage.root.getProducts().isEmpty());
+        assertFalse(service.list().stream().anyMatch(p -> p.getId() == saved.getId()));
+    }
+
+    /**
+     * The property the old mock-based assertions were really reaching for: after a restart, the
+     * product and the counter that named it are both present. A save that persisted one without
+     * the other would hand out a duplicate id here.
+     */
+    @Test
+    void productsAndTheIdCounterSurviveAReopen() throws Exception {
+        service.list();
+        long firstId = service.save(new Product(0, "Persisted", "X", 1, 1.0)).getId();
+        int countBefore = service.list().size();
+        db.close();
+
+        db = ZeroZDbNode.embedded(storeDir.resolve("store"), DataRoot::new);
+        service = new ProductServiceImpl();
+        inject(service, db);
+
+        assertEquals(countBefore, service.list().size(), "the catalogue survived the restart");
+        long nextId = service.save(new Product(0, "After restart", "X", 1, 1.0)).getId();
+        assertTrue(nextId > firstId, "the counter survived too, so ids are not reused");
     }
 }

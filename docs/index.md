@@ -96,7 +96,7 @@ your machine and fails for the second user, or works until someone reloads the p
 ## Working with an AI agent
 
 The stack is designed so a coding agent holds one language and one model of your data instead of four.
-To get the benefit, point your agent at [AGENTS.md](https://github.com/fschoning/zeroz4j/blob/main/AGENTS.md)
+To get the benefit, point your agent at [AGENTS.md](https://github.com/ZeroZ4j/zerozstack/blob/main/AGENTS.md)
 in the repository root; it carries the build commands, the decision procedure and the silent-failure
 list in a form an agent can act on. The repository also ships a `context7.json`, so that guidance
 reaches agents working through Context7 once the library is indexed.

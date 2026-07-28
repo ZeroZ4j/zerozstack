@@ -2,7 +2,7 @@
 
 > An experimental pure-Java full-stack framework (version 0.4.0). The UI is Java compiled for the
 > browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
-> WebSocket, and the server persists the JVM object graph directly with EclipseStore. You write no
+> WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
 Key things to know before generating ZeroZ4j code:
@@ -21,6 +21,10 @@ Key things to know before generating ZeroZ4j code:
 - Choosing between local signals, RMI, server events, shared signals and LiveSync is the framework's
   hardest decision and its most common source of bugs. Read the decision guide before generating
   state-propagation code.
+- Persistence is transactional. Inject `ZeroZDbNode` and send a `DbCommand`: everything it enlists
+  commits atomically. `zeroz4j.store.mode` = EMBEDDED | AUTO_SERVER | CLIENT selects where the data
+  lives without changing application code. Commands and queries must be plain classes, never
+  records.
 - Many failure modes are silent rather than exceptional. Read the troubleshooting page.
 
 ## Decision guides

@@ -3,8 +3,8 @@ site_description: >-
   Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a
   persistent WebSocket, and EclipseStore object-graph persistence.
 site_url: https://docs.zeroz4j.com/
-repo_url: https://github.com/fschoning/zeroz4j
-repo_name: fschoning/zeroz4j
+repo_url: https://github.com/ZeroZ4j/zerozstack
+repo_name: ZeroZ4j/zerozstack
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; Franz Schöning — Apache 2.0
 
@@ -114,6 +114,6 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/fschoning/zeroz4j
+      link: https://github.com/ZeroZ4j/zerozstack
     - icon: fontawesome/solid/globe
       link: https://www.zeroz4j.com

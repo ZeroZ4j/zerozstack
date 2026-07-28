@@ -22,7 +22,7 @@ import com.zeroz4j.example.model.Registration;
 import com.zeroz4j.example.server.store.DataRoot;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.store.storage.embedded.types.EmbeddedStorageManager;
+import com.zeroz4j.db.net.ZeroZDbNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,11 +30,19 @@ import java.util.List;
 @ApplicationScoped
 public class RegistrationServiceImpl implements RegistrationService {
 
+    /**
+     * The database node. Writes go inside a write-block so they commit atomically.
+     *
+     * <p>This example uses {@code db.localDb()}, the in-process engine, which is present because
+     * the example runs {@code zeroz4j.store.mode=EMBEDDED}. That keeps the persistence code short
+     * so it does not obscure what this example is really about. Code that must also run against a
+     * database server sends {@code DbCommand} objects instead - see the inventory-crud example.</p>
+     */
     @Inject
-    private EmbeddedStorageManager storage;
+    private ZeroZDbNode db;
 
     private DataRoot getRoot() {
-        return (DataRoot) storage.root();
+        return (DataRoot) db.localDb().root();
     }
 
     @Override
@@ -48,8 +56,10 @@ public class RegistrationServiceImpl implements RegistrationService {
                 throw new IllegalArgumentException("Email address already registered: " + r.getEmail());
             }
         }
-        root.getRegistrations().add(r);
-        storage.store(root.getRegistrations());
+        db.localDb().write(ctx -> {
+            ctx.edit(root.getRegistrations());
+            root.getRegistrations().add(r);
+        });
     }
 
     @Override

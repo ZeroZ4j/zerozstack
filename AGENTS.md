@@ -49,7 +49,7 @@ cache.
 | `zerozstack-bom` | Dependency BOM — the intended way for applications to import versions. |
 | `zerozstack-server-core` | CDI engine, RMI dispatcher, `SyncEngine`, `EventPublisher`, dev auth. |
 | `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. |
-| `zerozstack-store-eclipsestore` | Object-graph persistence adapter, multi-tenant storage. |
+| `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
 | `zerozstack-examples` | Seven runnable reference applications. |
 
@@ -77,6 +77,101 @@ implementations).
    `BinaryPackableRegistrar` or `WasmRmiClient.initialize` yourself — registrars are discovered via
    `META-INF/services`.
 8. **Get an RMI stub with `new MyService_Stub()`.** There is no `WasmRmiClient.create(Class)`.
+
+## Persistence and transactions
+
+Persistence runs on **[ZeroZ DB](https://github.com/ZeroZ4j/zerozdb)** (`com.zeroz4j:zerozdb`),
+the sibling project in the ZeroZ4J family. Inject `ZeroZDbNode`, not `EmbeddedStorageManager`.
+
+Where the data lives is a **deployment** choice, set by `zeroz4j.store.mode`:
+
+| mode | who owns the data |
+|---|---|
+| `EMBEDDED` (default) | this process, no socket, one copy of the graph |
+| `AUTO_SERVER` | this process if the store is free, otherwise whoever already owns it |
+| `CLIENT` | a separate `zerozdb` server, configured with `zeroz4j.store.server.host` and `.port` |
+
+### Writing
+
+Every write is a transaction: everything it enlists commits atomically, and if it throws, nothing
+is persisted and the objects it touched are restored in memory.
+
+For code that must run in **every** mode, send a command — it executes wherever the data is:
+
+```java
+@Inject ZeroZDbNode db;
+
+long id = db.execute(new AddProduct("Laptop stand"));
+int total = db.query(new CountProducts());
+```
+
+```java
+public class AddProduct implements DbCommand<Long> {
+    public String name;
+
+    public AddProduct() { }                    // needed for deserialisation
+    public AddProduct(String name) { this.name = name; }
+
+    @Override
+    public Long execute(WriteContext ctx, Object root) {
+        Catalog catalog = (Catalog) root;
+        ctx.edit(catalog);                     // the counter is about to change
+        ctx.edit(catalog.getProducts());       // and so is the list
+        long id = catalog.getNextId();
+        catalog.setNextId(id + 1);
+        catalog.getProducts().add(new Product(id, name));
+        return id;                             // both land in ONE commit
+    }
+}
+```
+
+For code that only ever runs embedded — which is most example and single-instance code — a
+write-block is shorter and equivalent:
+
+```java
+db.localDb().write(ctx -> {
+    ctx.edit(root.getTasks());
+    root.getTasks().add(task);
+});
+```
+
+`localDb()` is the in-process engine and is **null in CLIENT mode**, so using it pins that code to
+`EMBEDDED` or `AUTO_SERVER`. That is a fine trade for an example and the wrong one for a library.
+
+### The rules that break code most often
+
+**Enlisting does not cascade.** `ctx.store(obj)` covers that object only. Changing a field on the
+root *and* a collection hanging off it means enlisting both. Getting this wrong loses the change
+silently — it is in memory and never reaches disk.
+
+**Enlist before mutating** with `ctx.edit(obj)`. The rollback snapshot is taken at enlistment, so
+one taken afterwards already contains the change.
+
+**`DbCommand` and `DbQuery` must be plain classes, never records.** EclipseStore's serializer
+reaches fields directly and the JVM refuses that for records without
+`--add-exports java.base/jdk.internal.misc=ALL-UNNAMED`. It fails at the first remote call rather
+than at compile time, so it looks like a networking fault. Public fields, public no-arg constructor.
+
+**A query returns values, not live graph nodes.** Whatever it returns is serialized to the caller,
+so returning a deeply-connected entity ships its reachable graph. Copy or reduce first.
+
+**Never start a write inside a read block.** A read lock cannot be upgraded; the engine throws
+rather than deadlocking.
+
+### Reading fast on a client
+
+```java
+try (var local = db.<Catalog>localReads()) {
+    int count = local.read(c -> c.getProducts().size());   // heap access, no round trip
+}
+```
+
+The live graph when this process owns the store, a continuously refreshed replica when it does not
+— trailing the owner by about one round trip. Use `db.query(...)` when a read must be exactly
+current, security checks especially.
+
+Full detail: [docs/store-modes.md](docs/store-modes.md), [docs/guides/persistence.md](docs/guides/persistence.md),
+and the [ZeroZ DB guide](https://github.com/ZeroZ4j/zerozdb/blob/main/docs/Guide.md).
 
 ## Choosing a state-propagation mechanism
 

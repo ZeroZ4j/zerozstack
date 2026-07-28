@@ -669,7 +669,7 @@ against a protocol that isn't there.
 
 Note on the JitPack section: the corrected consumption path is the `zerozstack-bom`
 (`pom.xml:62`, used by `archetype-resources/pom.xml:26-28`), with JitPack coordinates
-`com.github.fschoning.zeroz4j:<module>` — not the non-existent single `com.github.fschoning:zeroz4j`
+`com.zeroz4j.zeroz4j:<module>` — not the non-existent single `com.zeroz4j:zeroz4j`
 artifact at the non-existent tag `v1.0.0`. Verify by actually resolving it in a scratch project
 before publishing the instruction.
 

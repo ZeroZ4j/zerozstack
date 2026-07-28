@@ -76,7 +76,7 @@ nothing and make retrieval much better:
   answer well.
 - **Stable headings.** They anchor retrieval and inbound links. Do not rename them casually.
 
-Keep [`context7.json`](https://github.com/fschoning/zeroz4j/blob/main/context7.json)'s `rules` array in
+Keep [`context7.json`](https://github.com/ZeroZ4j/zerozstack/blob/main/context7.json)'s `rules` array in
 sync with `agents/rules.md`. The array is the compressed projection of that page, and it is how
 guidance reaches agents working in other repositories.
 
