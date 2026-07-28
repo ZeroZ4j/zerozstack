@@ -65,14 +65,7 @@ ZeroZ4j is fully modular, allowing developers to pick exactly what they need:
 
 ## 5. Using ZeroZ Stack via Maven
 
-Not yet published to a repository. Build and install locally:
-
-```bash
-git clone https://github.com/ZeroZ4j/zerozstack.git
-cd zerozstack && mvn clean install -DskipTests
-```
-
-Then depend on the modules you need. The BOM keeps versions aligned:
+Available from Maven Central. Depend on the modules you need; the BOM keeps versions aligned:
 
 ```xml
 <dependencyManagement>
