@@ -3,7 +3,7 @@
 Status: **PROPOSED DESIGN — none of this is implemented.**
 Date: 2026-07-26.
 
-ZeroZ4j persists a live object graph with EclipseStore and has no transactions, no rollback, no
+ZeroZ Stack persists a live object graph with EclipseStore and has no transactions, no rollback, no
 store-level locking and no conflict detection. Today that is a documented limitation. This document
 is the design for closing it, written now rather than later because two of the decisions are
 effectively irreversible once applications exist: whether persistent types carry framework state, and
@@ -132,7 +132,7 @@ This ordering differs from the equivalent design in a server-side framework, and
 every application that writes more than one object, which is all of them.
 
 **D2 — No conflict detection on the wire.** Two clients editing the same object: whole-object
-last-write-wins, silently. This is ZeroZ4j's *characteristic* concurrency problem, because LiveSync
+last-write-wins, silently. This is ZeroZ Stack's *characteristic* concurrency problem, because LiveSync
 is a headline feature and the races are client-to-server, not server-internal.
 
 **D3 — No store-level lock.** Concurrent virtual-thread writers mutating a shared graph with no
@@ -176,7 +176,7 @@ whole layer exists to prevent.
 
 Constructed alongside `TenantStorageProvider`'s map, never a singleton. Two tenants must not
 serialise against each other. A transaction captures which tenant's store it belongs to; cross-tenant
-transactions are meaningless in ZeroZ4j and should be rejected outright rather than half-supported.
+transactions are meaningless in ZeroZ Stack and should be rejected outright rather than half-supported.
 
 ### 4.3 A programmatic API first, interception second
 
@@ -362,7 +362,7 @@ would be for EclipseStore to record the `Xid` **within its own atomic commit** a
 model permits writing such a record atomically alongside the object-graph commit is unresolved and is
 the pivotal question for this section.**
 
-#### Constraints this puts on ZeroZ4j
+#### Constraints this puts on ZeroZ Stack
 
 - **Keep the whole transactional unit on one virtual thread.** JTA context is thread-bound by
   definition and Helidon's `io.helidon.common.context.Contexts` propagates Helidon's context but
@@ -400,7 +400,7 @@ simpler, and nothing here changes its design — B is additive.
 ## 5. Not adopted
 
 **Working copies** (copy on read, mutate the copy, merge back at commit — the XDEV model). Rejected
-for a reason specific to ZeroZ4j: the deep copy would have to happen on the *server*, and the
+for a reason specific to ZeroZ Stack: the deep copy would have to happen on the *server*, and the
 serializer-based copy trick that makes it cheap requires `--add-opens` on `java.base` plus
 `setTypeEvaluatorPersistable(a -> true)` — a broad reflection grant for a framework whose thesis is
 minimal machinery. It also destroys object identity across reads, which `ObjectMapper`'s
@@ -450,7 +450,7 @@ a client-side product decision (§4.6), even though D2 is the most user-visible 
    a genuinely 2PC-capable resource is possible and the LRCO window closes. If no, LRCO's silent
    heuristic window is the floor for multi-resource atomicity. Unresolved from public sources;
    needs a spike against the storage engine.
-6. **Does ZeroZ4j want a JTA dependency at all?** §4.8 is additive and opt-in, but adopting it puts
+6. **Does ZeroZ Stack want a JTA dependency at all?** §4.8 is additive and opt-in, but adopting it puts
    Narayana in the runtime. An alternative is to declare multi-resource atomicity out of scope and
    say so in `reference/limitations.md`, which is a defensible position for a framework whose thesis
    is minimal machinery.

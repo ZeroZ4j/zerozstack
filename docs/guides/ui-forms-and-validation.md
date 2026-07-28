@@ -1,6 +1,6 @@
 # Forms and binding
 
-ZeroZ4j gives you two ways to connect a UI field to state. They answer different questions, and a
+ZeroZ Stack gives you two ways to connect a UI field to state. They answer different questions, and a
 typical application uses both.
 
 ## When to use this

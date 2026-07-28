@@ -1,6 +1,6 @@
 # Glossary
 
-ZeroZ4j overloads several words that mean other things elsewhere. These are the definitions used
+ZeroZ Stack overloads several words that mean other things elsewhere. These are the definitions used
 throughout the documentation; they are not interchangeable.
 
 ## The four propagation words
@@ -22,7 +22,7 @@ LiveSync updates are all pushes, on different opcodes.
 
 **Message**
 : Reserved for application domains — a `ChatMessage` in a chat app. Never a framework concept.
-ZeroZ4j is not a message broker.
+ZeroZ Stack is not a message broker.
 
 ## Framework terms
 
@@ -50,7 +50,7 @@ resolves inbound updates to existing instances by handle, which is why an object
 before `notifyChanged` can reach a client.
 
 **`ObjectMapper`**
-: ZeroZ4j's handle registry — *not* Jackson's `ObjectMapper`. Maps handles to object instances so that
+: ZeroZ Stack's handle registry — *not* Jackson's `ObjectMapper`. Maps handles to object instances so that
 identity, cycles and in-place updates survive serialization.
 
 **Mutation**
@@ -98,11 +98,11 @@ tracker. The client instantiates these instead of the base class.
 
 **TeaVM**
 : The ahead-of-time compiler that turns the Java client into browser-executable code. It has both a
-JavaScript and a WasmGC backend; ZeroZ4j currently uses the **JavaScript** backend in every client
+JavaScript and a WasmGC backend; ZeroZ Stack currently uses the **JavaScript** backend in every client
 module and in the archetype.
 
 **WasmGC**
-: The WebAssembly garbage-collection proposal, TeaVM's other backend and **ZeroZ4j's intended
+: The WebAssembly garbage-collection proposal, TeaVM's other backend and **ZeroZ Stack's intended
 destination**. Not yet in use, because TeaVM's WasmGC support is missing functionality the framework
 needs. The client module is named `zerozstack-client` rather than after either backend, so the name stays
 correct when the target changes. See [Limitations](limitations.md#compilation-target).

@@ -176,7 +176,7 @@ docs/
 │  └─ project-status.md              PoC status, roadmap, what "experimental" means here
 │
 ├─ agents/                           ── AI AGENT ENABLEMENT
-│  ├─ index.md                       How to point an agent at ZeroZ4j
+│  ├─ index.md                       How to point an agent at ZeroZ Stack
 │  ├─ rules.md                       The canonical do/don't rule list (source for context7 `rules`)
 │  ├─ prompts.md                     Curated task prompts (from AGENT_PROMPTS.md, trimmed)
 │  └─ recipes.md                     Copy-paste-correct minimal end-to-end skeletons
@@ -448,7 +448,7 @@ one canonical, self-contained snippet.*
 ```json
 {
   "$schema": "https://context7.com/schema/context7.json",
-  "projectTitle": "ZeroZ4j",
+  "projectTitle": "ZeroZ Stack",
   "description": "Pure-Java full-stack framework: Java UI compiled to WebAssembly via TeaVM, binary RPC over WebSocket, and EclipseStore object-graph persistence. No JavaScript, JSON, REST or ORM.",
   "folders": ["docs/**", "zerozstack-examples/**"],
   "excludeFolders": ["target", ".idea", ".github", "zerozstack-archetype/target"],
@@ -468,7 +468,7 @@ one canonical, self-contained snippet.*
     "LiveSync updates an object's fields in place but does not notify the view. Copy the object into a signal on a timer, or bridge via an event, to trigger re-rendering.",
     "Client-side UI code runs on a cooperative scheduler. Never create a java.lang.Thread in client code; RMI calls suspend and resume on their own.",
     "Do not mutate a shared or live object in place through a collection getter. Setters are the tracking boundary; reassign via the setter or call LiveMutationTracker.touch(obj).",
-    "ZeroZ4j is an experimental proof-of-concept, currently version 0.3.0."
+    "ZeroZ Stack is an experimental proof-of-concept, currently version 0.3.0."
   ]
 }
 ```

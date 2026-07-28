@@ -4,7 +4,7 @@ How a connection acquires an identity, and how that identity gates what it may d
 
 ## When to use this
 
-Read this before deploying anything. ZeroZ4j ships with a development authentication provider whose
+Read this before deploying anything. ZeroZ Stack ships with a development authentication provider whose
 credentials are hardcoded; replacing it is not optional.
 
 ## The shape of it
@@ -166,7 +166,7 @@ gone.
 - **Identity is fixed for the life of the connection.** Roles are read once at handshake, so a user
   whose roles change must reconnect. Re-evaluating per frame would put a security check on the hot
   path.
-- **No handshake origin check.** ZeroZ4j does not verify the `Origin` header; put that in front of the
+- **No handshake origin check.** ZeroZ Stack does not verify the `Origin` header; put that in front of the
   application, or in your provider.
 - **No session expiry.** A connection stays authenticated until it closes.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.

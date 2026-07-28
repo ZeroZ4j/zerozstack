@@ -1,6 +1,6 @@
-# Agent Prompts: Build a Zeroz4j App
+# Agent Prompts: Build a ZeroZ Stack App
 
-Ready-to-paste prompts for building Zeroz4j example applications with an AI coding agent. They serve three purposes:
+Ready-to-paste prompts for building ZeroZ Stack example applications with an AI coding agent. They serve three purposes:
 
 1. **For users** — off-the-shelf starting points: paste a prompt into your agent, get a working app, then adapt it.
 2. **For the project** — a growing set of showcase examples, buildable by any capable agent.
@@ -19,7 +19,7 @@ Prompts are ordered roughly by difficulty. Each is independent.
 ## Common Context (paste this first, before any task)
 
 ```text
-You are implementing a new example application for Zeroz4j, a zero-impedance Java
+You are implementing a new example application for ZeroZ Stack, a zero-impedance Java
 web framework: one language (Java 21) end-to-end — the client UI compiles to Wasm/JS
 via TeaVM, the server runs on Helidon with CDI, and the SAME POJOs travel from
 EclipseStore persistence through RMI to the browser. No REST, no JSON, no DTOs,
@@ -490,7 +490,7 @@ last-write-wins under the hood, masked by the lock).
 
 ## Evaluating agent runs (for framework contributors)
 
-When using these prompts to test how well agents handle Zeroz4j, record per run:
+When using these prompts to test how well agents handle ZeroZ Stack, record per run:
 
 | Check | Pass/Fail |
 |---|---|

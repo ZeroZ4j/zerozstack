@@ -1,10 +1,10 @@
 # Limitations
 
-Every known gap in ZeroZ4j 0.4.0, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.4.0, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 
-ZeroZ4j is an experimental proof-of-concept. Read this list as the honest boundary of the
+ZeroZ Stack is an experimental proof-of-concept. Read this list as the honest boundary of the
 demonstration, not as a roadmap commitment.
 
 ## Declared but not implemented
@@ -197,11 +197,11 @@ The annotation processor warns rather than fails for two footguns. Read your bui
 ## Compilation target
 
 The client is written entirely in Java and compiled ahead-of-time by TeaVM. TeaVM has two backends,
-JavaScript and WasmGC, and **ZeroZ4j uses the JavaScript backend today**. Every example client module
+JavaScript and WasmGC, and **ZeroZ Stack uses the JavaScript backend today**. Every example client module
 sets `<targetType>JAVASCRIPT</targetType>`, and no module in the repository sets `WEBASSEMBLY`.
 
 **This is a deliberate interim choice, not a stale setting.** TeaVM's WasmGC backend does not yet
-provide functionality ZeroZ4j depends on. WasmGC remains the intended destination — hence the
+provide functionality ZeroZ Stack depends on. WasmGC remains the intended destination — hence the
 `zerozstack-client` module name — and the project will move to it once TeaVM's support is complete.
 
 No application code changes with the backend: you write the same Java either way. The distinction

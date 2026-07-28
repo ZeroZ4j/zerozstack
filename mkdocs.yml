@@ -1,4 +1,4 @@
-site_name: ZeroZ4j
+site_name: ZeroZ Stack
 site_description: >-
   Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a
   persistent WebSocket, and EclipseStore object-graph persistence.

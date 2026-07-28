@@ -1,6 +1,6 @@
 # Events, signals or LiveSync?
 
-Three mechanisms push state from the ZeroZ4j server to connected clients. They look
+Three mechanisms push state from the ZeroZ Stack server to connected clients. They look
 interchangeable and are not. This page compares them on the properties that actually decide the
 choice, states each one's limits plainly, and works through concrete features.
 

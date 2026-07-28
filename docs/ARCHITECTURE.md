@@ -1,4 +1,4 @@
-# ZeroZ4j Architecture Guide
+# ZeroZ Stack Architecture Guide
 
 > ⚠️ **Contains pre-0.3.0 API references.** The architectural narrative holds, but do not copy code
 > from this page. Specifically: `WasmRmiClient.create(Class)` **does not exist** (obtain a stub with
@@ -8,7 +8,7 @@
 > `zerozstack-server-core` and `zerozstack-server-helidon`. For the wire format use
 > [PROTOCOL.md](PROTOCOL.md); for current limits see [Limitations](reference/limitations.md).
 
-This document provides a deep dive into the architecture of the **ZeroZ4j** framework. It is intended for developers, AI agents (like context7), and architects seeking to understand the internal mechanics of a pure Java, zero-impedance stack.
+This document provides a deep dive into the architecture of the **ZeroZ Stack** framework. It is intended for developers, AI agents (like context7), and architects seeking to understand the internal mechanics of a pure Java, zero-impedance stack.
 
 ## The Problem: Impedance Mismatch
 
@@ -19,9 +19,9 @@ Modern web development often feels like integrating a series of translation laye
 
 These translation layers introduce performance overhead, break static typing guarantees, complicate refactoring, and require duplicate domain models.
 
-## The ZeroZ4j Solution
+## The ZeroZ Stack Solution
 
-`ZeroZ4j` completely eliminates these translation layers. 
+ZeroZ Stack completely eliminates these translation layers. 
 
 - **End-to-End Java**: You write Java for the UI, the backend, and the database.
 - **EclipseStore**: The database *is* your JVM memory heap. Objects are stored natively as a graph, eliminating ORM entirely.
@@ -29,15 +29,15 @@ These translation layers introduce performance overhead, break static typing gua
 
 ## Compilation Pipeline (AOT)
 
-`ZeroZ4j` relies heavily on Ahead-of-Time (AOT) compilation to guarantee performance in the browser. 
+ZeroZ Stack relies heavily on Ahead-of-Time (AOT) compilation to guarantee performance in the browser. 
 
 1. **Annotation Processing (`zerozstack-apt`)**: During Maven compilation, the annotation processor scans for `@DataModel` and `@RmiService`. It generates `_Serializer` classes for every model and `_Stub` classes for every service. This avoids runtime reflection, which is slow and often problematic when compiling to WebAssembly.
 2. **TeaVM WasmGC**: The `zerozstack-client` module bridges Java to the browser. TeaVM transpiles the client-side Java bytecode (including the generated stubs and serializers) directly into WasmGC. 
-3. **Coroutines for Non-Blocking I/O**: Because Wasm runs on the browser's single UI thread, you cannot block it (e.g., waiting for an HTTP response). TeaVM provides `@Async` continuation coroutines. When a client invokes an RMI stub, `ZeroZ4j` suspends the coroutine, sends the binary frame, and cooperatively yields to the browser. When the WebSocket receives the server response, it resumes the coroutine perfectly. To make this ergonomic for developers, the `zerozstack-ui-components` library automatically dispatches all standard UI events (like button clicks) inside a new virtual thread. This guarantees that developers can make blocking backend calls directly inside UI event listeners without ever freezing the browser or writing boilerplate async code.
+3. **Coroutines for Non-Blocking I/O**: Because Wasm runs on the browser's single UI thread, you cannot block it (e.g., waiting for an HTTP response). TeaVM provides `@Async` continuation coroutines. When a client invokes an RMI stub, ZeroZ Stack suspends the coroutine, sends the binary frame, and cooperatively yields to the browser. When the WebSocket receives the server response, it resumes the coroutine perfectly. To make this ergonomic for developers, the `zerozstack-ui-components` library automatically dispatches all standard UI events (like button clicks) inside a new virtual thread. This guarantees that developers can make blocking backend calls directly inside UI event listeners without ever freezing the browser or writing boilerplate async code.
 
 ## Network Protocol Specification
 
-The `ZeroZ4j` RPC protocol operates entirely over binary WebSockets.
+The ZeroZ Stack RPC protocol operates entirely over binary WebSockets.
 
 ### Client-to-Server Invocation Frame
 

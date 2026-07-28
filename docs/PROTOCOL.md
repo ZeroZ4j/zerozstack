@@ -1,10 +1,10 @@
 # Detailed Protocol Specification
 
-ZeroZ4j relies on a pure binary WebSocket protocol to enable high-performance, bidirectional communication between the WebAssembly client and the Jakarta EE backend. The protocol eliminates JSON overhead entirely, providing dense serialization and native object mapping.
+ZeroZ Stack relies on a pure binary WebSocket protocol to enable high-performance, bidirectional communication between the WebAssembly client and the Jakarta EE backend. The protocol eliminates JSON overhead entirely, providing dense serialization and native object mapping.
 
 ## General Frame Structure
 
-Every WebSocket frame in ZeroZ4j is binary and begins with a 4-byte ID:
+Every WebSocket frame in ZeroZ Stack is binary and begins with a 4-byte ID:
 
 ```
 [ 4 bytes: Correlation ID or Handle ID (Int) ]
@@ -73,7 +73,7 @@ LiveSync handles real-time object graph synchronization and reactive signals.
 
 ## Binary Type Tags (Serialization)
 
-ZeroZ4j serializes data dynamically using `BinarySerializer`. Each serialized argument or payload value is prefixed with a 1-byte type tag:
+ZeroZ Stack serializes data dynamically using `BinarySerializer`. Each serialized argument or payload value is prefixed with a 1-byte type tag:
 
 | Tag | Type | Encoding |
 |-----|------|----------|

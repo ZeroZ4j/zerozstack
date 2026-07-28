@@ -42,7 +42,7 @@ mainLayout.add(formLayout, actionsLayout);
 
 ## Optional HTML Layout Feature
 
-While programmatic layouts are powerful, there are times when declaring a layout in HTML is more convenient. Zeroz4j provides an optional HTML layout feature via the `FlavourWrapper` component, leveraging TeaVM Flavour templates.
+While programmatic layouts are powerful, there are times when declaring a layout in HTML is more convenient. ZeroZ Stack provides an optional HTML layout feature via the `FlavourWrapper` component, leveraging TeaVM Flavour templates.
 By passing a Flavour template object to the `FlavourWrapper`, the framework binds the template to a host `div` element (`Templates.bind(flavourTemplateObj, getElement())`). This allows developers to seamlessly mix declarative HTML templates for complex visual structures with programmatic component logic, without sacrificing type safety or data binding.
 
 ## Data Binding to POJOs

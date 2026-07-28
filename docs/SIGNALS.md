@@ -1,6 +1,6 @@
 # Signals: Client-Side Reactive State
 
-Zeroz4j has **one signal abstraction** with three scopes: local to the client, local to the server, or shared across both. State lives in **signals**, derived values are **computed**, and rendering (or any side effect) happens in **effects** that re-run automatically when anything they read changes. No manual listener wiring, no "remember to update the label too" bugs.
+ZeroZ Stack has **one signal abstraction** with three scopes: local to the client, local to the server, or shared across both. State lives in **signals**, derived values are **computed**, and rendering (or any side effect) happens in **effects** that re-run automatically when anything they read changes. No manual listener wiring, no "remember to update the label too" bugs.
 
 The signal core (`com.zeroz4j.signals`) lives in the shared API module and knows nothing about the network. Server events can *feed* signals (see [SERVER_EVENTS.md](SERVER_EVENTS.md)), but neither feature requires the other.
 

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-ZeroZ4j's characteristic failure is *nothing happening*. Several conditions are caught and logged
+ZeroZ Stack's characteristic failure is *nothing happening*. Several conditions are caught and logged
 rather than thrown, so there is no exception to search for and no stack trace to follow. This page is
 organised by symptom.
 

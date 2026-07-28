@@ -1,6 +1,6 @@
 # Store modes: embedded or server-hosted
 
-ZeroZ4J persists application data with [ZeroZ DB](https://github.com/ZeroZ4j/zerozstack-db), which
+ZeroZ Stack persists application data with [ZeroZ DB](https://github.com/ZeroZ4j/zerozdb), which
 adds transactions, indexes, constraints and an optional network server on top of EclipseStore.
 
 **Where the data lives is a deployment decision, not an application one.** Services are written

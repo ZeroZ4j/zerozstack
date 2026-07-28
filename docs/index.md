@@ -1,18 +1,18 @@
-# ZeroZ4j documentation
+# ZeroZ Stack documentation
 
-ZeroZ4j is a pure-Java full-stack framework. Your UI is Java compiled by TeaVM to run in the browser,
+ZeroZ Stack is a pure-Java full-stack framework. Your UI is Java compiled by TeaVM to run in the browser,
 your network layer is a binary RPC protocol over a persistent WebSocket, and your database is the JVM
 object graph on disk. You write no JavaScript, no JSON, no REST routes and no SQL.
 
 !!! warning "Experimental"
-    ZeroZ4j is an experimental proof-of-concept at version **0.4.0**. It is a working demonstration,
+    ZeroZ Stack is an experimental proof-of-concept at version **0.4.0**. It is a working demonstration,
     not an industrialised production framework. Known gaps are listed in
     [Limitations](reference/limitations.md), and every page states its own limits where the feature is
     taught.
 
 !!! note "Compilation target"
     The client is written entirely in Java and compiled ahead-of-time by TeaVM. It currently targets
-    TeaVM's **JavaScript** backend, deliberately: WasmGC does not yet provide functionality ZeroZ4j
+    TeaVM's **JavaScript** backend, deliberately: WasmGC does not yet provide functionality ZeroZ Stack
     depends on. **WasmGC is the intended destination** and the project will move to it once TeaVM's
     support is complete. Nothing in the code you write changes either way.
 
@@ -88,9 +88,9 @@ sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text))
 
 ## If you read one page
 
-[Choosing how state moves](decide/index.md). ZeroZ4j gives you five ways to move state — local
+[Choosing how state moves](decide/index.md). ZeroZ Stack gives you five ways to move state — local
 signals, RMI calls, server events, shared signals and LiveSync — and picking the wrong one is the most
-common source of trouble in ZeroZ4j applications. The symptoms are rarely obvious: a feature works on
+common source of trouble in ZeroZ Stack applications. The symptoms are rarely obvious: a feature works on
 your machine and fails for the second user, or works until someone reloads the page.
 
 ## Working with an AI agent

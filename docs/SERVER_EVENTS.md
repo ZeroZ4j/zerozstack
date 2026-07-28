@@ -1,17 +1,17 @@
 # Server Events: Typed Push Topics
 
-Zeroz4j lets the server broadcast **typed events** to connected Wasm clients over the existing binary WebSocket — no REST callbacks, no JSON, no hand-maintained topic strings on either side.
+ZeroZ Stack lets the server broadcast **typed events** to connected Wasm clients over the existing binary WebSocket — no REST callbacks, no JSON, no hand-maintained topic strings on either side.
 
 ## Terminology
 
-Zeroz4j uses four terms with distinct meanings — keeping them apart keeps the mental model clean:
+ZeroZ Stack uses four terms with distinct meanings — keeping them apart keeps the mental model clean:
 
 | Term | Meaning |
 |---|---|
 | **Event** | A discrete, fire-and-forget *occurrence* broadcast from server to client: `EventTopic`, `EventPublisher`, `ServerEvents`. There is no "current value" and no replay. |
 | **Signal** | Reactive *state*: `ValueSignal`, `Computed`, `Effect` — local to either tier or shared across both via `Signals.shared` (see [SIGNALS.md](SIGNALS.md)). A separate, independent feature — **events do not require signals**. |
 | **Push** | The transport direction: the 0x02 PUSH frame that carries events over the WebSocket. |
-| **Message** | Reserved for application domains (e.g. a `ChatMessage` in a chat app). Never a framework concept — Zeroz4j is not a message broker. |
+| **Message** | Reserved for application domains (e.g. a `ChatMessage` in a chat app). Never a framework concept — ZeroZ Stack is not a message broker. |
 
 ## Declaring topics
 
@@ -109,4 +109,4 @@ Stated plainly so there are no surprises:
 * **No replay** — late subscribers do not receive past events.
 * Payloads must be wire-serializable: `@DataModel` classes or types supported by `BinarySerializer`.
 
-If you need durable delivery or replay, model it in your application (as the snapshot-then-merge pattern above does) — Zeroz4j deliberately does not include broker semantics.
+If you need durable delivery or replay, model it in your application (as the snapshot-then-merge pattern above does) — ZeroZ Stack deliberately does not include broker semantics.

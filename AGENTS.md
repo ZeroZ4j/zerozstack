@@ -1,16 +1,16 @@
-# AGENTS.md — working on or with ZeroZ4j
+# AGENTS.md — working on or with ZeroZ Stack
 
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ4j is an experimental pure-Java full-stack framework at version **0.4.0**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.4.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
 
 **Compilation target:** the build produces **JavaScript** via TeaVM's JavaScript backend
 (`<targetType>JAVASCRIPT</targetType>`); no module sets `WEBASSEMBLY`. This is a deliberate interim
-choice — TeaVM's WasmGC backend does not yet provide functionality ZeroZ4j needs — and WasmGC remains
+choice — TeaVM's WasmGC backend does not yet provide functionality ZeroZ Stack needs — and WasmGC remains
 the intended destination. Do not tell users their code compiles to Wasm today, and do not "fix" the
 JavaScript target.
 

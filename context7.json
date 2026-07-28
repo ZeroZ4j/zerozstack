@@ -1,6 +1,6 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
-  "projectTitle": "ZeroZ4j",
+  "projectTitle": "ZeroZ Stack",
   "description": "Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a persistent WebSocket, and EclipseStore object-graph persistence. You write no JavaScript, JSON, REST routes or SQL.",
   "branch": "main",
   "folders": [
@@ -20,10 +20,10 @@
     "NOTICE"
   ],
   "rules": [
-    "ZeroZ4j requires JDK 21 or later. Client code is written in Java and compiled for the browser by TeaVM, so only TeaVM-supported JDK APIs are available in client modules.",
+    "ZeroZ Stack requires JDK 21 or later. Client code is written in Java and compiled for the browser by TeaVM, so only TeaVM-supported JDK APIs are available in client modules.",
     "ZeroZ Stack is published to Maven Central under groupId com.zeroz4j at version 0.4.0. Import com.zeroz4j:zerozstack-bom as a POM dependency in dependencyManagement, then declare zerozstack-server-core, zerozstack-client, zerozstack-shared-api, zerozstack-ui-components and zerozstack-store-eclipsestore without versions. Or generate a project from com.zeroz4j:zerozstack-archetype, which produces the shared/client/server module shape. Building from source is only needed when working on the framework itself.",
     "Build with 'mvn clean install -DskipTests' from the repository root. Always include clean: each example server copies dependencies into target/libs, which is never pruned, so stale jars from earlier versions otherwise accumulate and cause duplicate-bean warnings at startup.",
-    "The client compiles with TeaVM's JavaScript backend today. This is a deliberate interim choice because TeaVM's WasmGC backend does not yet provide functionality ZeroZ4j needs; WasmGC is the intended destination, which is what the zerozstack-client module name refers to. Do not claim client code compiles to WebAssembly today, and do not change the JAVASCRIPT target.",
+    "The client compiles with TeaVM's JavaScript backend today. This is a deliberate interim choice because TeaVM's WasmGC backend does not yet provide functionality ZeroZ Stack needs; WasmGC is the intended destination, which is what the zerozstack-client module name refers to. Do not claim client code compiles to WebAssembly today, and do not change the JAVASCRIPT target.",
     "There is no executable jar and no exec-maven-plugin. Run an example with: java -cp \"target/classes;target/libs/*\" com.zeroz4j.example.server.ExampleServer from its server module directory, using ':' instead of ';' on POSIX. 'java -jar' and 'mvn exec:java' do not work.",
     "Four of the seven examples require signing in (chat-events, chat-livesync, job-monitor, components-showcase); they set zeroz.security.mode=dev and show a Login component. todo-signals, form-signup and inventory-crud connect anonymously. Development credentials are demo/demo (role user) and admin/admin (roles user and admin), validated by DevAuth from WebSocket handshake parameters. Replace this before any real deployment.",
     "Put @Secured and @RolesAllowed on the @RmiService interface and its methods, never on the implementing bean. The dispatcher scans only the interface, so annotations on the implementation are silently ignored and the method is left unprotected. These are com.zeroz4j.api.Secured and com.zeroz4j.api.RolesAllowed, not the Jakarta annotations of the same name.",
@@ -41,7 +41,7 @@
     "Do not wrap client event handlers in your own thread. Component.addDomEventListener already wraps every DOM listener via Component.threaded(...), so the handler body runs on a suspendable TeaVM green thread and a suspending RMI call works directly inside it. An extra thread is redundant and its UI updates may not repaint until the next event. For delayed work use Window.setTimeout.",
     "Dispose what you create. Effect.create and ServerEvents.on both return a Disposable, and Computed has dispose(). A view that creates them must release them when it is permanently removed.",
     "Validation annotations (@NotBlank, @Min, @Max, @Size) are declared once on the model in the shared module. The generated MyModel_Rules class feeds client-side field feedback through field.withRule(...), and the server enforces the same rules independently on RMI arguments, LiveSync mutations and shared-signal writes. Client-side validation is user feedback only, never a security boundary.",
-    "ZeroZ4j is an experimental proof-of-concept at version 0.4.0, not a production framework. Field-level merging, version-conflict rejection, tracked collections, per-topic event subscription and the @Route router are not implemented.",
+    "ZeroZ Stack is an experimental proof-of-concept at version 0.4.0, not a production framework. Field-level merging, version-conflict rejection, tracked collections, per-topic event subscription and the @Route router are not implemented.",
     "A @DataModel may declare EclipseStore Lazy<T> fields. The reference travels as a session-scoped handle and never as its contents; the client resolves it with a suspending RMI round trip on first get(), and the result is cached. Lazy references originate on the server, so a client cannot create one and send it up - assign the resolved value instead.",
     "Never mutate a signal's value in place. ValueSignal.set skips notification when the new value equals the old one, so mutating a list and setting it back changes nothing. Use update() and return a new instance.",
     "As of 0.4.0 these fail loudly rather than silently: SyncEngine.notifyChanged on an object never serialized to a client throws; an unserializable event or shared-signal payload throws to the caller; a conflicting shared-signal declaration throws; bindValue with a non-writable signal throws (use bindValueReadOnly for one-way); and @ClientWritable without @LiveSync, or on a field with no setter, is a compile error.",

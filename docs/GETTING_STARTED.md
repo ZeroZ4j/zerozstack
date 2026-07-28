@@ -48,11 +48,11 @@ To run the server:
 java -jar myapp-server/target/myapp-server-1.0.0-SNAPSHOT.jar
 ```
 
-Navigate to `http://localhost:8080` to see your running Zeroz4j application!
+Navigate to `http://localhost:8080` to see your running ZeroZ Stack application!
 
 ## 4. Code Example
 
-With ZeroZ4J, you avoid boilerplate HTTP mapping, JSON translation, and ORM schemas. Here is how simple it is to build a full-stack feature.
+With ZeroZ Stack, you avoid boilerplate HTTP mapping, JSON translation, and ORM schemas. Here is how simple it is to build a full-stack feature.
 
 ### 1. The Domain Model (Shared)
 Define your data structure. It automatically becomes serializable and persistable.

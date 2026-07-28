@@ -1,7 +1,7 @@
 # Choosing how state moves
 
-ZeroZ4j gives you five ways to move state around. Picking the wrong one is the most common source of
-trouble in ZeroZ4j applications, and the symptoms are rarely obvious — a feature works on your
+ZeroZ Stack gives you five ways to move state around. Picking the wrong one is the most common source of
+trouble in ZeroZ Stack applications, and the symptoms are rarely obvious — a feature works on your
 machine and fails for the second user, or works until someone reloads the page.
 
 This page is the decision procedure. Work through it in order; each question has one answer.

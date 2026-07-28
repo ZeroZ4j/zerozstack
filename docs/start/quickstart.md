@@ -1,6 +1,6 @@
 # Quickstart
 
-Build ZeroZ4j and run a working application in about five minutes. The build and run commands on this
+Build ZeroZ Stack and run a working application in about five minutes. The build and run commands on this
 page have been executed against the current `main`.
 
 ## Prerequisites
@@ -108,7 +108,7 @@ differences between the three propagation examples are the point.
 ## Next steps
 
 - **[Choosing how state moves](../decide/index.md)** — read this before you build anything. Picking
-  the wrong propagation mechanism is the most common source of trouble in ZeroZ4j applications.
+  the wrong propagation mechanism is the most common source of trouble in ZeroZ Stack applications.
 - [Troubleshooting](../guides/troubleshooting.md) — if something does not work, and especially if
   nothing at all happens.
 - [Limitations](../reference/limitations.md) — what this version does not do.

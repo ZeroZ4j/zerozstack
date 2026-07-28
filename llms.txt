@@ -5,7 +5,7 @@
 > WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
-Key things to know before generating ZeroZ4j code:
+Key things to know before generating ZeroZ Stack code:
 
 - Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.4.0` and depend on
   `zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`, `zerozstack-ui-components`
@@ -15,7 +15,7 @@ Key things to know before generating ZeroZ4j code:
 - An application has three modules: shared (`@DataModel` models, `@RmiService` interfaces), client
   (UI), server (`@ApplicationScoped` CDI implementations).
 - The client compiles to JavaScript via TeaVM today. This is a deliberate interim choice because
-  TeaVM's WasmGC backend is not yet complete enough for ZeroZ4j; WasmGC remains the intended
+  TeaVM's WasmGC backend is not yet complete enough for ZeroZ Stack; WasmGC remains the intended
   destination. Do not claim client code compiles to WebAssembly today, and do not change the
   JAVASCRIPT target.
 - Do not wrap client event handlers in your own thread. `Component.addDomEventListener` already runs
@@ -61,7 +61,7 @@ Key things to know before generating ZeroZ4j code:
 ## For coding agents
 
 - [AGENTS.md](https://github.com/ZeroZ4j/zerozstack/blob/main/AGENTS.md): Build commands, module map, non-negotiable rules, the decision procedure and the silent-failure table, compressed.
-- [Agent prompts](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/AGENT_PROMPTS.md): Ready-to-paste task specifications for building ZeroZ4j applications.
+- [Agent prompts](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/AGENT_PROMPTS.md): Ready-to-paste task specifications for building ZeroZ Stack applications.
 
 ## Optional
 

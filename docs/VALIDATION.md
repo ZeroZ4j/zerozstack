@@ -1,6 +1,6 @@
 # Validation: Annotate Once, Enforce Everywhere
 
-Zeroz4j validation lives as annotations on your `@DataModel` POJOs — the single place your domain rules belong — and is enforced on **both tiers** from that one declaration:
+ZeroZ Stack validation lives as annotations on your `@DataModel` POJOs — the single place your domain rules belong — and is enforced on **both tiers** from that one declaration:
 
 * the **Wasm client** uses the rules for live form feedback (the binder),
 * the **server** applies them automatically to every incoming RMI argument and every client-written shared signal value — so the rules hold even against a client that bypassed your UI entirely.

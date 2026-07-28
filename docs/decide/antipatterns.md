@@ -1,6 +1,6 @@
 # Anti-patterns
 
-Named failure modes, so they can be pointed at in a code review. Each is something ZeroZ4j
+Named failure modes, so they can be pointed at in a code review. Each is something ZeroZ Stack
 applications actually do. Most now fail loudly rather than silently, but the mistake is still worth
 avoiding — see [Troubleshooting](../guides/troubleshooting.md) for the symptom-first version.
 
