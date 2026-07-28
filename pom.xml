@@ -24,30 +24,48 @@
     <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <name>zeroz4j Parent</name>
-    <description>Zero Impendence Java Web application development framework</description>
-    <url>https://www.zero4j.com</url>
+    <name>ZeroZ Stack Parent</name>
+    <description>Zero-impedance pure-Java full-stack framework: Java UI compiled for the browser
+        by TeaVM, binary RPC over a persistent WebSocket, and object-graph persistence on
+        ZeroZ DB.</description>
+    <url>https://www.zeroz4j.com</url>
+
+    <organization>
+        <name>ZeroZ4J</name>
+        <url>https://www.zeroz4j.com</url>
+    </organization>
 
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
-            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
 
     <developers>
         <developer>
+            <id>fschoning</id>
             <name>Franz Schöning</name>
+            <url>https://www.franzschoning.com</url>
             <organizationUrl>https://www.franzschoning.com</organizationUrl>
+            <roles>
+                <role>Principal Enterprise Architect</role>
+            </roles>
         </developer>
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/fschoning/zeroz4j.git</connection>
-        <developerConnection>scm:git:ssh://github.com/fschoning/zeroz4j.git</developerConnection>
-        <url>https://github.com/fschoning/zeroz4j</url>
+        <connection>scm:git:https://github.com/ZeroZ4j/zerozstack.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/ZeroZ4j/zerozstack.git</developerConnection>
+        <url>https://github.com/ZeroZ4j/zerozstack</url>
+        <tag>HEAD</tag>
     </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/ZeroZ4j/zerozstack/issues</url>
+    </issueManagement>
 
     <modules>
         <module>zerozstack-shared-api</module>
@@ -290,4 +308,89 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <!--
+            Release to Maven Central. The account setup, namespace verification and signing key
+            are documented once for the family in ZeroZ DB's RELEASING.md; the com.zeroz4j
+            namespace covers this repository too, so only this build configuration is needed.
+
+                mvn clean deploy -Prelease
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration>
+                            <doctitle>ZeroZ Stack ${project.version} API</doctitle>
+                            <windowtitle>ZeroZ Stack ${project.version}</windowtitle>
+                            <bottom><![CDATA[Copyright &#169; 2026 Franz Sch&#246;ning &#8212;
+                                <a href="https://www.zeroz4j.com">zeroz4j.com</a> &#8212;
+                                <a href="https://www.franzschoning.com">Principal Enterprise Architect</a>]]></bottom>
+                            <doclint>none</doclint>
+                            <notimestamp>true</notimestamp>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <!-- GnuPG 2.x refuses a passphrase from settings.xml unless
+                                         loopback pinentry is enabled; without this a scripted
+                                         release hangs waiting for a dialog that never appears. -->
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.11.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <!-- Deliberately manual: a published version can never be changed or
+                                 removed, so each deployment is inspected in the portal first. -->
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>validated</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -18,23 +18,34 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
 
 ## Publishing to Maven Central
 
-Not yet configured for this repository. The process, the account steps and the signing key are
-documented once for the whole family in
-**[ZeroZ DB's RELEASING.md](https://github.com/ZeroZ4j/zerozdb/blob/main/RELEASING.md)** — the
-namespace verification there covers all of `com.zeroz4j`, so this repository needs only the build
-configuration, not the account setup again.
+The build is configured. The account steps — Central Portal account, namespace verification and
+the signing key — are documented once for the whole family in
+**[ZeroZ DB's RELEASING.md](https://github.com/ZeroZ4j/zerozdb/blob/main/RELEASING.md)**, and the
+verified `com.zeroz4j` namespace covers this repository too, so none of that is repeated here.
 
-What this repository still needs before its first Central release:
+```bash
+mvn clean deploy -Prelease
+```
 
-- the POM metadata Central validates: `url`, `licenses`, `developers`, `scm` (already present in
-  ZeroZ DB's POM, and worth copying from there);
-- a `release` profile attaching source and javadoc jars, signing with `maven-gpg-plugin`
-  (including `--pinentry-mode loopback`, without which a scripted release hangs), and uploading
-  with `central-publishing-maven-plugin`;
-- a decision on which modules publish. The examples should not; the archetype, BOM and the six
-  library modules should.
+The `release` profile attaches source and javadoc jars, signs everything, and uploads to the
+portal. `autoPublish` is false, so the deployment waits for your approval at
+[central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments)
+rather than going straight out — a published version can never be changed or removed.
 
-Being a multi-module build, one `mvn deploy -Prelease` publishes every selected module together.
+**Nine modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
+`-server-helidon`, `-ui-components`, `-store-eclipsestore`, `-bom` and `-archetype`.
+
+**The examples do not.** They are demonstrations rather than libraries, and
+`zerozstack-examples/pom.xml` sets `maven.deploy.skip`, `skipPublishing`, `gpg.skip`,
+`maven.source.skip` and `maven.javadoc.skip`, all inherited by every example module. They are still
+built and tested by the reactor; they are simply never published, and not signed either, since
+signing artifacts nobody consumes only slows the build.
+
+Verify before deploying, which signs everything without uploading:
+
+```bash
+mvn clean verify -Prelease -DskipTests
+```
 
 ## Tagging
 

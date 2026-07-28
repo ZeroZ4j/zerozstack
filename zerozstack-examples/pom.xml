@@ -30,6 +30,18 @@
 
     <packaging>pom</packaging>
 
+    <properties>
+        <!-- Examples are demonstrations, not libraries. They are built and tested with the
+             reactor but must never reach a repository, and there is no point signing or
+             producing source and javadoc jars for artifacts nobody consumes. These properties
+             are inherited by every example module. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipPublishing>true</skipPublishing>
+        <gpg.skip>true</gpg.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
     <modules>
         <module>components-showcase</module>
         <module>chat-events</module>
