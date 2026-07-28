@@ -1,0 +1,62 @@
+# ZeroZ4j
+
+> An experimental pure-Java full-stack framework (version 0.4.0). The UI is Java compiled for the
+> browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
+> WebSocket, and the server persists the JVM object graph directly with EclipseStore. You write no
+> JavaScript, JSON, REST routes or SQL.
+
+Key things to know before generating ZeroZ4j code:
+
+- Requires JDK 21. Build with `mvn clean install -DskipTests` from the repository root; the `clean` is
+  required because each example server's `target/libs` is never pruned.
+- An application has three modules: shared (`@DataModel` models, `@RmiService` interfaces), client
+  (UI), server (`@ApplicationScoped` CDI implementations).
+- The client compiles to JavaScript via TeaVM today. This is a deliberate interim choice because
+  TeaVM's WasmGC backend is not yet complete enough for ZeroZ4j; WasmGC remains the intended
+  destination. Do not claim client code compiles to WebAssembly today, and do not change the
+  JAVASCRIPT target.
+- Do not wrap client event handlers in your own thread. `Component.addDomEventListener` already runs
+  handler bodies on a suspendable TeaVM green thread, which is why a suspending RMI call works directly
+  inside one.
+- Choosing between local signals, RMI, server events, shared signals and LiveSync is the framework's
+  hardest decision and its most common source of bugs. Read the decision guide before generating
+  state-propagation code.
+- Many failure modes are silent rather than exceptional. Read the troubleshooting page.
+
+## Decision guides
+
+- [Choosing how state moves](https://github.com/fschoning/zeroz4j/blob/main/docs/decide/index.md): The decision procedure for all five state-propagation mechanisms. Start here.
+- [Events, signals or LiveSync?](https://github.com/fschoning/zeroz4j/blob/main/docs/decide/events-vs-signals-vs-livesync.md): Full comparison with worked examples, and the honest limits of each. Includes the facts that decide most cases: events and LiveSync can be scoped to a user or session while shared signals cannot, and a live object is itself a reactive dependency.
+- [RMI or state sync?](https://github.com/fschoning/zeroz4j/blob/main/docs/decide/rmi-vs-state-sync.md): State edits sync, operations call. Why operations deserve a named method.
+- [Local or shared signal?](https://github.com/fschoning/zeroz4j/blob/main/docs/decide/local-vs-shared-signal.md): When state should cross the wire at all. Shared signals are JVM-global.
+- [Anti-patterns](https://github.com/fschoning/zeroz4j/blob/main/docs/decide/antipatterns.md): Named failure modes and their fixes, including event-as-state, operation-as-edit and unbounded broadcast.
+
+## Getting started
+
+- [Quickstart](https://github.com/fschoning/zeroz4j/blob/main/docs/start/quickstart.md): Prerequisites, build, run an example, and which examples need dev login credentials. Build and run commands executed against main.
+- [Examples](https://github.com/fschoning/zeroz4j/blob/main/docs/examples/index.md): What each of the seven example applications demonstrates and why that mechanism. The examples are the most reliable specification of current usage.
+- [Troubleshooting](https://github.com/fschoning/zeroz4j/blob/main/docs/guides/troubleshooting.md): Symptom-first, covering the silent failures. Read this when nothing happens.
+
+## Reference
+
+- [Glossary](https://github.com/fschoning/zeroz4j/blob/main/docs/reference/glossary.md): Event, signal, push, message, sync, mutation, handle, retained value — defined once, not interchangeable.
+- [Limitations](https://github.com/fschoning/zeroz4j/blob/main/docs/reference/limitations.md): Every known gap in 0.4.0, including features that are declared but not implemented.
+- [Wire protocol](https://github.com/fschoning/zeroz4j/blob/main/docs/PROTOCOL.md): Frame structure, opcodes and type tags.
+- [Validation](https://github.com/fschoning/zeroz4j/blob/main/docs/VALIDATION.md): Annotate once on the model; enforced by the client binder and independently by the server.
+
+## Guides
+
+- [Signals](https://github.com/fschoning/zeroz4j/blob/main/docs/SIGNALS.md): ValueSignal, Computed, Effect, shared signals, the immutability contract, lifecycle.
+- [Server events](https://github.com/fschoning/zeroz4j/blob/main/docs/SERVER_EVENTS.md): EventTopic, EventPublisher, ServerEvents, delivery semantics.
+- [LiveSync](https://github.com/fschoning/zeroz4j/blob/main/docs/LIVESYNC.md): Two-way object synchronization, @ClientWritable gates, LiveMutationListener.
+- [UI components](https://github.com/fschoning/zeroz4j/blob/main/docs/UI_COMPONENTS.md): Layouts, the component catalogue, binding.
+
+## For coding agents
+
+- [AGENTS.md](https://github.com/fschoning/zeroz4j/blob/main/AGENTS.md): Build commands, module map, non-negotiable rules, the decision procedure and the silent-failure table, compressed.
+- [Agent prompts](https://github.com/fschoning/zeroz4j/blob/main/docs/AGENT_PROMPTS.md): Ready-to-paste task specifications for building ZeroZ4j applications.
+
+## Optional
+
+- [Architecture](https://github.com/fschoning/zeroz4j/blob/main/docs/ARCHITECTURE.md): Internals of the AOT pipeline and the sync engine. Contains some pre-0.3.0 API references.
+- [Documentation style guide](https://github.com/fschoning/zeroz4j/blob/main/docs/contribute/docs-style-guide.md): Conventions for contributing documentation.

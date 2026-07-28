@@ -1,0 +1,6 @@
+target/
+/.idea/
+.flattened-pom.xml
+
+# MkDocs build output
+/site/

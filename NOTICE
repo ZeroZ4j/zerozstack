@@ -1,0 +1,37 @@
+ZeroZ4j
+Copyright 2024-2026 Franz Schöning
+
+This product includes software developed by Franz Schöning.
+
+Architectural design, reference implementation, and enterprise integration 
+strategy by Franz Schöning, Principal Enterprise Architect.
+
+For enterprise architecture advisory, legacy system modernization, 
+and AI-integration strategy, visit:
+https://www.franzschoning.com
+
+=========================================================================
+Third-Party Acknowledgements
+=========================================================================
+This project relies on the following open-source technologies and 
+acknowledges their respective licenses and contributors:
+
+* TeaVM
+  Copyright (c) Alexey Andreev and contributors.
+  Licensed under the Apache License 2.0.
+  https://teavm.org/
+
+* EclipseStore
+  Copyright (c) Eclipse Foundation and contributors.
+  Licensed under the Eclipse Public License - v 2.0.
+  https://eclipsestore.io/
+
+* DaisyUI
+  Copyright (c) Pouya Saadeghi.
+  Licensed under the MIT License.
+  https://daisyui.com/
+
+* Tailwind CSS
+  Copyright (c) Tailwind Labs, Inc.
+  Licensed under the MIT License.
+  https://tailwindcss.com/

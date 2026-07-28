@@ -1,0 +1,41 @@
+/*
+ * Copyright 2026 Franz Schöning
+ * Project: https://www.zeroz4j.com
+ * Author: Franz Schöning - Principal Enterprise Architect (https://www.franzschoning.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.zeroz4j.example.client.showcase;
+
+import com.zeroz4j.ui.component.*;
+import com.zeroz4j.ui.layout.*;
+
+public class CarouselShowcase extends ComponentShowcase {
+
+    public CarouselShowcase() {
+        addTitle("Carousel");
+        addDescription("Carousels display a list of items or images in a horizontal scrollable strip.");
+
+        Carousel carousel = new Carousel();
+        carousel.addClassName("rounded-box max-w-md h-48 border border-base-300");
+
+        for (int i = 1; i <= 4; i++) {
+            Div item = new Div();
+            item.addClassName("carousel-item w-full justify-center bg-neutral text-neutral-content py-20 text-xl font-bold");
+            item.setText("Slide " + i);
+            carousel.add(item);
+        }
+
+        addSection("Carousel Example", carousel);
+    }
+}

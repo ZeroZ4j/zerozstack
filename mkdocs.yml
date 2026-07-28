@@ -1,0 +1,119 @@
+site_name: ZeroZ4j
+site_description: >-
+  Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a
+  persistent WebSocket, and EclipseStore object-graph persistence.
+site_url: https://docs.zeroz4j.com/
+repo_url: https://github.com/fschoning/zeroz4j
+repo_name: fschoning/zeroz4j
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Franz Schöning — Apache 2.0
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+
+  - Get started:
+      - Quickstart: start/quickstart.md
+      - Examples: examples/index.md
+
+  - Decide:
+      - decide/index.md
+      - Events, signals or LiveSync?: decide/events-vs-signals-vs-livesync.md
+      - RMI or state sync?: decide/rmi-vs-state-sync.md
+      - Local or shared signal?: decide/local-vs-shared-signal.md
+      - Anti-patterns: decide/antipatterns.md
+
+  - Guides:
+      - Saving data: guides/persistence.md
+      - Authentication and authorization: guides/security-auth.md
+      - Forms and binding: guides/ui-forms-and-validation.md
+      - Troubleshooting: guides/troubleshooting.md
+      - Signals: SIGNALS.md
+      - Server events: SERVER_EVENTS.md
+      - LiveSync: LIVESYNC.md
+      - Validation: VALIDATION.md
+      - UI components: UI_COMPONENTS.md
+
+  - Reference:
+      - Glossary: reference/glossary.md
+      - Limitations: reference/limitations.md
+      - Wire protocol: PROTOCOL.md
+
+  - Explanation:
+      - Architecture: ARCHITECTURE.md
+      - Core concepts: CONCEPTS.md
+      - Code walkthrough: CODE_WALKTHROUGH.md
+      - Legacy getting started: GETTING_STARTED.md
+
+  - Design proposals:
+      - Transactions and concurrency: design/persistence-transactions.md
+
+  - AI agents:
+      - Agent prompts: AGENT_PROMPTS.md
+
+  - Contribute:
+      - Documentation style guide: contribute/docs-style-guide.md
+      - Documentation rewrite plan: contribute/documentation-plan.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/fschoning/zeroz4j
+    - icon: fontawesome/solid/globe
+      link: https://www.zeroz4j.com

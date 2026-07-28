@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>${groupId}</groupId>
+    <artifactId>${rootArtifactId}</artifactId>
+    <version>${version}</version>
+  </parent>
+  <artifactId>${rootArtifactId}-server</artifactId>
+  
+  <dependencies>
+    <dependency>
+      <groupId>${groupId}</groupId>
+      <artifactId>${rootArtifactId}-shared</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>${groupId}</groupId>
+      <artifactId>${rootArtifactId}-client</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-server-helidon</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-apt</artifactId>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <!-- Must be listed explicitly: declaring <resources> replaces the default src/main/resources,
+           which would silently drop logging.properties and break ServerApp on startup. -->
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- The compiled client, served by Helidon from the classpath at /js/classes.js -->
+      <resource>
+        <directory>${project.basedir}/../${rootArtifactId}-client/target/js</directory>
+        <targetPath>META-INF/resources/js</targetPath>
+      </resource>
+      <!-- index.html and any static assets, served at / -->
+      <resource>
+        <directory>${project.basedir}/../${rootArtifactId}-client/src/main/webapp</directory>
+        <targetPath>META-INF/resources</targetPath>
+      </resource>
+    </resources>
+
+    <plugins>
+      <!-- Copies every dependency into target/libs so the app can be launched with
+           java -cp "target/classes;target/libs/*" ${package}.server.ServerApp
+           (use ':' instead of ';' on Linux and macOS). -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-libs</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/libs</outputDirectory>
+              <includeScope>runtime</includeScope>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-libs-provided</id>
+            <phase>package</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/libs</outputDirectory>
+              <includeScope>provided</includeScope>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

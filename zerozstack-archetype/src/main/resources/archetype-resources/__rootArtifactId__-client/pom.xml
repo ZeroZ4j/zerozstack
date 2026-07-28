@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>${groupId}</groupId>
+    <artifactId>${rootArtifactId}</artifactId>
+    <version>${version}</version>
+  </parent>
+  <artifactId>${rootArtifactId}-client</artifactId>
+  
+  <dependencies>
+    <!-- TeaVM's JDK emulation. Without it the TeaVM compile fails with
+         "Class java.util.concurrent.ConcurrentHashMap was not found". Version comes from zerozstack-bom. -->
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>${groupId}</groupId>
+      <artifactId>${rootArtifactId}-shared</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-ui-components</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-apt</artifactId>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <version>0.15.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <phase>process-classes</phase>
+            <configuration>
+              <mainClass>${package}.client.ClientApp</mainClass>
+              <mainPageIncluded>false</mainPageIncluded>
+              <!-- TeaVM's JavaScript backend. The WasmGC backend is not currently supported by
+                   zerozstack-client; see docs/reference/limitations.md#compilation-target. -->
+              <targetType>JAVASCRIPT</targetType>
+              <optimizationLevel>ADVANCED</optimizationLevel>
+              <targetDirectory>${project.build.directory}/js</targetDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

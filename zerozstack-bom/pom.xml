@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.zeroz4j</groupId>
+        <artifactId>zerozstack-parent</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>zerozstack-bom</artifactId>
+    <packaging>pom</packaging>
+    <name>zeroz4j BOM</name>
+    <description>Bill of Materials (BOM) for zeroz4j framework</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-shared-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-apt</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-helidon</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-ui-components</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-store-eclipsestore</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- TeaVM is managed here deliberately: a client module compiles against the same TeaVM
+                 that zerozstack-client was built with, and a version mismatch produces obscure
+                 "class not found" failures at compile time rather than a dependency error. -->
+            <dependency>
+                <groupId>org.teavm</groupId>
+                <artifactId>teavm-classlib</artifactId>
+                <version>${teavm.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.teavm</groupId>
+                <artifactId>teavm-jso-apis</artifactId>
+                <version>${teavm.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
