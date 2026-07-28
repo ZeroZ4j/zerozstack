@@ -203,7 +203,7 @@
             </plugin>
             <plugin>
                 <!-- Resolves ${revision} in installed/deployed POMs so artifacts are
-                     consumable outside the reactor (local installs, JitPack). -->
+                     consumable outside the reactor (local installs, Maven Central). -->
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
                 <version>1.6.0</version>

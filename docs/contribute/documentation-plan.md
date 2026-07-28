@@ -632,7 +632,7 @@ in the project*:
 
 | Current file | Fate | Destination |
 |---|---|---|
-| `README.md` | **Rewrite as router** (~120 lines) | thesis prose → `explain/why-zero-impedance.md`; author/consulting → bottom, compressed; JitPack section → `start/prerequisites.md`, corrected to `zerozstack-bom` (see below) |
+| `README.md` | **Rewrite as router** (~120 lines) | thesis prose → `explain/why-zero-impedance.md`; author/consulting → bottom, compressed; Maven consumption section → `start/prerequisites.md`, using `zerozstack-bom` (done) |
 | `CONTRIBUTING.md` | Expand, fix `mvn clean test` → install-first | stays at root; deep content → `contribute/` |
 | `docs/CONCEPTS.md` | **Delete.** Its job splits cleanly | glossary → `reference/glossary.md`; orientation → `start/index.md` + `explain/architecture.md`. (It is also mistitled: "10 Core Concepts" with 11 sections.) |
 | `docs/GETTING_STARTED.md` | **Delete and rewrite from scratch** — 6 of its ~8 factual claims are wrong (archetype version, `java -jar`, `com.zeroz4j.ui.components.*` packages, `onClick`) | `start/prerequisites.md` + `start/quickstart.md` + `start/first-feature.md` |
@@ -667,11 +667,9 @@ The reference page must mark these "reserved, not implemented" rather than descr
 present tense — this is precisely the kind of claim that misleads an agent into generating code
 against a protocol that isn't there.
 
-Note on the JitPack section: the corrected consumption path is the `zerozstack-bom`
-(`pom.xml:62`, used by `archetype-resources/pom.xml:26-28`), with JitPack coordinates
-`com.zeroz4j.zeroz4j:<module>` — not the non-existent single `com.zeroz4j:zeroz4j`
-artifact at the non-existent tag `v1.0.0`. Verify by actually resolving it in a scratch project
-before publishing the instruction.
+Note on Maven consumption: the path is the `zerozstack-bom`
+(`pom.xml:62`, used by `archetype-resources/pom.xml:26-28`). The README was corrected in
+0.4.0; JitPack is no longer offered, since the family publishes to Maven Central.
 
 ---
 
