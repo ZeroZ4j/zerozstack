@@ -1,14 +1,11 @@
 # Developer Setup & Getting Started Guide
 
-> ⚠️ **Outdated — this page predates 0.3.0 and several of its commands and APIs are wrong.** Use
-> **[Quickstart](start/quickstart.md)** instead, where every command has been executed against the
-> current `main`.
+> ⚠️ **Superseded.** Use **[Quickstart](start/quickstart.md)** instead, where every command has been
+> executed against the current `main`. This page is kept only because it is linked from elsewhere.
 >
-> Known errors on this page: the archetype version below is `1.0.0-SNAPSHOT` but the project is at
-> `0.3.0`; `java -jar …-server.jar` cannot work because no shade or assembly plugin is configured;
-> the UI imports are `com.zeroz4j.ui.components.*` but the real packages are
-> `com.zeroz4j.ui.component` and `com.zeroz4j.ui.layout`; and `Button` has no `onClick` method — it is
-> `addClickListener`.
+> The UI package names and the `Button` API on this page were wrong until 0.4.1 and are now
+> corrected. One known error remains: `java -jar …-server.jar` cannot work, because no shade or
+> assembly plugin is configured — launch with `java -cp "target/classes:target/libs/*"` instead.
 
 The easiest way to scaffold a new `zeroz4j` project is to use the provided Maven Archetype. This will automatically generate a complete, multi-module project (client, shared, server) with all TeaVM, annotation processors, and Helidon dependencies correctly configured.
 
@@ -20,7 +17,7 @@ Run the following Maven command to scaffold your project:
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=1.0.0-SNAPSHOT \
+  -DarchetypeVersion=0.4.1 \
   -DgroupId=com.mycompany \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT
@@ -117,13 +114,13 @@ public class ChatServiceImpl implements ChatService {
 Invoke the backend directly from a UI button click event. The UI never touches JSON or REST.
 
 ```java
-import com.zeroz4j.ui.components.Button;
-import com.zeroz4j.ui.components.Div;
+import com.zeroz4j.ui.component.Button;   // component, singular
+import com.zeroz4j.ui.layout.Div;         // layouts live in ui.layout
 
 public class ChatView extends Div {
     public ChatView(ChatService chatService) {
         Button sendBtn = new Button("Send Hello");
-        sendBtn.onClick(event -> {
+        sendBtn.addClickListener(event -> {
             // Suspends cooperatively, calls backend over binary WebSocket
             chatService.sendMessage(new ChatMessage("Alice", "Hello World!"));
         });

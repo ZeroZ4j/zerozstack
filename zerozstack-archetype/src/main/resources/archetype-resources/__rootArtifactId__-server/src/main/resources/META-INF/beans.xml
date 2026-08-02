@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Makes this module an explicit CDI bean archive.
+
+  Without it Weld's discovery does not reliably find the @ApplicationScoped @RmiService
+  implementations that the RMI engine resolves through the bean manager, and every call from the
+  client fails with "Rejected RMI call to unregistered service" even though the implementation is
+  present, annotated and on the classpath.
+
+  bean-discovery-mode="annotated" keeps the scan to annotated classes, so @DataModel POJOs are not
+  turned into beans.
+-->
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_3_0.xsd"
+       version="3.0"
+       bean-discovery-mode="annotated">
+</beans>

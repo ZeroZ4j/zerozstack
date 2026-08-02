@@ -3,15 +3,21 @@
 The gallery for `zerozstack-ui-components`. If you want to know what a component looks like, how it is
 constructed, or which variants it supports, this is the example to run and to read.
 
-It is also the only example that exercises the component library broadly: 54 registered component
+It is also the only example that exercises the component library broadly: 80 registered component
 showcases, plus a data-binding view, a role-gated admin view and an HTML-template view.
 
 ## What it demonstrates
 
-- **The component catalogue** — 54 showcase panels, one per component, registered in
-  `ShowcaseRegistry` and grouped into categories (actions, data display, navigation, data input,
-  layout, feedback, mockups). Each panel is a `ComponentShowcase` subclass showing the component in
-  its variants with a short description.
+- **The component catalogue** — 80 showcase panels, one per component, registered in
+  `ShowcaseRegistry` and grouped into categories (charts, dashboard panels, actions, data display,
+  navigation, data input, layout, feedback, mockups). Each panel is a `ComponentShowcase` subclass
+  showing the component in its variants with a short description.
+- **The chart set** — the *Charts* and *Dashboard Panels* groups cover
+  `com.zeroz4j.ui.chart`: time series, rolling telemetry, gauges, bar gauges, bar charts, heatmaps,
+  histograms, scatter, donut, treemap, state timelines, status history, plus the panel chrome
+  (`PanelFrame`, `TimeRangePicker`, `RefreshControl`, `MetricTable`, `LogViewer`,
+  `ColorScaleLegend`). Sample data comes from `DemoData`, which is seeded rather than random so the
+  gallery renders identically on every load and can be screenshot-tested.
 - **Signal-driven navigation** — `MainLayout` holds `ValueSignal<ViewType> currentViewSignal` and
   `ValueSignal<String> currentComponentSignal`; an `Effect` swaps the content area when either
   changes. No router is involved (`@Route` is not implemented).

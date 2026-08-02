@@ -325,4 +325,58 @@ public class WasmRmiServerEngineTest {
         assertEquals((byte) 0x0F, response.get()); 
         assertEquals("Intentional Error", BinarySerializer.readString(response));
     }
+
+    // ---------------------------------------------------------------- diagnose()
+
+    /** Not annotated at all: the developer really does need to add @DataModel. */
+    static class PlainPojo {
+        public String text;
+    }
+
+    /**
+     * Annotated but with no generated serializer alongside it — which is what a skipped annotation
+     * processor looks like from the outside. Nothing named PlainAnnotated_Serializer exists.
+     */
+    @com.zeroz4j.api.DataModel
+    static class PlainAnnotated {
+        public String text;
+    }
+
+    /** Annotated, and a class named exactly as the processor would name its serializer. */
+    @com.zeroz4j.api.DataModel
+    static class WithSerializer {
+        public String text;
+    }
+
+    /** Stands in for generated output; diagnose() only checks that this name resolves. */
+    static class WithSerializer_Serializer {
+    }
+
+    @Test
+    void diagnoseTellsAnUnannotatedTypeToAnnotateItself() {
+        String message = WasmRmiServerEngine.diagnose(PlainPojo.class);
+        assertTrue(message.contains("Annotate"), message);
+        assertTrue(message.contains(PlainPojo.class.getName()), message);
+        assertFalse(message.contains("annotation processor did not run"), message);
+    }
+
+    @Test
+    void diagnosePointsAtTheProcessorWhenTheTypeIsAnnotatedButHasNoSerializer() {
+        String message = WasmRmiServerEngine.diagnose(PlainAnnotated.class);
+        // The old message said "annotate the type @DataModel" here, sending people to a class that
+        // was already annotated. It must now name the real cause instead.
+        assertTrue(message.contains("IS annotated @DataModel"), message);
+        assertTrue(message.contains("annotation processor did not run"), message);
+        assertTrue(message.contains("JEP 470"), message);
+        assertTrue(message.contains("annotationProcessorPaths"), message);
+    }
+
+    @Test
+    void diagnoseBlamesTheValueWhenTheSerializerWasGenerated() {
+        // diagnose() decides purely on whether <Type>_Serializer resolves, so a companion class
+        // with exactly that name stands in for generated output.
+        String message = WasmRmiServerEngine.diagnose(WithSerializer.class);
+        assertTrue(message.contains("problem is inside the value"), message);
+        assertFalse(message.contains("annotation processor did not run"), message);
+    }
 }

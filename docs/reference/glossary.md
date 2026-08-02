@@ -28,7 +28,9 @@ ZeroZ Stack is not a message broker.
 
 **`@DataModel`**
 : Marks a class as wire-serializable. The annotation processor generates a binary serializer for it at
-compile time. Requires a public no-arg constructor plus getters and setters.
+compile time. Requires a public no-arg constructor, and for every serialized field either a public
+field or standard accessors — public fields are enough on their own, which is what the archetype's
+own `Message` example uses.
 
 **RMI**
 : Remote method invocation over the binary WebSocket — *not* `java.rmi`. A `@RmiService` interface in

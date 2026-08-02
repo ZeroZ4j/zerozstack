@@ -42,6 +42,40 @@
         <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
+    <build>
+        <plugins>
+            <!-- Empties target/libs before copy-dependencies refills it. That goal only adds, so
+                 after a version bump without a `mvn clean` the directory holds both the old and the
+                 new framework jars, every class is on the classpath twice, and the example dies at
+                 startup with "WELD-001409: Ambiguous dependencies" — which says nothing about the
+                 real cause. Harmless in modules that have no target/libs. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>purge-libs</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <!-- A running server holds these jars open on Windows; a stale libs dir is a far
+                                 smaller problem than a build that cannot complete. -->
+                            <failOnError>false</failOnError>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.directory}/libs</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <modules>
         <module>components-showcase</module>
         <module>chat-events</module>

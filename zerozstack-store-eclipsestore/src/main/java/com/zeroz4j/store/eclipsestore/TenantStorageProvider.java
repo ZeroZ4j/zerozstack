@@ -28,6 +28,7 @@ import com.zeroz4j.db.Durability;
 import com.zeroz4j.db.net.ZeroZDbNode;
 
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -68,17 +69,26 @@ public class TenantStorageProvider {
     @ConfigProperty(name = "zeroz4j.store.schemaId", defaultValue = "default")
     String schemaId;
 
+    /**
+     * Only read in {@code CLIENT} mode, so it is genuinely optional.
+     *
+     * <p>Declared as {@code Optional} rather than {@code defaultValue = ""}: Helidon's
+     * {@code ConfigCdiExtension} treats an empty default as <em>no</em> default, so the empty-string
+     * form fails CDI validation at startup with "Cannot find value for key" — and takes down every
+     * application that never intended to use client mode.</p>
+     */
     @Inject
-    @ConfigProperty(name = "zeroz4j.store.server.host", defaultValue = "")
-    String serverHost;
+    @ConfigProperty(name = "zeroz4j.store.server.host")
+    Optional<String> serverHost;
 
     @Inject
     @ConfigProperty(name = "zeroz4j.store.server.port", defaultValue = "5150")
     int serverPort;
 
+    /** Optional for the same reason as {@link #serverHost}. */
     @Inject
-    @ConfigProperty(name = "zeroz4j.store.server.secret", defaultValue = "")
-    String serverSecret;
+    @ConfigProperty(name = "zeroz4j.store.server.secret")
+    Optional<String> serverSecret;
 
     private final ConcurrentHashMap<String, ZeroZDbNode> nodes = new ConcurrentHashMap<>();
 
@@ -163,13 +173,15 @@ public class TenantStorageProvider {
             case EMBEDDED -> builder.mode(ZeroZDbNode.Mode.EMBEDDED);
             case AUTO_SERVER -> builder.mode(ZeroZDbNode.Mode.AUTO_SERVER);
             case CLIENT -> {
-                if (serverHost == null || serverHost.isBlank()) {
+                String host = serverHost.orElse("");
+                if (host.isBlank()) {
                     throw new IllegalStateException(
                             "zeroz4j.store.mode=CLIENT needs zeroz4j.store.server.host to be set.");
                 }
-                builder.remote(serverHost, serverPort);
-                if (!serverSecret.isBlank()) {
-                    builder.secret(serverSecret);
+                builder.remote(host, serverPort);
+                String secret = serverSecret.orElse("");
+                if (!secret.isBlank()) {
+                    builder.secret(secret);
                 }
             }
         }

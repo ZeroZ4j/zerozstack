@@ -50,6 +50,35 @@
     </resources>
 
     <plugins>
+      <!-- Empties target/libs before it is refilled. copy-dependencies only adds, so after a
+           dependency version changes without a `mvn clean` the directory holds both the old and
+           the new jar. Every framework class is then on the classpath twice and the app dies at
+           startup with "WELD-001409: Ambiguous dependencies" — a message that says nothing about
+           the actual cause. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>purge-libs</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+            <configuration>
+              <excludeDefaultDirectories>true</excludeDefaultDirectories>
+              <!-- A running server holds these jars open on Windows; a stale libs dir is a far
+                   smaller problem than a build that cannot complete. -->
+              <failOnError>false</failOnError>
+              <filesets>
+                <fileset>
+                  <directory>${project.build.directory}/libs</directory>
+                </fileset>
+              </filesets>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <!-- Copies every dependency into target/libs so the app can be launched with
            java -cp "target/classes;target/libs/*" ${package}.server.ServerApp
            (use ':' instead of ';' on Linux and macOS). -->

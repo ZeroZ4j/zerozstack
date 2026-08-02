@@ -96,7 +96,13 @@ public class MainLayout extends HorizontalLayout {
         List<String> layout = Arrays.asList("artboard", "divider", "drawer", "footer", "hero", "indicator", "join", "stack");
         List<String> mockup = Arrays.asList("mockup-browser", "mockup-code", "mockup-phone", "mockup-window");
         List<String> feedback = Arrays.asList("dialog", "toast");
+        List<String> charts = Arrays.asList("time-series", "rolling-chart", "gauge", "bar-gauge", "bar-chart", "heatmap", "state-timeline", "status-history", "donut", "histogram", "scatter", "treemap", "sparkline", "kpi-tile");
+        List<String> dashboard = Arrays.asList("panel-frame", "time-range", "refresh-control", "metric-table", "log-viewer", "color-scale", "status-dot", "token-meter", "lane-timeline", "property-grid", "virtual-scroller", "svg-canvas");
 
+        uiComponentsSubMenu.addSubMenu("Charts", createCategoryMenu(charts, currentComponentSignal, currentViewSignal));
+        // "Dashboard Panels", not "Dashboard" — the top-level menu already has a Dashboard view,
+        // and two identically named entries in the same sidebar is a coin toss for the user.
+        uiComponentsSubMenu.addSubMenu("Dashboard Panels", createCategoryMenu(dashboard, currentComponentSignal, currentViewSignal));
         uiComponentsSubMenu.addSubMenu("Actions", createCategoryMenu(actions, currentComponentSignal, currentViewSignal));
         uiComponentsSubMenu.addSubMenu("Data Input", createCategoryMenu(dataInput, currentComponentSignal, currentViewSignal));
         uiComponentsSubMenu.addSubMenu("Data Display", createCategoryMenu(dataDisplay, currentComponentSignal, currentViewSignal));

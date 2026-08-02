@@ -50,7 +50,10 @@
             <phase>process-classes</phase>
             <configuration>
               <mainClass>${package}.client.ClientApp</mainClass>
-              <mainPageIncluded>false</mainPageIncluded>
+              <!-- No <mainPageIncluded> here: teavm-maven-plugin 0.15.0 does not recognise it and
+                   silently ignores it, which reads as if the page bootstrap were being handled.
+                   The backend emits a UMD module that exports main rather than calling it, so
+                   index.html invokes it explicitly. -->
               <!-- TeaVM's JavaScript backend. The WasmGC backend is not currently supported by
                    zerozstack-client; see docs/reference/limitations.md#compilation-target. -->
               <targetType>JAVASCRIPT</targetType>

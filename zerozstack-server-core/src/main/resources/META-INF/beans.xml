@@ -5,4 +5,25 @@
                            https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
        version="4.0"
        bean-discovery-mode="all">
+
+    <!--
+      RmiSecurityFilter and DevLoginServlet implement the servlet API, which is not on the Helidon
+      server's runtime classpath. Weld would otherwise log three WELD-000119 "underlying class
+      loading error" lines on every boot — harmless, but alarming enough to send people debugging
+      the wrong thing.
+
+      The condition matters: in a servlet container jakarta.servlet.Filter *is* available, these
+      stay beans, and nothing is excluded.
+    -->
+    <scan>
+        <exclude name="com.zeroz4j.server.RmiSecurityFilter">
+            <if-class-not-available name="jakarta.servlet.Filter"/>
+        </exclude>
+        <exclude name="com.zeroz4j.server.DevLoginServlet">
+            <if-class-not-available name="jakarta.servlet.http.HttpServlet"/>
+        </exclude>
+        <exclude name="com.zeroz4j.server.DevLoginServlet$DevUser">
+            <if-class-not-available name="jakarta.servlet.http.HttpServlet"/>
+        </exclude>
+    </scan>
 </beans>

@@ -82,6 +82,36 @@ public class ShowcaseRegistry {
         showcases.put("toggle", ToggleShowcase::new);
         showcases.put("tooltip", TooltipShowcase::new);
         showcases.put("mockup-window", WindowMockupShowcase::new);
+
+        // Charts — the dashboard visualisation set.
+        showcases.put("time-series", TimeSeriesChartShowcase::new);
+        showcases.put("rolling-chart", RollingChartShowcase::new);
+        showcases.put("gauge", GaugeShowcase::new);
+        showcases.put("bar-gauge", BarGaugeShowcase::new);
+        showcases.put("bar-chart", BarChartShowcase::new);
+        showcases.put("heatmap", HeatmapShowcase::new);
+        showcases.put("state-timeline", StateTimelineShowcase::new);
+        showcases.put("status-history", StatusHistoryShowcase::new);
+        showcases.put("donut", DonutChartShowcase::new);
+        showcases.put("histogram", HistogramShowcase::new);
+        showcases.put("scatter", ScatterChartShowcase::new);
+        showcases.put("treemap", TreemapShowcase::new);
+        showcases.put("sparkline", SparklineShowcase::new);
+        showcases.put("kpi-tile", KpiTileShowcase::new);
+
+        // Dashboard — panel chrome and the dense data surfaces.
+        showcases.put("panel-frame", PanelFrameShowcase::new);
+        showcases.put("time-range", TimeRangePickerShowcase::new);
+        showcases.put("refresh-control", RefreshControlShowcase::new);
+        showcases.put("metric-table", MetricTableShowcase::new);
+        showcases.put("log-viewer", LogViewerShowcase::new);
+        showcases.put("color-scale", ColorScaleLegendShowcase::new);
+        showcases.put("status-dot", StatusDotShowcase::new);
+        showcases.put("token-meter", TokenMeterShowcase::new);
+        showcases.put("lane-timeline", LaneTimelineShowcase::new);
+        showcases.put("property-grid", PropertyGridShowcase::new);
+        showcases.put("virtual-scroller", VirtualScrollerShowcase::new);
+        showcases.put("svg-canvas", SvgCanvasShowcase::new);
     }
 
     public static Component createShowcase(String componentId) {
@@ -148,6 +178,34 @@ public class ShowcaseRegistry {
         labels.put("toggle", "Toggle");
         labels.put("tooltip", "Tooltip");
         labels.put("mockup-window", "Window Mockup");
+
+        labels.put("time-series", "Time Series Chart");
+        labels.put("rolling-chart", "Rolling Chart");
+        labels.put("gauge", "Gauge");
+        labels.put("bar-gauge", "Bar Gauge");
+        labels.put("bar-chart", "Bar Chart");
+        labels.put("heatmap", "Heatmap");
+        labels.put("state-timeline", "State Timeline");
+        labels.put("status-history", "Status History");
+        labels.put("donut", "Donut Chart");
+        labels.put("histogram", "Histogram");
+        labels.put("scatter", "Scatter Chart");
+        labels.put("treemap", "Treemap");
+        labels.put("sparkline", "Sparkline");
+        labels.put("kpi-tile", "KPI Tile");
+
+        labels.put("panel-frame", "Panel Frame");
+        labels.put("time-range", "Time Range Picker");
+        labels.put("refresh-control", "Refresh Control");
+        labels.put("metric-table", "Metric Table");
+        labels.put("log-viewer", "Log Viewer");
+        labels.put("color-scale", "Color Scale Legend");
+        labels.put("status-dot", "Status Dot");
+        labels.put("token-meter", "Token Meter");
+        labels.put("lane-timeline", "Lane Timeline");
+        labels.put("property-grid", "Property Grid");
+        labels.put("virtual-scroller", "Virtual Scroller");
+        labels.put("svg-canvas", "SVG Canvas");
         return labels;
     }
 }

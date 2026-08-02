@@ -28,8 +28,8 @@ import java.lang.annotation.Target;
  * persistence, and the Wasm UI all use the same instance class. One annotation, nothing
  * else: no interface to implement, no DTOs, no mapping.
  *
- * <p>Requirements: a public no-arg constructor and getters/setters (or non-private
- * fields) for every serialized field. Validation annotations from
+ * <p>Requirements: a public no-arg constructor, and for every serialized field either a public
+ * field or standard accessors — public fields alone are enough. Validation annotations from
  * {@code com.zeroz4j.api.validation} may be declared on fields and are enforced on both
  * tiers.</p>
  *

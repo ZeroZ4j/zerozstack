@@ -5,15 +5,20 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
 
 ## Before a release
 
-1. `mvn clean install` from the root — the whole build, tests included. Use `clean`: each example
-   server copies dependencies into `target/libs`, which is never pruned, so stale jars otherwise
-   accumulate and cause duplicate-bean warnings at startup.
-2. Update [CHANGELOG.md](CHANGELOG.md). Read the **Breaking** section as a user would; that is what
+1. `mvn clean install` from the root — the whole build, tests included. Since 0.4.1 each server
+   module prunes its own `target/libs` before refilling it, so a plain `install` no longer leaves
+   stale jars behind and dies with "WELD-001409: Ambiguous dependencies"; `clean` is still the
+   honest choice before a release.
+2. **Run the archetype smoke test** — [`zerozstack-archetype/smoke/README.md`](zerozstack-archetype/smoke/README.md).
+   It generates a project from the archetype, builds it, starts it and drives it with a headless
+   browser. The three blockers fixed in 0.4.1 all produced a project that compiled, started and
+   served pages while not working; only an end-to-end run catches that class of defect.
+3. Update [CHANGELOG.md](CHANGELOG.md). Read the **Breaking** section as a user would; that is what
    people rely on when upgrading.
-3. Set the version. This build uses CI-friendly versioning: change `<revision>` in the root
+4. Set the version. This build uses CI-friendly versioning: change `<revision>` in the root
    `pom.xml` and every module follows, with `flatten-maven-plugin` resolving it in the installed
    POMs.
-4. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
+5. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
    covered by `${revision}`.
 
 ## Publishing to Maven Central

@@ -18,6 +18,7 @@
 package com.zeroz4j.server;
 
 import com.zeroz4j.api.BinarySerializer;
+import com.zeroz4j.api.DataModel;
 import com.zeroz4j.api.GrowableBuffer;
 import com.zeroz4j.api.ObjectMapper;
 import com.zeroz4j.api.Scope;
@@ -305,7 +306,49 @@ public class WasmRmiServerEngine implements EventPublisher {
         } catch (RuntimeException ex) {
             throw new IllegalArgumentException(
                     "Cannot serialize " + description + ": " + ex.getMessage()
-                    + ". Annotate the type @DataModel, or use a supported built-in type.", ex);
+                    + " " + diagnose(value.getClass()), ex);
+        }
+    }
+
+    /**
+     * Explains <em>why</em> a type could not be put on the wire.
+     *
+     * <p>This used to say "annotate the type @DataModel" unconditionally, which sent developers to
+     * look at a model class that was already annotated — the actual cause was usually that the
+     * annotation processor never ran, which is invisible from the source. The three cases are
+     * genuinely different problems and are now reported as such.</p>
+     *
+     * @param type the runtime type that failed to serialize
+     * @return a sentence naming the likely cause and what to check
+     */
+    // Package-private so WasmRmiServerEngineTest can assert each branch. This message only ever
+    // appears when something is already broken, which is exactly when it must not be wrong.
+    static String diagnose(Class<?> type) {
+        if (!type.isAnnotationPresent(DataModel.class)) {
+            return "Annotate " + type.getName() + " with @DataModel, or use a supported built-in type.";
+        }
+        if (!hasGeneratedSerializer(type)) {
+            return type.getName() + " IS annotated @DataModel, but no "
+                    + type.getSimpleName() + "_Serializer was generated for it, so the annotation "
+                    + "processor did not run for that module. JDK 23 disabled implicit annotation "
+                    + "processing (JEP 470), so zerozstack-apt on the classpath alone is ignored. "
+                    + "Declare it explicitly in the module that owns this type, via "
+                    + "maven-compiler-plugin <annotationProcessorPaths> with "
+                    + "com.zeroz4j:zerozstack-apt. Verify by looking for "
+                    + type.getSimpleName() + "_Serializer.class in that module's target/classes.";
+        }
+        return type.getName() + " is annotated @DataModel and its serializer was generated, so the "
+                + "problem is inside the value rather than the type itself — most often a field "
+                + "whose own type is neither @DataModel nor a supported built-in.";
+    }
+
+    /** Whether the processor emitted a serializer for this type, alongside it in its own package. */
+    private static boolean hasGeneratedSerializer(Class<?> type) {
+        try {
+            Class.forName(type.getName() + "_Serializer", false, type.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError notGenerated) {
+            return false;
         }
     }
 

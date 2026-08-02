@@ -2,10 +2,42 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zeroz4j Application</title>
 </head>
 <body>
-    <div id="app-root">Loading...</div>
+    <div id="app-root">Loading&hellip;</div>
     <script type="text/javascript" charset="utf-8" src="js/classes.js"></script>
+    <script type="text/javascript">
+        // TeaVM's JavaScript backend emits a UMD module that *exports* main rather than calling
+        // it, so without this the bundle loads, defines everything, and does nothing: the page
+        // sits on "Loading..." forever with HTTP 200, no JavaScript error and no WebSocket.
+        // The typeof check matters as much as the call — it turns that silent case into a visible
+        // one.
+        (function () {
+            var root = document.getElementById("app-root");
+            function fail(msg) {
+                root.textContent = "";
+                var box = document.createElement("div");
+                box.setAttribute("style",
+                    "margin:2rem auto;max-width:40rem;padding:1rem 1.25rem;border-radius:8px;"
+                    + "border:1px solid rgb(208,59,59);color:rgb(208,59,59);font:14px/1.5 system-ui,sans-serif");
+                box.textContent = msg;
+                root.appendChild(box);
+            }
+
+            if (typeof main !== "function") {
+                fail("The application bundle did not load. Check that js/classes.js is served, "
+                    + "and that the TeaVM compile ran (target/js/classes.js should exist).");
+                return;
+            }
+            try {
+                main();
+            } catch (e) {
+                console.error("Client start-up failed:", e);
+                fail("The application failed to start — see the browser console.");
+            }
+        })();
+    </script>
 </body>
 </html>

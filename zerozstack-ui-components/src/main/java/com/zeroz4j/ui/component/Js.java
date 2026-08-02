@@ -33,6 +33,26 @@ public final class Js {
         void accept(String dataUri);
     }
 
+    /** A plain notification with no payload. */
+    @JSFunctor
+    public interface VoidCallback extends JSObject {
+        void call();
+    }
+
+    /**
+     * Fires {@code callback} whenever {@code element} changes size, via {@code ResizeObserver}.
+     *
+     * <p>The window {@code resize} event is not enough for anything that draws to measured
+     * pixels: a chart inside a drawer, a split pane or a collapsing card is resized by layout
+     * without the window ever changing. Silently does nothing where {@code ResizeObserver} is
+     * unavailable, so callers still need their own initial draw.</p>
+     */
+    @JSBody(params = {"element", "callback"}, script =
+        "if (typeof ResizeObserver === 'undefined') { return; }"
+        + "var observer = new ResizeObserver(function(){ callback(); });"
+        + "observer.observe(element);")
+    public static native void onResize(HTMLElement element, VoidCallback callback);
+
     /**
      * Fires {@code callback} with a data: URI whenever an image is pasted into {@code element}
      * (Ctrl+V of a screenshot). Prevents the default paste for images so no stray text lands

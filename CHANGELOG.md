@@ -8,6 +8,104 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.4.1] — 2026-08-01
+
+A generated project from `zerozstack-archetype:0.4.0` compiled cleanly, started cleanly, served
+pages — and did not work. Three separate defects, each surfacing far from its cause and none
+producing an error at the point of the mistake. All three are fixed here, and the archetype now has
+an end-to-end smoke test so they cannot come back silently.
+
+### Fixed
+
+- **The annotation processor is no longer skipped on JDK 23+.** `zerozstack-apt` relied on javac
+  discovering it from the classpath, and [JEP 470](https://openjdk.org/jeps/470) disabled implicit
+  annotation processing in JDK 23 — so on a modern JDK no `*_Serializer`, no `*_Stub` and no
+  `BinaryPackableRegistrar` was generated, with no error and no warning. The first shared-signal
+  broadcast then failed at runtime telling the developer to annotate a type that was already
+  annotated. The archetype now declares `annotationProcessorPaths` in its root pom, so the processor
+  runs on every JDK and in every module, and the shared module — where `@DataModel` types live by
+  convention — depends on `zerozstack-apt` at last.
+- **`assertSerializable` no longer misdirects.** When a type carries `@DataModel` but has no
+  generated serializer, the message now says exactly that and names the likely cause (the processor
+  did not run) instead of telling you to add an annotation that is already there.
+- **A generated project renders without hand-editing `index.html`.** TeaVM's JavaScript backend
+  emits a UMD module that *exports* `main` rather than calling it, and the archetype's page never
+  invoked it: the browser sat on `Loading…` forever with HTTP 200, zero JavaScript errors and no
+  WebSocket — no signal of any kind that anything was wrong. The archetype page now calls `main()`
+  and, just as importantly, reports it visibly when the bundle did not load. The dead
+  `<mainPageIncluded>` parameter, which `teavm-maven-plugin` 0.15.0 silently ignores, is gone.
+- **RMI services are discovered again.** The archetype's server module shipped no
+  `META-INF/beans.xml`, so it was not an explicit bean archive and Weld did not reliably find the
+  `@ApplicationScoped` implementations the RMI engine resolves through the bean manager — every call
+  failed with "Rejected RMI call to unregistered service". The archetype now ships one with
+  `bean-discovery-mode="annotated"`, which also keeps `@DataModel` POJOs from becoming beans.
+- **Three `WELD-000119` warnings no longer appear on every boot.** `RmiSecurityFilter` and
+  `DevLoginServlet` reference the servlet API, which is absent from the Helidon runtime classpath.
+  They are now excluded from bean discovery when `jakarta.servlet.Filter` is not available, so they
+  stay beans in a servlet container and go quiet everywhere else.
+- **A version bump no longer produces "WELD-001409: Ambiguous dependencies".** `copy-dependencies`
+  only adds to `target/libs`, so changing a dependency version without a `mvn clean` left both the
+  old and the new jar there, every framework class on the classpath twice, and the app dead at
+  startup with a message pointing nowhere near the cause. The archetype's server module now empties
+  `target/libs` before refilling it, and tolerates a jar held open by a running server rather than
+  failing the build.
+- **Applications no longer fail to start unless they configure client-mode storage.** Helidon treats
+  `@ConfigProperty(defaultValue = "")` as *no default*, so `TenantStorageProvider`'s `serverHost` and
+  `serverSecret` failed CDI validation with "Cannot find value for key" in every application that
+  never intended to use `CLIENT` mode — `components-showcase` among them. Both are now
+  `Optional<String>`.
+
+### Documentation
+
+- `docs/index.md` and `docs/GETTING_STARTED.md` imported `com.zeroz4j.ui.components` — plural, and
+  it does not exist. Corrected to `com.zeroz4j.ui.component` and `com.zeroz4j.ui.layout`, and
+  `onClick(...)` corrected to `addClickListener(...)`.
+- `docs/reference/glossary.md` claimed `@DataModel` requires getters and setters. Public fields work
+  and always have — the archetype's own `Message` example uses one. The requirement now reads "a
+  public no-arg constructor, and public fields or standard accessors".
+
+### Added
+
+- **A dashboard chart set** in the new `com.zeroz4j.ui.chart` package, written in Java against SVG
+  and DOM — no JavaScript charting library is wrapped or loaded. Series colours resolve to DaisyUI
+  semantic tokens (`var(--color-primary, …)`), so a theme switch recolours every chart with no
+  redraw and no listener; each token carries a literal fallback so charts stay legible in
+  applications that do not load DaisyUI.
+  - **Charts** — `TimeSeriesChart` (lines, areas, stacks, shared crosshair, live legend),
+    `RollingChart` (sliding window; redraw decoupled from data arrival so a stalled feed shows as a
+    growing gap rather than a frozen chart), `Gauge`, `BarGauge`, `BarChart`, `Heatmap`,
+    `Histogram`, `ScatterChart`, `DonutChart`, `Treemap` (squarified), `StateTimeline`,
+    `StatusHistory`.
+  - **Dashboard surfaces** — `PanelFrame` (title, actions, footer, and the ready/loading/error/
+    no-data states), `TimeRangePicker` (selection published as a `ValueSignal`), `RefreshControl`
+    (interval plus the age of the current data), `MetricTable`, `LogViewer`, `ColorScaleLegend`.
+  - **Supporting types** — `Series`, `Threshold`, `ValueFormat`, `StateColor`, `Scales` (nice ticks,
+    local-time tick alignment, TeaVM-safe formatting), `Palette`, `ChartBase`, `CartesianChart`.
+- **`Sparkline` gained modes and annotation** — `AREA` (unchanged default), `LINE` and `BAR`, plus
+  an optional baseline, min/max markers, delta colouring (green when the series ends above where it
+  started, red below) and an explicit colour override. Gaps are honoured: a `NaN` breaks the line
+  rather than reading as zero. The zero-argument constructor behaves exactly as before.
+- **`KpiTile` computes its own movement** — `setDelta(current, previous, unit)` renders the absolute
+  change, the percentage and a direction arrow. `setDirection` says whether a rise is good news,
+  because that is a judgement and not arithmetic: falling free memory is bad, falling latency is
+  good. Also a separate unit in smaller type, `setValueColor` for threshold colouring, and
+  `sparkline()` to configure the trend. The existing `value`/`delta`/`trend` methods are unchanged.
+- **`Js.onResize`** wraps `ResizeObserver`, so a component can redraw when its container resizes.
+  A window `resize` listener misses a drawer opening or a split pane being dragged.
+- **26 new showcase panels** in `components-showcase`, under new *Charts* and *Dashboard Panels*
+  menu groups. This also backfills panels for `KpiTile`, `Sparkline`, `StatusDot`, `TokenMeter`,
+  `LaneTimeline`, `SvgCanvas`, `PropertyGrid` and `VirtualScroller`, which the gallery had never
+  covered. Sample data is seeded rather than random, so the gallery renders identically on every
+  load and can be screenshot-tested.
+
+### Notes
+
+- **A component must not read a `Signal` in its constructor.** A signal read registers a dependency
+  on whichever `Effect` is currently running, and components are typically constructed *inside* the
+  effect that swaps views — so the component ends up invalidating the view that built it, which
+  rebuilds the component, until the stack overflows. Mirror the value in a plain field and read
+  that. `TimeRangePicker` documents the pattern.
+
 ## [0.4.0] — 2026-07-28
 
 The last release was `v0.2.0`. **Version 0.3.0 was never tagged**, so its changes — UUID, `Instant`

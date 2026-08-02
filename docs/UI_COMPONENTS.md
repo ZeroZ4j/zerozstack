@@ -106,7 +106,7 @@ When building your own custom components that hook into low-level DOM events via
 
 ## Component Reference
 
-The framework provides a rich set of 87 UI components, broken down into the following functional categories:
+The framework provides a rich set of 105 UI components, broken down into the following functional categories:
 
 ### Layout Components
 Used for structuring the application and organizing other components.
@@ -174,7 +174,10 @@ Components used to present data, alerts, and content to the user.
 - **Js**: A component wrapper for embedding custom JavaScript execution.
 - **Kbd**: Represents keyboard input visually (e.g., styling for `Ctrl+C`).
 - **KeyedList**: An optimized list component that efficiently manages DOM nodes based on keys.
-- **KpiTile**: A dashboard tile for displaying Key Performance Indicators.
+- **KpiTile**: A dashboard stat tile: label, big value with an optional unit, a computed movement
+  line (absolute change, percentage and direction arrow) and a trend sparkline. `setDirection`
+  decides whether a rise is coloured as good news — falling free memory is bad, falling latency is
+  good, and that is a judgement rather than arithmetic.
 - **LaneTimeline**: A timeline view segmented into multiple lanes.
 - **Loading**: A spinner or indicator signifying a background process is running.
 - **MarkdownView**: Renders Markdown text safely into HTML.
@@ -184,7 +187,9 @@ Components used to present data, alerts, and content to the user.
 - **PropertyGrid**: A structured grid for displaying key-value pairs or object properties.
 - **Resizer**: A drag handle component for resizable containers.
 - **Skeleton**: A placeholder skeleton screen shown while data is loading.
-- **Sparkline**: A small, inline chart used to show data trends over time.
+- **Sparkline**: A tiny inline trend chart in `AREA`, `LINE` or `BAR` mode, auto-scaled to its
+  data, with an optional baseline, min/max markers and delta colouring. Draws in `currentColor`
+  by default, so it inherits the surrounding text colour and follows the theme for free.
 - **SplitPane**: A container with two resizable panels separated by a divider.
 - **Stack**: A layout utility for overlapping components.
 - **Stat**: A component optimized for displaying a prominent statistic or metric.
@@ -198,6 +203,65 @@ Components used to present data, alerts, and content to the user.
 - **TokenMeter**: A specialized visualization component (e.g., for showing API token usage).
 - **Tooltip**: A small informational popup shown when hovering over an element.
 - **VirtualScroller**: An optimized list container that only renders visible items for high performance with large datasets.
+
+### Charts & Dashboards
+Package `com.zeroz4j.ui.chart`. Built in Java against SVG and DOM — no JavaScript charting library is
+wrapped or loaded. Series colours resolve to DaisyUI theme tokens (`var(--color-primary)`), so
+switching `data-theme` recolours every chart with no redraw and no listener.
+
+**Charts**
+- **TimeSeriesChart**: The workhorse panel — multiple metrics over time as lines, filled areas or a
+  stack, with a shared crosshair, a hover tooltip and a live legend. Uses the *aligned* data model:
+  one timestamp array plus one value array per series. `NaN` is a gap, not a zero.
+- **RollingChart**: Live telemetry with a sliding window. `push()` samples in; redraw is decoupled
+  from data arrival, so the trace scrolls smoothly at any sample rate and a stalled feed shows as a
+  growing gap rather than a frozen chart. Bounded ring buffer.
+- **Gauge**: One value against a range, coloured by threshold, with threshold arcs outside the dial.
+  Where `RadialProgress` shows a percentage, a Gauge shows a *reading* — min, max, unit and judgement.
+- **BarGauge**: A stack of labelled meters on a shared scale (`BASIC`, `LCD`, `GRADIENT`; horizontal
+  or vertical). The densest way to show one measurement across many subjects.
+- **BarChart**: Categorical bars, grouped or stacked, vertical or horizontal.
+- **Heatmap**: Histograms over time — time buckets across, value bands up, colour by count. Shows
+  whether a tail moved because everything slowed or because a second mode appeared.
+- **Histogram**: Distribution of a sample set, with automatic nice-numbered bucketing.
+- **ScatterChart**: Two measurements against each other, with optional category colour and bubble
+  size (scaled by area, not radius).
+- **DonutChart**: Composition of a whole, with the total in the centre.
+- **Treemap**: Proportional area via the squarified algorithm, up to two levels. For "what is taking
+  up all the space".
+- **StateTimeline**: Discrete state over time as bands whose edges are the transitions.
+- **StatusHistory**: One mark per periodic sample, so a missed poll leaves a visible hole —
+  "the probe stopped answering" looks different from "the value did not change".
+
+**Dashboard surfaces**
+- **PanelFrame**: Panel chrome — title, subtitle, header actions, footer — and the four states a
+  panel really has: ready, loading, error, no-data.
+- **TimeRangePicker**: Quick ranges published as a `ValueSignal`, so panels bind with an `Effect`
+  rather than being wired up by hand. A range is a duration resolved against the clock, so "last
+  hour" keeps meaning the last hour.
+- **RefreshControl**: Manual refresh, an auto-refresh interval, and the age of the current data —
+  so "the number has not moved" is distinguishable from "the number has not been fetched".
+- **MetricTable**: A sortable table whose cells are measurements: threshold-coloured numbers, inline
+  sparklines, in-cell bars and state pills.
+- **LogViewer**: Level-coloured, filterable, tail-following log pane on `VirtualScroller`.
+- **ColorScaleLegend**: The key for a colour-encoded chart — a continuous ramp or discrete thresholds.
+
+**Supporting types**
+- **Series**: A named value array plus its draw style (filled, stepped, dashed, points, hidden).
+- **Threshold**: A value band and the colour it paints, shared by every threshold-aware component.
+- **ValueFormat**: How a number is rendered — percent, bytes, gigabytes, duration, or your own lambda.
+- **StateColor**: Maps a discrete state name to a colour; the default knows up/down, running/exited,
+  healthy/unhealthy.
+- **Scales**: Nice tick selection, local-time tick alignment, and TeaVM-safe number formatting
+  (`String.format` does not exist in the TeaVM classlib).
+- **Palette**: DaisyUI token series colours plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`).
+- **ChartBase / CartesianChart**: Measure-then-draw lifecycle, SVG factories, tooltip, legend, empty
+  state; axes, grid, threshold bands and crosshair. Extend these to add a chart type.
+
+> **Constructor caveat.** A component must not read a `Signal` in its constructor. A signal read
+> registers a dependency on whichever `Effect` is currently running — and components are typically
+> constructed *inside* the effect that swaps views, so the component would end up invalidating the
+> view that built it. Mirror the value in a plain field and read that. See `TimeRangePicker`.
 
 ### Base Classes & Interfaces
 Core building blocks that other components extend or implement.

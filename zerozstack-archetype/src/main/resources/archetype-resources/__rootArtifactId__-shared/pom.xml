@@ -14,5 +14,14 @@
       <groupId>com.zeroz4j</groupId>
       <artifactId>zerozstack-shared-api</artifactId>
     </dependency>
+    <!-- @DataModel and @RmiService types live in this module by convention, so this is the module
+         that most needs the processor. The root pom's annotationProcessorPaths is what actually
+         runs it; this dependency is here so the annotations resolve and the module reads as
+         self-describing. -->
+    <dependency>
+      <groupId>com.zeroz4j</groupId>
+      <artifactId>zerozstack-apt</artifactId>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
 </project>

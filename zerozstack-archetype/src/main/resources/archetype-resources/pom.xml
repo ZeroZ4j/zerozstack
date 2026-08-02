@@ -41,4 +41,29 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <!-- The processor path must be explicit. JDK 23 disabled implicit annotation processing
+               (JEP 470), so a processor found only on the classpath is silently ignored: no
+               *_Serializer, no *_Stub, no BinaryPackableRegistrar, no error and no warning. The
+               application then compiles, starts, serves pages, and fails on the first shared-signal
+               broadcast. Declared here in the root pom so shared, client and server all inherit it —
+               the shared module is where @DataModel types live. -->
+          <annotationProcessorPaths>
+            <path>
+              <groupId>com.zeroz4j</groupId>
+              <artifactId>zerozstack-apt</artifactId>
+              <version>${zeroz4j.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>
