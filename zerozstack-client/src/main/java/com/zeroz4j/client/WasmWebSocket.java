@@ -88,6 +88,27 @@ public class WasmWebSocket {
     )
     private static native void sendBytes(JSObject ws, byte[] bytes);
 
+    /**
+     * Closes the connection deliberately, with a normal-closure status.
+     *
+     * <p>Distinct from the socket dropping: a caller that reconnects on close needs to be able to
+     * tell "the application is finished with this" from "the network went away", or it will keep
+     * trying to restore a connection nobody wants. Code 1000 is what says so on the wire.
+     *
+     * <p><b>Under the hood:</b> Invokes {@code ws.close(1000)}, guarded so closing an already-closed
+     * socket is a no-op rather than a thrown {@code InvalidStateError}.</p>
+     */
+    public void close() {
+        closeSocket(ws);
+    }
+
+    @JSBody(params = { "ws" }, script =
+        "try {" +
+        "  if (ws.readyState === 0 || ws.readyState === 1) { ws.close(1000, 'Client closed'); }" +
+        "} catch (e) { }"
+    )
+    private static native void closeSocket(JSObject ws);
+
     /** TeaVM JSFunctor for inbound message array buffer callbacks. */
     @JSFunctor
     public interface MessageHandler extends JSObject {

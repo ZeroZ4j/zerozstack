@@ -31,8 +31,26 @@ import com.zeroz4j.api.BinaryRegistry;
  */
 public final class Zeroz4jClient {
 
+    private static WasmRmiClientChannel channel;
+
     private Zeroz4jClient() {
         // Prevent instantiation
+    }
+
+    /**
+     * The channel established by {@link #connect(String, Runnable)}, or {@code null} before it.
+     *
+     * <p>Exposed so an application can observe the connection: register a
+     * {@link WasmRmiClientChannel.StateListener} to show a reconnecting indicator, and re-read
+     * authoritative state from the server when it returns to
+     * {@link WasmRmiClientChannel.State#CONNECTED}. Reconnection itself needs no involvement — the
+     * channel handles it — but only the application knows what a lost call was trying to do, so
+     * only the application can decide what to do about it.
+     *
+     * @return the active channel, or null if {@code connect} has not been called
+     */
+    public static WasmRmiClientChannel channel() {
+        return channel;
     }
 
     /**
@@ -47,7 +65,7 @@ public final class Zeroz4jClient {
     public static void connect(String wsUrl, Runnable onReady) {
         BinaryRegistry.init();
         System.out.println("[zeroz4j] Connecting to " + wsUrl + "...");
-        WasmRmiClientChannel channel = new WasmRmiClientChannel(wsUrl, onReady);
+        channel = new WasmRmiClientChannel(wsUrl, onReady);
         WasmRmiClient.initialize(channel);
     }
 
