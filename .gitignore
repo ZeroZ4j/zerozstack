@@ -4,3 +4,6 @@ target/
 
 # MkDocs build output
 /site/
+
+# Archetype smoke-test screenshots
+/zerozstack-archetype/smoke/shots/

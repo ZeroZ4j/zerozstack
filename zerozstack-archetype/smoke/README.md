@@ -27,14 +27,24 @@ fixtures in `fixtures/` add the smallest thing that exercises each path.
 mvn -o install -DskipTests
 ```
 
+Pin the plugin coordinates. The bare `archetype:generate` prefix resolves against the current
+project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
+
 ```bash
-mvn -B archetype:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.4.1 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke
+mvn -B org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.4.1 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
 ```
 
-Copy the fixtures over the generated sources — `fixtures/shared/*` into
-`smokeapp-shared/src/main/java/com/smoke/`, `fixtures/server/*` into
-`smokeapp-server/src/main/java/com/smoke/server/`, and `fixtures/client/ClientApp.java` over the
-generated one — then build and start it:
+Copy the fixtures over the generated sources, keeping each one's subdirectory — the fixture packages
+are `com.smoke.service` and `com.smoke.signals`, not `com.smoke`:
+
+| Fixture | Destination |
+|---|---|
+| `fixtures/shared/service/EchoService.java` | `smokeapp-shared/src/main/java/com/smoke/service/` |
+| `fixtures/shared/signals/SmokeSignals.java` | `smokeapp-shared/src/main/java/com/smoke/signals/` |
+| `fixtures/server/*.java` | `smokeapp-server/src/main/java/com/smoke/server/` |
+| `fixtures/client/ClientApp.java` | over the generated `smokeapp-client/src/main/java/com/smoke/client/ClientApp.java` |
+
+Then build and start it:
 
 ```bash
 cd smokeapp && mvn -B install && cd smokeapp-server && java -cp "target/classes:target/libs/*" com.smoke.server.ServerApp
@@ -47,7 +57,9 @@ Then, with `playwright` installed:
 node smoke-test.mjs http://localhost:8100
 ```
 
-It exits non-zero if any check fails.
+It exits non-zero if any check fails, and writes a screenshot to `shots/smokeapp.png`. Node resolves
+`playwright` from the script's own directory upwards, so either install it here or copy the script
+next to an installation.
 
 ## Also worth eyeballing
 
