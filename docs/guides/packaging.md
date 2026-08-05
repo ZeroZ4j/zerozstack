@@ -32,6 +32,21 @@ is the whole application. This layout is the base for both shapes below. `target
 before it is refilled on every build, so a version bump cannot leave two framework jars on the
 classpath.
 
+!!! warning "On Linux, sort the classpath"
+    A `libs/*` wildcard expands in **directory order** — alphabetical on Windows, arbitrary on
+    Linux. One of the arbitrary orders loads Helidon's CDI extensions in a sequence where the
+    WebSocket routing registers after the server was already built. The symptom: HTTP works, the
+    page loads, and **every WebSocket handshake answers 404 — on Linux only**. Found by running
+    the same jars on both systems; any deterministic order fixes it. On Linux, launch with a
+    sorted explicit classpath:
+
+    ```bash
+    java -cp "target/classes:$(ls target/libs/*.jar | sort | tr '\n' ':')" com.mycompany.server.ServerApp
+    ```
+
+    The generated `Dockerfile` already does this, and on Windows the wildcard happens to be safe
+    because the filesystem returns sorted entries.
+
 ## Shape 2: a double-clickable executable (`jpackage`)
 
 For handing the application to someone as a file. Projects generated from the archetype (0.5.1+)

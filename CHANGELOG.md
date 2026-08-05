@@ -25,6 +25,17 @@ upgrading.
   - A new guide, [Packaging and running](docs/guides/packaging.md), states the never-shade rule
     and why, and when to pick which shape.
 
+### Fixed
+
+- **WebSocket handshakes no longer 404 on Linux.** A `libs/*` classpath wildcard expands in
+  directory order — alphabetical on Windows, arbitrary on Linux — and one of the arbitrary
+  orders loads Helidon's CDI extensions in a sequence where the WebSocket routing registers
+  after the server was already built. Same jars: Windows fine, Linux container dead, with HTTP
+  and static content working and only the upgrade answering 404. Found by running the archetype
+  smoke test against the generated container image; proven by showing any deterministic jar
+  order fixes it. The generated `Dockerfile` now builds a sorted explicit classpath, and the
+  packaging guide, troubleshooting page and AGENTS.md tell Linux classpath launches to sort.
+
 ## [0.5.0] — 2026-08-05
 
 Dropped WebSockets happen constantly in practice — proxies time out, laptops sleep, phones change

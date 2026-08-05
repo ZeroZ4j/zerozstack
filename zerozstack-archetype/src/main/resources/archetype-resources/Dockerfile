@@ -21,6 +21,10 @@ COPY ${rootArtifactId}-server/target/${rootArtifactId}-server-*.jar app.jar
 
 EXPOSE 8080
 
-# Exec form on purpose: no shell, signals reach the JVM, and Java itself expands the
-# classpath wildcard.
-ENTRYPOINT ["java", "-cp", "app.jar:lib/*", "${package}.server.ServerApp"]
+# The classpath is built SORTED, deliberately. A `lib/*` wildcard expands in filesystem
+# directory order, which is alphabetical on Windows and arbitrary on Linux — and one of the
+# arbitrary orders loads Helidon's CDI extensions in a sequence where the WebSocket routing
+# is registered after the server has already been built. The symptom is brutal: HTTP works,
+# the page loads, and every WebSocket handshake answers 404 — on Linux only. A sorted
+# explicit classpath makes the order deterministic. `exec` keeps signals reaching the JVM.
+ENTRYPOINT ["sh", "-c", "exec java -cp \"app.jar:$(ls lib/*.jar | sort | tr '\\n' ':')\" ${package}.server.ServerApp"]

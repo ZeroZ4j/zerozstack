@@ -250,6 +250,12 @@ executable and bundled runtime at `<app>-server/target/dist/<app>/`; and the gen
 `Dockerfile`, which layers `libs/` separately from the app jar. GraalVM native-image is not
 supported (EclipseStore uses JDK internals it restricts). See docs/guides/packaging.md.
 
+On Linux, never launch with a bare `libs/*` classpath wildcard: it expands in arbitrary directory
+order, and one of the orders registers Helidon's WebSocket routing after the server is built —
+HTTP works, every WebSocket handshake 404s, Windows is unaffected (its filesystem sorts). Build
+the classpath sorted: `java -cp "target/classes:$(ls target/libs/*.jar | sort | tr '\n' ':')" …`.
+The generated Dockerfile already does this.
+
 ## Connection drops (0.5.0+)
 
 Do not generate reconnect plumbing — the framework recovers by itself: automatic reconnect with
