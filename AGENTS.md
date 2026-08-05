@@ -239,6 +239,17 @@ shared-signal declaration, `bindValue` with a non-writable signal, an RMI call w
 is down (`DisconnectedException`, immediately — never a 30-second hang), and — at compile time —
 `@ClientWritable` without `@LiveSync` or on a field with no setter.
 
+## Packaging — never shade
+
+Never add `maven-shade-plugin` to a ZeroZ Stack server. Weld treats each jar as its own bean
+archive with its own `beans.xml`; a merged jar collapses that and CDI discovery breaks far from
+the cause (beans vanish, or WELD-001409 duplicates). The supported shapes, all keeping jars
+intact: the default jar + `target/libs` classpath layout; `mvn verify -Ppackage` in a generated
+project, which runs the JDK's `jpackage` and produces a self-contained folder with launcher
+executable and bundled runtime at `<app>-server/target/dist/<app>/`; and the generated
+`Dockerfile`, which layers `libs/` separately from the app jar. GraalVM native-image is not
+supported (EclipseStore uses JDK internals it restricts). See docs/guides/packaging.md.
+
 ## Connection drops (0.5.0+)
 
 Do not generate reconnect plumbing — the framework recovers by itself: automatic reconnect with

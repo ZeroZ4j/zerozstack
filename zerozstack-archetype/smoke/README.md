@@ -72,6 +72,13 @@ case. Stop any already-running smoke server first; this script owns the server l
 node drop-recovery-test.mjs /path/to/smokeapp/smokeapp-server
 ```
 
+## Packaged-app variant
+
+The smoke test can also run against the jpackage output instead of the classpath launch, which
+proves CDI discovery survives packaging. Build with `mvn verify -Ppackage`, start
+`smokeapp-server/target/dist/smokeapp/smokeapp.exe` (or `bin/smokeapp` on Linux) instead of the
+`java -cp` line, and run `smoke-test.mjs` as above. Same five checks, same expected 5/5.
+
 ## Also worth eyeballing
 
 - `smokeapp-shared/target/classes` should contain `Message_Serializer.class`,

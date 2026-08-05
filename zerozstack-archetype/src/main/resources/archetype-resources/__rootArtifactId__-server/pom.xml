@@ -112,4 +112,92 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!--
+        mvn verify -Ppackage
+
+        Produces a self-contained, double-clickable application at
+        target/dist/${rootArtifactId}/ — launcher executable, every jar unmodified in lib/, and a
+        bundled Java runtime. Ships as one folder; no Java installation needed on the target
+        machine. Uses the JDK's own jpackage, so there is nothing to install for the build either.
+
+        Deliberately NOT a shaded jar: Weld treats each jar as a bean archive with its own
+        beans.xml and discovery mode, and melting them into one jar collapses that structure —
+        beans vanish or appear twice, far from the cause. jpackage keeps every jar intact.
+    -->
+    <profile>
+      <id>package</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>assemble-jpackage-input</id>
+                <phase>verify</phase>
+                <goals><goal>run</goal></goals>
+                <configuration>
+                  <target>
+                    <!-- jpackage refuses to overwrite an existing image. Retried, because on
+                         Windows the antivirus holds a freshly created .exe open for a moment,
+                         and a still-running packaged app holds it longer - the retry rides out
+                         the first and gives a clear repeated failure for the second. -->
+                    <retry retrycount="5" retrydelay="2000">
+                      <delete dir="${project.build.directory}/dist"/>
+                    </retry>
+                    <mkdir dir="${project.build.directory}/package/lib"/>
+                    <copy todir="${project.build.directory}/package/lib">
+                      <fileset dir="${project.build.directory}/libs"/>
+                    </copy>
+                    <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                          todir="${project.build.directory}/package/lib"/>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>jpackage</id>
+                <phase>verify</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <executable>${java.home}/bin/jpackage</executable>
+                  <commandlineArgs>--type app-image --name ${rootArtifactId} --input "${project.build.directory}/package/lib" --main-jar ${project.build.finalName}.jar --main-class ${package}.server.ServerApp --dest "${project.build.directory}/dist" ${jpackage.platform.args}</commandlineArgs>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- A server needs its console: without this the Windows launcher is a windowed app and the
+         log output goes nowhere visible. Harmless elsewhere; the option only exists on Windows. -->
+    <profile>
+      <id>jpackage-windows-console</id>
+      <activation>
+        <os><family>windows</family></os>
+      </activation>
+      <properties>
+        <jpackage.platform.args>--win-console</jpackage.platform.args>
+      </properties>
+    </profile>
+    <profile>
+      <id>jpackage-default-args</id>
+      <activation>
+        <os><family>!windows</family></os>
+      </activation>
+      <properties>
+        <jpackage.platform.args></jpackage.platform.args>
+      </properties>
+    </profile>
+  </profiles>
 </project>

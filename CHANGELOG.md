@@ -8,6 +8,23 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [Unreleased]
+
+### Added
+
+- **A packaging story, so "how do I ship this" stops being every application's research
+  project.** Shading was the recurring dead end: Weld treats each jar as its own bean archive,
+  and a merged jar breaks CDI discovery far from the cause. Projects generated from the
+  archetype now carry two shade-free paths, both keeping every jar intact:
+  - **`mvn verify -Ppackage`** runs the JDK's own `jpackage` and produces a self-contained
+    folder at `<app>-server/target/dist/<app>/` — launcher executable, all jars unmodified in
+    `app/`, bundled Java runtime. Ship the folder; the target machine needs no Java. Verified by
+    running the full archetype smoke test against the packaged `.exe`: 5/5, zero Weld warnings.
+  - **A `Dockerfile`** at the project root with the dependency jars as their own image layer
+    below the app jar, so a routine rebuild pushes kilobytes rather than the framework.
+  - A new guide, [Packaging and running](docs/guides/packaging.md), states the never-shade rule
+    and why, and when to pick which shape.
+
 ## [0.5.0] — 2026-08-05
 
 Dropped WebSockets happen constantly in practice — proxies time out, laptops sleep, phones change

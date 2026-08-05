@@ -9,6 +9,15 @@
       <defaultValue>@project.version@</defaultValue>
     </requiredProperty>
   </requiredProperties>
+  <fileSets>
+    <!-- Filtered so ${package} and ${rootArtifactId} resolve inside the Dockerfile. -->
+    <fileSet filtered="true" packaged="false">
+      <directory></directory>
+      <includes>
+        <include>Dockerfile</include>
+      </includes>
+    </fileSet>
+  </fileSets>
   <modules>
     <module id="${rootArtifactId}-shared" dir="__rootArtifactId__-shared" name="${rootArtifactId}-shared">
       <fileSets>
