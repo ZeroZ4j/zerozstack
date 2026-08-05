@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [0.5.0] — Unreleased
+## [0.5.0] — 2026-08-05
 
 Dropped WebSockets happen constantly in practice — proxies time out, laptops sleep, phones change
 networks — and 0.4.x left everything above the transport broken after one: reconnection restored
@@ -51,6 +51,27 @@ now gets a visible outage, an automatic reconnect, and a correct screen afterwar
   any number of state listeners. `setStateListener` keeps its exact old contract — it replaces the
   listener it previously set — because applications register from view constructors and rebuilt
   views must not leave a trail of stale listeners behind.
+
+### Fixed
+
+- **`@Inject ZeroZDbNode` works.** It could not, in any application, throughout 0.4.x — which is
+  awkward, because it is the documented way to reach the store and what the `inventory-crud`
+  example does. `EclipseStoreProducer.getNode()` was `@RequestScoped`; a normal scope makes the
+  container inject a client proxy; a proxy is a generated subclass; and `ZeroZDbNode` is `final`
+  with a private constructor. Deployment failed with **WELD-001410**, or **WELD-001437** at first
+  use when the node was reached through `Instance`. Neither the scope nor the finality was
+  something an application could change, so there was no way to write the documented injection
+  correctly — the only workaround was to inject `TenantStorageProvider` and call
+  `getNode(tenantId)`. The producer is now `@Dependent`, which needs no proxy. It also takes an
+  `InjectionPoint` parameter, which CDI permits only on a `@Dependent` bean, so the scope cannot
+  silently regress. Reported against the Prashna Chakra application; thanks for the diagnosis.
+- **A `@Dependent` node is reachable off-request.** The old request scope also meant the node was
+  unusable from any thread with no active request context — a scheduler, a virtual thread, startup
+  code. Those work now. `EmbeddedStorageManager` remains `@RequestScoped` deliberately: it is an
+  interface, so it proxies, and the proxy is what re-resolves the tenant on each request.
+- **This module now has a CDI test.** Every existing test built `ZeroZDbNode` by hand, which is
+  precisely why the defect above shipped. `NodeInjectionTest` starts a real Weld container and
+  injects the node into an `@ApplicationScoped` service, with no request context active.
 
 ### Changed
 

@@ -84,6 +84,34 @@ The same command runs wherever the data is — in this process when embedded, on
 — so the choice between the two is configuration, not code. See
 [Store modes](../store-modes.md).
 
+### If your application is multi-tenant
+
+`@Inject ZeroZDbNode` resolves the tenant **once, when the injecting bean is created** — the
+producer is `@Dependent`, which it has to be, because `ZeroZDbNode` is `final` and a normal CDI
+scope would need to proxy it.
+
+For a single-tenant application, which is the default, that is exactly right and there is nothing
+to think about. If you publish a `TenantResolver`, it is not: an `@ApplicationScoped` service is
+created once, so whichever tenant triggered its creation would own every write after it. Inject the
+provider and resolve per operation instead:
+
+```java
+@ApplicationScoped
+public class ProductServiceImpl implements ProductService {
+
+    @Inject TenantStorageProvider storage;
+    @Inject TenantResolver tenants;
+
+    public long add(String name) {
+        return storage.getNode(tenants.resolveTenant()).execute(new AddProduct(name));
+    }
+}
+```
+
+The framework logs a warning when it sees an application-scoped bean injecting the node directly
+while a `TenantResolver` is present. It cannot be an error — the pattern is correct for everyone
+else.
+
 ## What to save after changing a collection
 
 Changing the contents of a collection does not change the object that holds it. Save the collection.

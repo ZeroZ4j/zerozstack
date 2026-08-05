@@ -35,6 +35,10 @@ zeroz4j.store.schemaId = myapp-v3
 Inject `ZeroZDbNode` and express work as commands and queries. They execute wherever the data
 is — in this process when embedded, on the server when not — so the same code runs in every mode.
 
+The injected node is `@Dependent`, so it also works on threads with no request context — a
+scheduler, a virtual thread, startup code. One caveat if you are multi-tenant:
+[the tenant is resolved once per injecting bean](guides/persistence.md#if-your-application-is-multi-tenant).
+
 ```java
 @ApplicationScoped
 public class ProductService {

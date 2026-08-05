@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.4.1**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.5.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
@@ -27,9 +27,11 @@ mvn clean install -DskipTests   # from the repository root
 mvn test                        # then tests
 ```
 
-Use **`clean`**. Each example server copies its dependencies into `target/libs`, and that directory is
-never pruned — without `clean`, jars from previous versions accumulate there and Weld reports
-duplicate beans with "this may result in incorrect behavior" at startup.
+Prefer **`clean`**. Each example server copies its dependencies into `target/libs`; since 0.4.1
+that directory is emptied before it is refilled, so a plain `install` no longer leaves jars from
+previous versions behind (which used to kill startup with "WELD-001409: Ambiguous dependencies").
+`clean` remains the honest choice before a release, and the purge tolerates a jar held open by a
+running server rather than failing the build.
 
 Install before you test. The annotation processor and shared API must be in your local repository
 before the modules that consume them can compile, so `mvn clean test` on its own is not a reliable
@@ -137,6 +139,18 @@ db.localDb().write(ctx -> {
 
 `localDb()` is the in-process engine and is **null in CLIENT mode**, so using it pins that code to
 `EMBEDDED` or `AUTO_SERVER`. That is a fine trade for an example and the wrong one for a library.
+
+### The node is `@Dependent`, and why that matters
+
+The producer for `ZeroZDbNode` is `@Dependent` and cannot be anything else: `ZeroZDbNode` is
+`final`, a normal scope would make CDI proxy it, and a proxy is a generated subclass. Through
+0.4.1 the producer was `@RequestScoped` and `@Inject ZeroZDbNode` therefore failed at deployment
+with WELD-001410 in every application. Do not "fix" the scope back.
+
+The consequence to know: a `@Dependent` producer runs when the injecting bean is created, so an
+`@ApplicationScoped` service resolves its tenant **once**. Correct for a single-tenant application.
+Wrong for one with a `TenantResolver` — there, inject `TenantStorageProvider` and call
+`getNode(tenantId)` per operation.
 
 ### The rules that break code most often
 

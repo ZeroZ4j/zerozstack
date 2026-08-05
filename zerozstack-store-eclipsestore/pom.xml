@@ -47,6 +47,15 @@
             <version>5.10.2</version>
             <scope>test</scope>
         </dependency>
+        <!-- A real CDI container, so the producers in this module are tested the way an
+             application actually reaches them. Without it the @RequestScoped/final-class defect
+             that shipped in 0.4.1 was invisible: every test built the node by hand. -->
+        <dependency>
+            <groupId>org.jboss.weld</groupId>
+            <artifactId>weld-junit5</artifactId>
+            <version>4.0.0.Final</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
