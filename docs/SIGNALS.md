@@ -79,6 +79,7 @@ Semantics and current limits, stated plainly:
 * **Latest-wins state, not events** — consecutive equal values are deduplicated, and there is no history or replay of intermediate values. For discrete occurrences use [server events](SERVER_EVENTS.md).
 * **Serializable payloads** — the value type must be wire-serializable (`@DataModel` or a `BinarySerializer`-supported type). Treat shared values as immutable: `set()` a new instance, never mutate the current one.
 * **Naming** — the wire name defaults to the payload's class name (the same runtime identity the binary serializer already puts on the wire), giving one default signal per type. Need several signals of the same type, or a stable name across payload-class renames? Use `Signals.shared("explicit.name", initialValue)`.
+* **Reconnection is automatic.** When a dropped WebSocket restores itself, every shared signal re-subscribes and snaps its mirror to the current retained value — updates broadcast during the outage are not missed, they arrive as the fresh value. A write made to a `sharedWritable` signal *while offline* is applied optimistically on screen, queued, and sent on reconnect (last value only); the server then accepts and broadcasts it, or corrects the writer, exactly as it would have online.
 
 ## Component binding
 

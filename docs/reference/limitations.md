@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.4.1, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.5.0, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 
@@ -18,6 +18,32 @@ These exist in the source as annotations or constants and do nothing. Do not bui
 | Versioned mutations, acknowledgement and conflict rejection | Reserved in the protocol. The implemented sync path has no version field, no ACK and no conflict detection. |
 | `@RequiresRole` | A `@Target(TYPE)` guard intended for **client-side views**, checked by the router against `RmiSecurityContext.hasAnyRole`. Unimplemented for the same reason `@Route` is — there is no router. It is not a substitute for `@RolesAllowed`, which is a server-side RMI check; gate views by hand with `RmiSecurityContext.hasAnyRole(...)` and always enforce on the server. |
 | Coalesced LiveSync mutations and UI-scheduler dispatch of inbound frames | Both are conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework. So every setter sends its own mutation frame, and all inbound frames are applied inline on the WebSocket callback. |
+
+## Connection and reconnection
+
+Since 0.5.0 a dropped WebSocket recovers by itself: the channel reconnects with backoff, a built-in
+banner shows the outage, shared signals re-subscribe, live objects are re-synced from the server,
+edits and writes made while offline are sent on reconnect, and RMI calls fail immediately with
+`DisconnectedException` instead of hanging. What automatic recovery deliberately does **not** cover:
+
+- **RMI calls are never replayed.** A call that failed to a drop is the application's to retry — the
+  framework cannot know whether repeating it is safe. Catch `DisconnectedException`, or disable
+  controls while `WasmRmiClient.connectionState()` is not `CONNECTED`.
+- **A server restart empties the handle registry.** Re-sync can only restore objects the server
+  still knows. After a restart, live objects held by clients stay as they were and the application
+  must re-fetch them the way it first obtained them; the server logs how many handles it could not
+  restore. Shared signals recover fully either way.
+- **Session ids change on reconnect.** Anything keyed by session id — `Scope.SESSION` pushes,
+  application registries of "sessions viewing X" — points at a dead session after a drop. The
+  application must re-register from a `StateListener` on `CONNECTED`; observe the server-side CDI
+  event `SessionClosedEvent` to clean up the stale entry.
+- **A lost `LiveMutex` stays lost.** The server releases a session's locks when the socket closes.
+  Reconnecting does not re-acquire; the holder is told through `setLostListener`.
+- **Events broadcast during an outage are gone.** Events are fire-and-forget news with no replay;
+  this is unchanged and by design. State belongs in signals or LiveSync, which do recover.
+- **Offline writes are last-write-wins.** A shared-signal write queued offline flushes as one write
+  with the final value; intermediate values are not replayed. Concurrent edits from other clients
+  during the outage are settled by the server's usual last-write-wins rules, not merged.
 
 ## LiveSync
 

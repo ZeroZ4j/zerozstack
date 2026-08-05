@@ -221,8 +221,22 @@ Most of these now throw. The ones that remain are the genuinely silent cases.
 
 These used to be silent and now fail loudly — expect an exception, not a mystery:
 `notifyChanged` on an unsynced object, an unserializable event or signal payload, a conflicting
-shared-signal declaration, `bindValue` with a non-writable signal, and — at compile time —
+shared-signal declaration, `bindValue` with a non-writable signal, an RMI call while the connection
+is down (`DisconnectedException`, immediately — never a 30-second hang), and — at compile time —
 `@ClientWritable` without `@LiveSync` or on a field with no setter.
+
+## Connection drops (0.5.0+)
+
+Do not generate reconnect plumbing — the framework recovers by itself: automatic reconnect with
+backoff, a built-in "Connection lost" banner (`Zeroz4jClient.showConnectionBanner(false)` to opt
+out), shared signals re-subscribed, live objects re-synced in place, offline signal writes and
+`@ClientWritable` edits queued and flushed. Connection state is a signal:
+`WasmRmiClient.connectionState()` — read it in an `Effect` to disable controls while not
+`CONNECTED`. What remains application work: retrying an RMI call that failed with
+`DisconnectedException` (never replayed automatically), re-registering anything keyed by session id
+(ids change on reconnect; observe `SessionClosedEvent` server-side to clean up), reacting to a lost
+`LiveMutex` (`setLostListener`), and re-fetching live objects after a full **server restart**, which
+empties the handle registry that re-sync restores from.
 
 ## Running the examples
 

@@ -169,6 +169,32 @@ module's `target/js`) and that the page's script tag points at it.
 The default request timeout is 30 seconds. If a call hangs, check the server log for an exception
 inside the service method — an error becomes an error frame, but a hung method produces nothing.
 
+A hang is **not** the connection: since 0.5.0 a call made while the socket is down, or in flight
+when it drops, fails immediately with `DisconnectedException` instead of hanging.
+
+### The page says "Connection lost — reconnecting…"
+
+That is the built-in banner doing its job: the WebSocket dropped and the client is retrying with
+backoff, indefinitely. When the server is reachable again the banner disappears, shared signals
+snap to their current values, and live objects are re-synced automatically. Nothing to do unless
+it never disappears — then the server is down or unreachable, and the browser console shows the
+retry attempts. An application that draws its own indicator turns the banner off with
+`Zeroz4jClient.showConnectionBanner(false)`.
+
+### Data is stale after the server restarted
+
+Re-sync restores live objects from the server's in-memory handle registry, which a restart empties.
+Shared signals recover; live objects fetched before the restart cannot, and the server log says how
+many (`Re-sync for session …: N handle(s) unknown`). The application must re-fetch them the way it
+first obtained them — a `StateListener` on `CONNECTED` is the place.
+
+### Per-session pushes stop after a reconnect
+
+A reconnect is a **new session with a new id**. Anything the application keyed by session id — a
+`Scope.SESSION` push target, a "sessions viewing this dashboard" registry — points at the dead
+session. Re-register from a `StateListener` on `CONNECTED`, and observe the CDI event
+`SessionClosedEvent` server-side to drop the stale entry.
+
 ## Security and access
 
 ### `SecurityException: Rejected RMI call to unregistered service`

@@ -24,11 +24,14 @@ import org.teavm.jso.JSBody;
  * Provides error, message, and close lifecycle event handling with automatic reconnection.
  *
  * <p><b>Reconnection.</b> A dropped socket re-establishes itself with exponential backoff, for as
- * long as the application has not closed the channel deliberately. What this deliberately does
- * <em>not</em> do is replay calls that were in flight when the socket dropped: the channel cannot
- * know whether a given RPC is safe to repeat, and repeating a non-idempotent one corrupts data
- * silently. Restoring the channel is this class's job; deciding what to do about a lost call
- * belongs to the application, which is what {@link StateListener} exists for.
+ * long as the application has not closed the channel deliberately. On reconnect the framework
+ * recovers by itself: queued offline writes and edits are sent, every shared signal re-subscribes,
+ * and a re-sync request refreshes every object this client holds — see
+ * {@code WasmRmiClient.onStateChange} for the choreography. What is deliberately <em>not</em>
+ * replayed is RMI calls: a call in flight when the socket dropped fails immediately with a
+ * {@code DisconnectedException}, because the channel cannot know whether repeating it is safe,
+ * and repeating a non-idempotent one corrupts data silently. Deciding what to do about a lost
+ * call belongs to the application, which is what {@link StateListener} exists for.
  *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
@@ -86,11 +89,13 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     /**
      * Notified on every connection state change.
      *
-     * <p>This is what an application renders a "reconnecting" indicator from, and where it decides
-     * what to do about work lost to the drop. The usual answer is not to replay the lost call but
-     * to re-read authoritative state from the server on {@link State#CONNECTED} — which is correct
-     * whether or not the call had already been applied, and needs no sequence numbers to work out
-     * which.
+     * <p>Most applications need no listener at all: the built-in banner shows the outage, and
+     * signals and live objects re-synchronize automatically on {@link State#CONNECTED}. Register
+     * one to render a custom indicator (also available as a signal via
+     * {@code WasmRmiClient.connectionState()}), or to redo work the framework cannot: re-register
+     * with an application-level, session-keyed registry (the session id changed), or retry an RMI
+     * call that was lost — re-reading authoritative state is correct whether or not the lost call
+     * had been applied, and needs no sequence numbers.
      */
     public interface StateListener {
         /**
@@ -106,7 +111,7 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     private final String url;
     private final Runnable onOpen;
     private ConnectionListener connectionListener;
-    private StateListener stateListener;
+    private final java.util.List<StateListener> stateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private State state = State.CONNECTING;
     private int attempt;
     private boolean opened;
@@ -136,18 +141,52 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     }
 
     /**
-     * Sets a listener for connection state changes.
+     * Adds a listener for connection state changes. Several can coexist: the framework registers
+     * its own for re-synchronization and the built-in banner, without occupying the application's.
      *
      * <p>The current state is reported immediately, so a listener registered after the socket has
      * already opened is not left waiting for a transition that has been and gone.
      *
+     * @param listener the state listener
+     */
+    public void addStateListener(StateListener listener) {
+        if (listener == null) {
+            return;
+        }
+        stateListeners.add(listener);
+        listener.onStateChange(state);
+    }
+
+    /**
+     * Removes a previously added state listener. Unknown listeners are ignored.
+     *
+     * @param listener the listener to remove
+     */
+    public void removeStateListener(StateListener listener) {
+        stateListeners.remove(listener);
+    }
+
+    /** The one listener installed through {@link #setStateListener}, kept apart so it replaces. */
+    private StateListener applicationStateListener;
+
+    /**
+     * Sets <em>the</em> application state listener, replacing any previous one set this way.
+     *
+     * <p>Replace rather than add, deliberately: applications register from view constructors, and
+     * views are rebuilt on navigation. Under add-semantics every rebuilt view would leave its
+     * predecessor's listener behind, each firing on every reconnect against a view no longer on
+     * screen. Existing applications rely on replacement. Framework internals and code that manages
+     * its own lifecycle use {@link #addStateListener}/{@link #removeStateListener} instead, which
+     * this does not disturb.
+     *
      * @param listener the state listener, or {@code null} to clear
      */
     public void setStateListener(StateListener listener) {
-        this.stateListener = listener;
-        if (listener != null) {
-            listener.onStateChange(state);
+        if (applicationStateListener != null) {
+            stateListeners.remove(applicationStateListener);
         }
+        applicationStateListener = listener;
+        addStateListener(listener);
     }
 
     /**
@@ -178,9 +217,19 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
             return;
         }
         state = next;
-        if (stateListener != null) {
-            stateListener.onStateChange(next);
+        for (StateListener listener : stateListeners) {
+            listener.onStateChange(next);
         }
+    }
+
+    /**
+     * Whether the socket is open and a send will reach the wire.
+     *
+     * @return true only in {@link State#CONNECTED}
+     */
+    @Override
+    public boolean isOpen() {
+        return state == State.CONNECTED;
     }
 
     private void connect() {

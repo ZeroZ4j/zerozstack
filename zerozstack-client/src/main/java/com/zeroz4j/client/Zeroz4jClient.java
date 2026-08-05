@@ -32,20 +32,37 @@ import com.zeroz4j.api.BinaryRegistry;
 public final class Zeroz4jClient {
 
     private static WasmRmiClientChannel channel;
+    private static boolean bannerEnabled = true;
 
     private Zeroz4jClient() {
         // Prevent instantiation
     }
 
     /**
+     * Turns the built-in "Connection lost — reconnecting…" bar on or off. On by default, so a
+     * dropped connection is never invisible in an application that configured nothing. Turn it
+     * off when the application renders its own indicator from
+     * {@link WasmRmiClient#connectionState()} — two banners saying the same thing is worse
+     * than either.
+     *
+     * @param enabled false to suppress the built-in bar
+     */
+    public static void showConnectionBanner(boolean enabled) {
+        bannerEnabled = enabled;
+        if (!enabled) {
+            ConnectionBanner.hide();
+        }
+    }
+
+    /**
      * The channel established by {@link #connect(String, Runnable)}, or {@code null} before it.
      *
-     * <p>Exposed so an application can observe the connection: register a
-     * {@link WasmRmiClientChannel.StateListener} to show a reconnecting indicator, and re-read
-     * authoritative state from the server when it returns to
-     * {@link WasmRmiClientChannel.State#CONNECTED}. Reconnection itself needs no involvement — the
-     * channel handles it — but only the application knows what a lost call was trying to do, so
-     * only the application can decide what to do about it.
+     * <p>Most applications never need it: reconnection, the outage banner, and the
+     * re-synchronization of shared signals and live objects are automatic, and the connection
+     * state is available as a signal via {@code WasmRmiClient.connectionState()}. It is exposed
+     * for the cases that remain the application's: retrying an RMI call that failed with a
+     * {@code DisconnectedException}, and re-registering with server-side registries keyed by
+     * session id, which changes on every reconnect.
      *
      * @return the active channel, or null if {@code connect} has not been called
      */
@@ -67,6 +84,16 @@ public final class Zeroz4jClient {
         System.out.println("[zeroz4j] Connecting to " + wsUrl + "...");
         channel = new WasmRmiClientChannel(wsUrl, onReady);
         WasmRmiClient.initialize(channel);
+        channel.addStateListener(state -> {
+            if (!bannerEnabled) {
+                return;
+            }
+            if (state == WasmRmiClientChannel.State.RECONNECTING) {
+                ConnectionBanner.show("Connection lost — reconnecting…");
+            } else if (state == WasmRmiClientChannel.State.CONNECTED) {
+                ConnectionBanner.hide();
+            }
+        });
     }
 
     /**

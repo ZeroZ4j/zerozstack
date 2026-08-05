@@ -8,6 +8,70 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.5.0] — Unreleased
+
+Dropped WebSockets happen constantly in practice — proxies time out, laptops sleep, phones change
+networks — and 0.4.x left everything above the transport broken after one: reconnection restored
+the pipe, and the application then ran on quietly stale data. Every application was forced to build
+its own recovery. 0.5.0 moves all of it into the framework. An application that configures nothing
+now gets a visible outage, an automatic reconnect, and a correct screen afterwards.
+
+### Added
+
+- **Automatic re-sync after a reconnect.** On reconnection the client re-subscribes every shared
+  signal (each answered with the current retained value, so updates missed during the outage are
+  not silently absent until the next change) and sends one `zeroz4j.resync` request naming every
+  object handle it holds; the server re-sends each object's current state as ordinary in-place
+  updates. Re-serializing also re-registers lazy-field handles for the new session, so unresolved
+  `Lazy` references work again. One honest boundary: a **server restart** empties the in-memory
+  handle registry, so re-sync cannot restore live objects fetched before it — the server logs how
+  many handles were unknown, and the application re-fetches them as it first obtained them.
+- **Nothing the user did while offline is lost.** Writes to `sharedWritable` signals made while
+  disconnected are queued (last value per signal) and flushed on reconnect; edits to
+  `@ClientWritable` live objects are retained and flushed the same way — previously both were
+  silently discarded while the user's screen showed them applied. Flushes go out *before* the
+  re-sync request, so the fetched server truth already includes them.
+- **The connection is a signal.** `WasmRmiClient.connectionState()` returns a `ValueSignal` of
+  CONNECTING / CONNECTED / RECONNECTING / CLOSED. Read it in an `Effect` to disable controls or
+  render an indicator — no listener wiring.
+- **A built-in connection banner.** "Connection lost — reconnecting…" appears fixed to the top of
+  the page while the channel is down and disappears on recovery. Raw DOM with inline styles, so it
+  renders identically with or without any CSS framework. On by default;
+  `Zeroz4jClient.showConnectionBanner(false)` turns it off for applications that render their own.
+- **Lock loss is reported.** The server has always released a session's `LiveMutex` locks when the
+  socket closed; now the client-side holder learns of it: `mutex.setLostListener(...)` fires the
+  moment the drop is detected, on the UI scheduler. A lost lock is not re-acquired — the callback
+  is where an editor stops accepting input.
+- **`SessionClosedEvent`.** A CDI event fired after framework cleanup when a WebSocket session
+  closes, carrying the session id and principal name. Applications keep registries keyed by
+  session id (scoped pushes, rooms, dashboards) and previously had no way to learn a session was
+  gone — they coped with bounded collections and eviction heuristics. Observe the event and remove
+  the entry instead.
+- **`WasmRmiClientChannel.addStateListener` / `removeStateListener`.** The channel now supports
+  any number of state listeners. `setStateListener` keeps its exact old contract — it replaces the
+  listener it previously set — because applications register from view constructors and rebuilt
+  views must not leave a trail of stale listeners behind.
+
+### Changed
+
+- **RMI calls fail fast when the connection is down.** A call made while disconnected, or in
+  flight when the socket drops, now fails immediately with the new typed
+  `com.zeroz4j.api.DisconnectedException`. Previously it hung — not for the 30-second timeout but
+  indefinitely, because the timeout sweep only ran on traffic and a dead socket produces none; the
+  browser meanwhile either discarded the frame silently or threw a raw `InvalidStateError` that
+  died invisibly in the calling green thread. Calls are deliberately **never queued or replayed**:
+  the framework cannot know whether repeating a call is safe, and silently replaying "submit
+  order" after an outage places the order twice. Catch the exception to retry, or disable controls
+  while `connectionState()` is not CONNECTED.
+
+### Breaking
+
+- Application code that already implements `WasmWebSocketChannel` gains a default `isOpen()`
+  returning true — no action needed unless the transport can actually be down, in which case
+  override it so fail-fast works.
+- Applications that built their own outage banner will now show two. Either delete yours or call
+  `Zeroz4jClient.showConnectionBanner(false)`.
+
 ## [0.4.1] — 2026-08-01
 
 A generated project from `zerozstack-archetype:0.4.0` compiled cleanly, started cleanly, served

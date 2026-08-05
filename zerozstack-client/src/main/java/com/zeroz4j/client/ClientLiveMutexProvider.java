@@ -36,6 +36,47 @@ import com.zeroz4j.api.RmiClientExecutor;
 public class ClientLiveMutexProvider extends LiveMutexProvider {
 
     /**
+     * Every mutex this client believes it holds. When the socket drops the server releases them
+     * all, so this is exactly the set whose holders must be told. Identity-keyed on the mutex
+     * instance; the value is its lost listener (possibly a no-op).
+     */
+    private static final java.util.Map<LiveMutex, Runnable> held =
+            java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
+
+    /** Test support only: forgets all held locks. */
+    static void resetForTesting() {
+        held.clear();
+    }
+
+    /**
+     * Marks every held lock as lost and tells its holder. Called by {@link WasmRmiClient} the
+     * moment a drop is detected — not on reconnect, because the lock stopped protecting anything
+     * the instant the server session closed, and an editor should stop accepting input now.
+     * Listeners run on the UI scheduler when one is installed.
+     */
+    static void connectionLost() {
+        java.util.List<Runnable> listeners;
+        synchronized (held) {
+            if (held.isEmpty()) {
+                return;
+            }
+            listeners = new java.util.ArrayList<>(held.values());
+            held.clear();
+        }
+        for (Runnable listener : listeners) {
+            if (listener == null) {
+                continue;
+            }
+            WasmRmiClient.PlatformScheduler scheduler = WasmRmiClient.getPlatformScheduler();
+            if (scheduler != null) {
+                scheduler.runLater(listener);
+            } else {
+                listener.run();
+            }
+        }
+    }
+
+    /**
      * Creates a {@link LiveMutex} instance bound to the specified shared object handle.
      *
      * @param sharedObject the target shared model object instance
@@ -47,6 +88,8 @@ public class ClientLiveMutexProvider extends LiveMutexProvider {
     @Override
     public LiveMutex create(Object sharedObject) {
         return new LiveMutex() {
+            private Runnable lostListener;
+
             @Override
             public void lock() {
                 String id = WasmRmiClient.MAPPER.getId(sharedObject);
@@ -54,14 +97,24 @@ public class ClientLiveMutexProvider extends LiveMutexProvider {
                     id = WasmRmiClient.MAPPER.register(sharedObject);
                 }
                 RmiClientExecutor.executeCall("com.zeroz4j.api.LiveMutexRpc", "acquireLock", new Object[]{id});
+                // Only reached when acquireLock returned: the lock is genuinely held from here.
+                held.put(this, lostListener);
             }
 
             @Override
             public void unlock() {
+                held.remove(this);
                 String id = WasmRmiClient.MAPPER.getId(sharedObject);
                 if (id != null) {
                     RmiClientExecutor.executeCall("com.zeroz4j.api.LiveMutexRpc", "releaseLock", new Object[]{id});
                 }
+            }
+
+            @Override
+            public void setLostListener(Runnable listener) {
+                this.lostListener = listener;
+                // If already held, refresh the registered listener too.
+                held.replace(this, listener);
             }
         };
     }

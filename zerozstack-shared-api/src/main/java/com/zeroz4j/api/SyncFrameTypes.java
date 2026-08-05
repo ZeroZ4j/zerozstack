@@ -97,4 +97,16 @@ public final class SyncFrameTypes {
 
     /** Server -> Client: One-shot push message (0x18). Payload: topic string + serialized payload. */
     public static final byte PUSH        = 0x18;
+
+    /**
+     * Reserved service name for re-synchronization after a reconnect ({@code zeroz4j.resync}).
+     *
+     * <p>The client calls {@code sync} with one argument: the list of object handles it holds.
+     * The server answers with one {@link #SUBSCRIBE} (0x10) frame per handle it still knows,
+     * carrying that object's current state, which the client applies in place — the same frame
+     * and the same apply path as an ordinary LiveSync update, so re-synchronization needs no
+     * decoding logic of its own. Handles the server does not know (it restarted since the client
+     * fetched them) are counted and logged server-side; no frame is sent for them.</p>
+     */
+    public static final String RESYNC_SERVICE = "zeroz4j.resync";
 }

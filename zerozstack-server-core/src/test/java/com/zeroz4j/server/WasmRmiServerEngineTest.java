@@ -379,4 +379,34 @@ public class WasmRmiServerEngineTest {
         assertTrue(message.contains("problem is inside the value"), message);
         assertFalse(message.contains("annotation processor did not run"), message);
     }
+
+    /**
+     * A reconnected client presents the handles it holds; the server re-sends current state for
+     * the ones it knows as 0x10 frames and skips the ones it does not (it restarted since they
+     * were fetched) without failing the rest of the batch.
+     */
+    @Test
+    public void testResyncResendsKnownHandlesAndSkipsUnknown() throws Exception {
+        engine.onOpen(fakeSession, new FakeEndpointConfig());
+        mapper.registerWithId("known-1", "current-state");
+
+        GrowableBuffer buffer = new GrowableBuffer();
+        buffer.putInt(0); // fire-and-forget
+        BinarySerializer.writeString(buffer, com.zeroz4j.api.SyncFrameTypes.RESYNC_SERVICE);
+        BinarySerializer.writeString(buffer, "sync");
+        buffer.putInt(1);
+        BinarySerializer.writeValue(buffer, List.of("known-1", "gone-since-restart"), mapper);
+
+        fakeSession.basic.latch = new CountDownLatch(1);
+        engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
+        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
+
+        // Frame 0 is the auth frame from onOpen; the resync answer is the only other one:
+        // one frame for the known handle, none for the unknown.
+        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        ByteBuffer frame = fakeSession.basic.sentBuffers.get(1);
+        assertEquals(0, frame.getInt());
+        assertEquals(com.zeroz4j.api.SyncFrameTypes.SUBSCRIBE, frame.get());
+        assertEquals("current-state", BinarySerializer.readValue(frame, mapper));
+    }
 }

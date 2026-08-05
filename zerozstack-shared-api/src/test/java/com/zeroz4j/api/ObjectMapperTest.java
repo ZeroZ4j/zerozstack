@@ -68,4 +68,22 @@ public class ObjectMapperTest {
         // Should not throw exceptions and shouldn't store null keys/values that break
         assertNull(mapper.getObject(null));
     }
+
+    @Test
+    public void testIdsReturnsSnapshotOfAllHandles() {
+        ObjectMapper mapper = new ObjectMapper();
+        assertTrue(mapper.ids().isEmpty());
+
+        mapper.registerWithId("a", new Object());
+        String generated = mapper.register(new Object());
+
+        java.util.List<String> ids = mapper.ids();
+        assertEquals(2, ids.size());
+        assertTrue(ids.contains("a"));
+        assertTrue(ids.contains(generated));
+
+        // A snapshot: mutating the mapper afterwards must not change the returned list.
+        mapper.registerWithId("b", new Object());
+        assertEquals(2, ids.size());
+    }
 }

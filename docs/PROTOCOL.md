@@ -120,5 +120,32 @@ Resolving a lazy handle rides an RMI-shaped frame to the internal service `zeroz
 server intercepts it before service dispatch, checks that the handle was disclosed to that session,
 and answers with an ordinary `0x01` response carrying the loaded value.
 
+## Reconnection and re-sync
+
+A dropped socket reconnects automatically with exponential backoff (500 ms doubling to a 15 s cap,
+retried indefinitely). Reconnecting produces a **new session**: the handshake and the `0x03` AUTH
+frame run again, and the previous session's server-side registrations are gone. The client restores
+itself in this order, all as fire-and-forget frames:
+
+1. Shared-signal writes queued while offline — internal service `zeroz4j.signals`, method `set`,
+   one frame per signal carrying the last value written.
+2. Live-object edits retained while offline — `zeroz4j.livesync`, method `mutate`, one whole-object
+   frame per edited object.
+3. A re-subscribe for every shared signal the client declared — `zeroz4j.signals`, method
+   `subscribe`; each is answered with a `0x17` update carrying the current retained value.
+4. One re-sync request — internal service **`zeroz4j.resync`**, method `sync`, one argument: the
+   `List` of every object handle this client holds. The server answers with one `0x10` frame per
+   handle it still knows, carrying that object's current state, applied in place on the client
+   exactly like any LiveSync update. Re-serializing also re-registers the objects' lazy-field
+   handles for the new session. Handles the server does not know — it restarted since they were
+   fetched — produce no frame and one server-side log line naming the count.
+
+Presenting a handle to `zeroz4j.resync` is treated as proof of prior disclosure, the same trust
+model as LiveSync mutation: handles are unguessable random UUIDs a client can only have learned by
+being sent the object.
+
+In-flight RMI requests are **not** replayed. Their suspended callers fail with
+`DisconnectedException` the moment the drop is detected, as do calls attempted while disconnected.
+
 Collections are rebuilt on the receiving side as `ArrayList`, `LinkedHashSet` and `LinkedHashMap`.
 Declare `@DataModel` fields as `List`, `Set` and `Map` rather than concrete implementation types.

@@ -62,6 +62,16 @@ public class WasmRmiClient {
     private static PlatformScheduler uiScheduler;
 
     /**
+     * The connection state as a signal, so UI reacts to it like any other state: read it in an
+     * {@code Effect} and the effect re-runs on every transition. See {@link #connectionState()}.
+     */
+    private static final com.zeroz4j.signals.ValueSignal<WasmRmiClientChannel.State> connectionState =
+            new com.zeroz4j.signals.ValueSignal<>(WasmRmiClientChannel.State.CONNECTING);
+
+    /** Previous state, to tell a reconnect (RECONNECTING → CONNECTED) from the first open. */
+    private static WasmRmiClientChannel.State lastState = WasmRmiClientChannel.State.CONNECTING;
+
+    /**
      * Pluggable platform scheduler for dispatching push callbacks onto a main UI thread (if applicable).
      */
     public interface PlatformScheduler {
@@ -105,6 +115,105 @@ public class WasmRmiClient {
         ClientSignalTransport.install();
         LiveMutations.install();
         ClientLazyAdapter.install();
+        if (channel instanceof WasmRmiClientChannel) {
+            ((WasmRmiClientChannel) channel).addStateListener(WasmRmiClient::onStateChange);
+        }
+    }
+
+    /**
+     * The connection to the server, as a read-only signal: {@code CONNECTING} during the first
+     * attempt, {@code CONNECTED} when usable, {@code RECONNECTING} after a drop, {@code CLOSED}
+     * after a deliberate close.
+     *
+     * <p>Read it inside an {@code Effect} to react — disable a form while not connected, render
+     * an indicator — with no listener wiring. The built-in banner uses exactly this signal.</p>
+     *
+     * @return the connection state signal
+     */
+    public static com.zeroz4j.signals.ValueSignal<WasmRmiClientChannel.State> connectionState() {
+        return connectionState;
+    }
+
+    /**
+     * Reacts to a connection state transition. Called by the channel; the whole recovery
+     * choreography hangs off this method:
+     *
+     * <ul>
+     *   <li><b>Down</b> (RECONNECTING or CLOSED): every in-flight call fails now with a
+     *       {@link com.zeroz4j.api.DisconnectedException} rather than hanging out its timeout,
+     *       and held {@code LiveMutex} locks report themselves lost — the server released them
+     *       when the session closed.</li>
+     *   <li><b>Restored</b> (RECONNECTING → CONNECTED): what the user did while offline is sent
+     *       first (queued shared-signal writes, then pending live-object edits), so the server
+     *       truth fetched next already includes it. Then every shared signal re-subscribes,
+     *       which snaps its mirror to the current retained value, and one re-sync request asks
+     *       the server to re-send the current state of every object this client holds. The
+     *       answers arrive as ordinary in-place updates. Re-serializing the objects also
+     *       re-registers their lazy-field handles for the new session.</li>
+     * </ul>
+     */
+    static void onStateChange(WasmRmiClientChannel.State state) {
+        WasmRmiClientChannel.State previous = lastState;
+        lastState = state;
+        connectionState.set(state);
+
+        if (state == WasmRmiClientChannel.State.RECONNECTING
+                || state == WasmRmiClientChannel.State.CLOSED) {
+            failAllPending("the connection to the server was lost");
+            ClientLiveMutexProvider.connectionLost();
+        } else if (state == WasmRmiClientChannel.State.CONNECTED
+                && previous == WasmRmiClientChannel.State.RECONNECTING) {
+            ClientSignalTransport.flushQueuedWrites();
+            LiveMutations.flushPending();
+            ClientSignalTransport.resubscribeAll();
+            sendResyncRequest();
+        }
+    }
+
+    /** Test support only: puts the connection-state tracking back to its initial value. */
+    static void resetConnectionStateForTesting() {
+        lastState = WasmRmiClientChannel.State.CONNECTING;
+        connectionState.set(WasmRmiClientChannel.State.CONNECTING);
+    }
+
+    /**
+     * Fails every in-flight request immediately. A suspended coroutine whose reply can no longer
+     * arrive must be resumed with an error now; waiting out the request timeout just makes the
+     * user stare at a stuck action for thirty seconds before learning what the framework already
+     * knew.
+     */
+    private static void failAllPending(String reason) {
+        for (Integer id : pendingRequests.keySet()) {
+            PendingRequest pending = pendingRequests.remove(id);
+            if (pending != null) {
+                pending.callback.error(new com.zeroz4j.api.DisconnectedException(
+                        "RMI request " + id + " failed: " + reason));
+            }
+        }
+    }
+
+    /**
+     * Asks the server to re-send the current state of every object this client holds, by handle.
+     * Fire-and-forget: the answers are ordinary 0x10 update frames applied in place, so there is
+     * nothing to correlate. Objects the server no longer knows (it restarted) are logged there.
+     */
+    private static void sendResyncRequest() {
+        List<String> handles = MAPPER.ids();
+        if (handles.isEmpty()) {
+            return;
+        }
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0); // fire-and-forget
+            BinarySerializer.writeString(buffer, SyncFrameTypes.RESYNC_SERVICE);
+            BinarySerializer.writeString(buffer, "sync");
+            buffer.putInt(1);
+            BinarySerializer.writeValue(buffer, handles, MAPPER);
+            networkChannel.sendRawBytes(buffer.toByteArray());
+            System.out.println("[zeroz4j] Re-sync requested for " + handles.size() + " object(s)");
+        } catch (Exception e) {
+            System.err.println("[zeroz4j] Failed to request re-sync: " + e.getMessage());
+        }
     }
 
     /**
@@ -152,6 +261,18 @@ public class WasmRmiClient {
     static void executeCall(String interfaceName, String methodName, Object[] args,
                                      AsyncCallback<Object> callback) {
         sweepStaleRequests();
+
+        // Fail fast while the connection is down. Writing into a dead socket either throws a
+        // browser error or silently discards the frame; both leave the user guessing. Deliberately
+        // NOT queued for replay: the framework cannot know whether repeating this call later is
+        // safe, and silently replaying "submit order" after an outage places the order twice.
+        if (networkChannel == null || !networkChannel.isOpen()) {
+            callback.error(new com.zeroz4j.api.DisconnectedException(
+                    "RMI call " + interfaceName + "#" + methodName
+                    + " refused: not connected to the server"));
+            return;
+        }
+
         int msgId = messageIdGenerator.incrementAndGet() & 0x7FFFFFFF;
         pendingRequests.put(msgId, new PendingRequest(callback, System.currentTimeMillis()));
 

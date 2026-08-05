@@ -55,6 +55,24 @@ For writes that are *operations* rather than edits — "checkout", "approve", "c
 * **Re-rendering is automatic.** A `@LiveSync` object is a reactive dependency: read one of its getters inside an `Effect` or `Computed` and an inbound sync re-runs it. Notification is per object, not per field.
 * Only objects the server has previously synced to the client can be mutated (the canonical instance must exist in the server's object mapper).
 
+## Reconnection
+
+A dropped WebSocket needs nothing from the application. When the connection restores itself (which
+it does automatically, with backoff and a built-in banner):
+
+* Edits made to `@ClientWritable` objects **while offline** are retained and sent first, as the
+  usual whole-object mutations. Last-write-wins settles them against anything that changed
+  server-side during the outage.
+* Every live object this client holds is then **re-synced**: the server re-sends its current state
+  and it is applied in place, so effects re-run and the screen is correct again — including changes
+  broadcast while the socket was down, which would otherwise be silently missing.
+
+Two things do not come back by themselves. A held `LiveMutex` is released by the server the moment
+the session closes; the holder learns of it through `mutex.setLostListener(...)` and should stop
+accepting edits. And if the **server itself restarted**, its handle registry is empty, so re-sync
+cannot restore the objects — the application re-fetches them the way it first obtained them (the
+server log names how many handles were unknown).
+
 ## Choosing a propagation feature
 
 | | Shape | Client writes |

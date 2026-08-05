@@ -46,6 +46,24 @@ public interface LiveMutex {
     void unlock();
 
     /**
+     * Registers a callback invoked if this lock is lost without {@link #unlock()} being called.
+     *
+     * <p>That happens when the WebSocket drops while the lock is held: the server releases every
+     * lock a session holds the moment the session closes, so another client may acquire it during
+     * the outage. A lost lock is lost — reconnecting does not re-acquire it, because the framework
+     * cannot know whether the protected work is still valid to continue. The callback is where an
+     * editor stops accepting input and tells the user to re-open the record.</p>
+     *
+     * <p>The default implementation ignores the listener; the client-side provider overrides it.
+     * On the server a lock cannot be lost this way, so the default stands there.</p>
+     *
+     * @param listener invoked at most once per acquisition, on the UI scheduler when one is installed
+     */
+    default void setLostListener(Runnable listener) {
+        // Lock loss is a client-side concept; the server holds no lock across a socket.
+    }
+
+    /**
      * Obtains a {@link LiveMutex} instance for the given shared object.
      *
      * @param sharedObject the object instance to lock (must be registered or registerable with {@link ObjectMapper})

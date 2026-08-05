@@ -17,7 +17,7 @@ Run the following Maven command to scaffold your project:
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=0.4.1 \
+  -DarchetypeVersion=0.5.0 \
   -DgroupId=com.mycompany \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT

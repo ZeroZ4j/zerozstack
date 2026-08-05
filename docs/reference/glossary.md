@@ -68,9 +68,27 @@ This is what makes late joiners correct without a snapshot fetch, and what event
 rejected, snapping its optimistic local change back to server truth. The reason is never sent to the
 client, and is not always logged on the server either — a failed role check leaves no record at all.
 
+**Re-sync**
+: The automatic recovery after a reconnect: the client re-subscribes its shared signals and sends
+the server the list of object handles it holds (`zeroz4j.resync`); the server answers with each
+object's current state, applied in place. Restores what a drop made stale — it does not replay RMI
+calls, re-acquire lost locks, or survive a server restart (which empties the handle registry).
+
+**`DisconnectedException`**
+: What an RMI call throws when the connection is down — immediately, whether the call was made
+while offline or was in flight when the socket dropped. Never queued or replayed: retrying is the
+application's decision, because only it knows whether repeating the call is safe.
+
+**Connection state**
+: `CONNECTING`, `CONNECTED`, `RECONNECTING` or `CLOSED`, exposed as a signal by
+`WasmRmiClient.connectionState()`. The built-in "Connection lost — reconnecting…" banner renders
+from it; applications with their own indicator disable the banner via
+`Zeroz4jClient.showConnectionBanner(false)`.
+
 **Scope**
-: How wide a LiveSync push reaches — `Scope.GLOBAL`, `SESSION` or `USER`. Events and shared
-signals have no scoping; they always reach every connected session.
+: How wide a LiveSync push or a scoped event reaches — `Scope.GLOBAL`, `SESSION`, `USER` or
+`TENANT`. Shared signals have no scoping; a shared signal is one value every session agrees on.
+`SESSION` targets a session id, which changes when that client reconnects.
 
 **Effect**
 : A side-effect runner, usually rendering, that re-runs when any signal it read changes. Created with

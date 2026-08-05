@@ -144,4 +144,17 @@ public class ObjectMapper {
     public int size() {
         return idToObject.size();
     }
+
+    /**
+     * A snapshot of every tracked handle ID.
+     *
+     * <p>This is what the client sends the server after a reconnect: the complete list of
+     * objects it holds, so the server can re-send their current state. A snapshot rather
+     * than a live view, because the caller serializes it while other code may register.</p>
+     *
+     * @return the handle IDs at the moment of the call, in no particular order
+     */
+    public java.util.List<String> ids() {
+        return new java.util.ArrayList<>(idToObject.keySet());
+    }
 }

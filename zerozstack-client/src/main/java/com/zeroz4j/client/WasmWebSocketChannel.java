@@ -39,4 +39,17 @@ public interface WasmWebSocketChannel {
      * @param bytes the raw binary packet payload
      */
     void sendRawBytes(byte[] bytes);
+
+    /**
+     * Whether the channel can deliver a frame right now.
+     *
+     * <p>This is what makes an RMI call fail fast with a {@link com.zeroz4j.api.DisconnectedException}
+     * instead of writing into a dead socket, where the browser either throws or silently discards
+     * the bytes. Defaults to {@code true} for transports that have no notion of being down.</p>
+     *
+     * @return true if a send will actually reach the wire
+     */
+    default boolean isOpen() {
+        return true;
+    }
 }

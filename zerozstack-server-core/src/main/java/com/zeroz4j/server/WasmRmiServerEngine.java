@@ -253,6 +253,19 @@ public class WasmRmiServerEngine implements EventPublisher {
 
         // Lazy references: release the handles disclosed to this session
         LazyHandles.sessionClosed(session.getId());
+
+        // Tell the application, after framework cleanup: apps keep registries keyed by session id
+        // (scoped pushes, rooms) and previously had no way to learn a session was gone.
+        try {
+            Principal principal = (Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
+            CDI.current().getBeanManager().getEvent()
+                .select(SessionClosedEvent.class)
+                .fire(new SessionClosedEvent(session.getId(), principal != null ? principal.getName() : null));
+        } catch (Exception e) {
+            // An observer threw, or the CDI container is already shutting down. Either way the
+            // close itself must complete; the observer's problem is logged, not propagated.
+            LOG.warning("[zeroz4j] SessionClosedEvent observer failed: " + e.getMessage());
+        }
     }
 
     private void sendAuthFrame(Session session, String username, Set<String> roles) {
@@ -491,6 +504,64 @@ public class WasmRmiServerEngine implements EventPublisher {
             } catch (Exception ioEx) {
                 LOG.warning("[zeroz4j] Failed to send lazy error: " + ioEx.getMessage());
             }
+        }
+    }
+
+    /**
+     * Answers a reconnected client's re-sync request: for every handle it presents that this
+     * server still knows, the object's current state is re-sent as an ordinary 0x10 update frame,
+     * which the client applies in place. Re-serializing also walks each object's {@code Lazy}
+     * fields, re-registering their handles for this (new) session — which is what brings lazy
+     * resolution back to life after a reconnect.
+     *
+     * <p><b>Trust model:</b> presenting a handle is treated as proof of prior disclosure, exactly
+     * as elsewhere in LiveSync — handles are unguessable random UUIDs that a client can only have
+     * learned by being sent the object. No role re-check happens here, because objects carry no
+     * roles; a service that discloses an object under a role check has disclosed it.
+     *
+     * <p>Handles this server does not know mean the server restarted since the client fetched
+     * them (the registry is in-memory). Those objects cannot be restored — the client's copies
+     * stay as they are, and the application re-fetches them the way it first obtained them. One
+     * warning names the count, so a stale-after-restart report is diagnosable from the log.
+     *
+     * @param handles the handle list from the client
+     * @param session the reconnected session
+     */
+    void handleResync(java.util.List<?> handles, Session session) {
+        int sent = 0;
+        int unknown = 0;
+        for (Object handleObj : handles) {
+            if (!(handleObj instanceof String)) {
+                continue;
+            }
+            Object obj = mapper.getObject((String) handleObj);
+            if (obj == null) {
+                unknown++;
+                continue;
+            }
+            try {
+                GrowableBuffer buffer = new GrowableBuffer();
+                buffer.putInt(0); // broadcast-style frame: no correlation
+                buffer.put(SyncFrameTypes.SUBSCRIBE);
+                LazyHandles.setCurrentSession(session.getId());
+                try {
+                    BinarySerializer.writeValue(buffer, obj, mapper);
+                } finally {
+                    LazyHandles.setCurrentSession(null);
+                }
+                WsWrites.send(session, buffer.toByteArray());
+                sent++;
+            } catch (Exception e) {
+                LOG.warning("[zeroz4j] Re-sync failed for handle " + handleObj + ": " + e.getMessage());
+            }
+        }
+        if (unknown > 0) {
+            LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent
+                + " object(s) re-sent, " + unknown + " handle(s) unknown -- the server restarted "
+                + "since the client fetched them; those objects stay stale until the application "
+                + "re-fetches them.");
+        } else if (sent > 0) {
+            LOG.info("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent + " object(s) re-sent.");
         }
     }
 
@@ -776,6 +847,17 @@ public class WasmRmiServerEngine implements EventPublisher {
                     if (SyncFrameTypes.LAZY_SERVICE.equals(interfaceName)) {
                         if ("resolve".equals(methodName) && argumentCount == 1) {
                             handleLazyResolve(messageId, buffer, session);
+                        }
+                        return;
+                    }
+
+                    // Framework-internal frames: re-synchronization after a reconnect
+                    if (SyncFrameTypes.RESYNC_SERVICE.equals(interfaceName)) {
+                        if ("sync".equals(methodName) && argumentCount == 1) {
+                            Object handles = BinarySerializer.readValue(buffer, mapper);
+                            if (handles instanceof java.util.List) {
+                                handleResync((java.util.List<?>) handles, session);
+                            }
                         }
                         return;
                     }

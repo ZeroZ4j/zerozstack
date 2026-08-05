@@ -44,7 +44,25 @@ final class ClientSignalTransport implements SignalTransport {
 
     private static final List<String> pendingSubscribes = new ArrayList<>();
 
+    /** Every signal this client has subscribed to, for re-subscription after a reconnect. */
+    private static final java.util.Set<String> subscribed = new java.util.LinkedHashSet<>();
+
+    /**
+     * The last write per signal made while the connection was down, flushed on reconnect.
+     * Last-write-per-signal rather than a full history, because shared signals are
+     * whole-value state: replaying five intermediate values the user typed through would
+     * broadcast four stale ones.
+     */
+    private static final java.util.Map<String, Object> queuedOfflineWrites = new java.util.LinkedHashMap<>();
+
     private ClientSignalTransport() {}
+
+    /** Test support only: clears subscription tracking and queued offline writes. */
+    static synchronized void resetForTesting() {
+        pendingSubscribes.clear();
+        subscribed.clear();
+        queuedOfflineWrites.clear();
+    }
 
     /**
      * Installs the transport and flushes subscribe requests queued before the channel
@@ -60,6 +78,39 @@ final class ClientSignalTransport implements SignalTransport {
     }
 
     /**
+     * Re-subscribes every signal this client ever subscribed to. Called after a reconnect:
+     * each subscribe is answered with the signal's current retained value, which snaps the
+     * local mirror to server truth — including any changes broadcast while the socket was
+     * down, which would otherwise be missing until the <em>next</em> change.
+     */
+    static synchronized void resubscribeAll() {
+        for (String name : subscribed) {
+            sendSubscribe(name);
+        }
+    }
+
+    /**
+     * Sends the writes made to client-writable shared signals while the connection was down.
+     * Called on reconnect, deliberately <em>before</em> {@link #resubscribeAll()}: the write
+     * reaches the server first, so the retained value the re-subscription answers with
+     * already reflects it. If the server rejects the write, its corrective update reverts
+     * the mirror exactly as it would have online.
+     */
+    static void flushQueuedWrites() {
+        java.util.Map<String, Object> toSend;
+        synchronized (ClientSignalTransport.class) {
+            if (queuedOfflineWrites.isEmpty()) {
+                return;
+            }
+            toSend = new java.util.LinkedHashMap<>(queuedOfflineWrites);
+            queuedOfflineWrites.clear();
+        }
+        for (java.util.Map.Entry<String, Object> write : toSend.entrySet()) {
+            sendSet(write.getKey(), write.getValue());
+        }
+    }
+
+    /**
      * Applies a SIGNAL_UPDATE frame's payload to the local mirror, if declared.
      */
     static void handleUpdate(String name, Object value) {
@@ -70,8 +121,14 @@ final class ClientSignalTransport implements SignalTransport {
     }
 
     private static synchronized void sendSubscribe(String name) {
+        subscribed.add(name);
         if (WasmRmiClient.networkChannel == null) {
             pendingSubscribes.add(name);
+            return;
+        }
+        if (!WasmRmiClient.networkChannel.isOpen()) {
+            // Down right now; resubscribeAll() replays every name in `subscribed` on reconnect,
+            // so recording it above is all that queueing requires.
             return;
         }
         try {
@@ -84,6 +141,22 @@ final class ClientSignalTransport implements SignalTransport {
             WasmRmiClient.networkChannel.sendRawBytes(buffer.toByteArray());
         } catch (Exception e) {
             System.err.println("[zeroz4j] Failed to subscribe to shared signal '" + name + "': " + e.getMessage());
+        }
+    }
+
+    private static void sendSet(String name, Object value) {
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0); // fire-and-forget
+            BinarySerializer.writeString(buffer, SyncFrameTypes.SIGNALS_SERVICE);
+            BinarySerializer.writeString(buffer, "set");
+            buffer.putInt(2);
+            BinarySerializer.writeValue(buffer, name, WasmRmiClient.MAPPER);
+            BinarySerializer.writeValue(buffer, value, WasmRmiClient.MAPPER);
+            WasmRmiClient.networkChannel.sendRawBytes(buffer.toByteArray());
+        } catch (Exception e) {
+            System.err.println("[zeroz4j] Failed to send write for shared signal '"
+                    + name + "': " + e.getMessage());
         }
     }
 
@@ -105,18 +178,14 @@ final class ClientSignalTransport implements SignalTransport {
         if (WasmRmiClient.networkChannel == null) {
             return;
         }
-        try {
-            GrowableBuffer buffer = new GrowableBuffer();
-            buffer.putInt(0); // fire-and-forget
-            BinarySerializer.writeString(buffer, SyncFrameTypes.SIGNALS_SERVICE);
-            BinarySerializer.writeString(buffer, "set");
-            buffer.putInt(2);
-            BinarySerializer.writeValue(buffer, signal.name(), WasmRmiClient.MAPPER);
-            BinarySerializer.writeValue(buffer, newValue, WasmRmiClient.MAPPER);
-            WasmRmiClient.networkChannel.sendRawBytes(buffer.toByteArray());
-        } catch (Exception e) {
-            System.err.println("[zeroz4j] Failed to send write for shared signal '"
-                    + signal.name() + "': " + e.getMessage());
+        if (!WasmRmiClient.networkChannel.isOpen()) {
+            // Down right now. The optimistic value is already on screen; queue the write so
+            // reconnecting sends it rather than silently dropping what the user did.
+            synchronized (ClientSignalTransport.class) {
+                queuedOfflineWrites.put(signal.name(), newValue);
+            }
+            return;
         }
+        sendSet(signal.name(), newValue);
     }
 }

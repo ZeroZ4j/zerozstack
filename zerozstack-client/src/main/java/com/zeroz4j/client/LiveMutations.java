@@ -44,6 +44,12 @@ final class LiveMutations {
 
     private LiveMutations() {}
 
+    /** Test support only: drops retained mutations. */
+    static synchronized void resetForTesting() {
+        pendingMutations.clear();
+        flushScheduled = false;
+    }
+
     /**
      * Enables live instantiation and installs the mutation listener.
      * Called from {@link WasmRmiClient#initialize}.
@@ -70,6 +76,14 @@ final class LiveMutations {
     private static void flush() {
         Object[] toSend;
         synchronized (LiveMutations.class) {
+            if (WasmRmiClient.networkChannel != null && !WasmRmiClient.networkChannel.isOpen()) {
+                // The connection is down. Keep the pending set instead of sending into a dead
+                // socket, where the edits would be silently lost while the user's screen shows
+                // them applied — the worst failure this class can produce. flushPending() sends
+                // them the moment the connection is restored.
+                flushScheduled = false;
+                return;
+            }
             toSend = pendingMutations.toArray();
             pendingMutations.clear();
             flushScheduled = false;
@@ -77,6 +91,16 @@ final class LiveMutations {
         for (Object liveObject : toSend) {
             sendMutation(liveObject);
         }
+    }
+
+    /**
+     * Sends every mutation retained while the connection was down. Called on reconnect, before
+     * the re-sync request: the edits reach the server first, so the object state the re-sync
+     * answers with already includes them (and any concurrent change is settled by the server's
+     * usual last-write-wins broadcast).
+     */
+    static void flushPending() {
+        flush();
     }
 
     private static void sendMutation(Object liveObject) {
