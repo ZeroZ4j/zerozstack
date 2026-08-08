@@ -25,7 +25,16 @@ import org.teavm.jso.dom.html.HTMLElement;
 public class ClientApp {
     public static void main(String[] args) {
         Zeroz4jClient.connect(getWebSocketUrl(), () -> {
-            RmiSecurityContext.onAuthenticated(() -> {
+            // onResolved fires once the server has answered, whether this connection ended up
+            // authenticated or anonymous — it is the "connection is usable" signal, and what you
+            // build the UI from. onAuthenticated is about identity and never fires for an anonymous
+            // connection, so mounting from it would leave this page blank.
+            //
+            // If your view makes an RMI call while it is being built, wrap it:
+            //     RmiSecurityContext.onResolved(() -> new Thread(ClientApp::buildUi).start());
+            // This callback runs on a stack that began in native JavaScript, where a suspending call
+            // cannot start.
+            RmiSecurityContext.onResolved(() -> {
                 HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
                 appRoot.setInnerHTML("<h1>Zeroz4j App is running!</h1>");
             });

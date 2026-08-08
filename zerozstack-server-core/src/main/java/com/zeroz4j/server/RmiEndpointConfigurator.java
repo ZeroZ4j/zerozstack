@@ -49,6 +49,16 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
     /** Key used to store the tenant id in user properties map ("zeroz.tenant"). */
     public static final String TENANT_KEY = "zeroz.tenant";
 
+    /** Key used to store the browser's client id in user properties map ("zeroz.clientId"). */
+    public static final String CLIENT_KEY = "zeroz.clientId";
+
+    /**
+     * Key marking a handshake refused by {@link OriginPolicy}. The upgrade itself cannot be failed
+     * from here in a container-independent way, so the flag is read by
+     * {@link WasmRmiServerEngine#onOpen} which closes the connection immediately.
+     */
+    public static final String REJECTED_KEY = "zeroz.rejected";
+
     /**
      * The application's authentication provider, discovered once via {@link java.util.ServiceLoader}.
      * Resolved lazily because the handshake can run before anything else has touched this class.
@@ -123,6 +133,21 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
                                 HandshakeRequest request,
                                 HandshakeResponse response) {
         super.modifyHandshake(config, request, response);
+
+        // Origin first: a browser attaches the client-id cookie to any connection to this origin,
+        // including one opened by an attacker's page, so an unchecked Origin would hand that page
+        // the victim's identity. Nothing else about the handshake matters if this fails.
+        String origin = firstHeader(request, "Origin");
+        String host = firstHeader(request, "Host");
+        if (!OriginPolicy.isAllowed(origin, host)) {
+            LOG.warning("[zeroz4j] Refused WebSocket handshake. "
+                    + OriginPolicy.explainRefusal(origin, host));
+            config.getUserProperties().put(REJECTED_KEY, Boolean.TRUE);
+            return;
+        }
+
+        resolveClientId(config, request, response);
+
         Principal principal = request.getUserPrincipal();
         Set<String> userRoles = new LinkedHashSet<>();
         String tenantId = null;
@@ -189,4 +214,63 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         java.util.List<String> values = params != null ? params.get(name) : null;
         return values != null && !values.isEmpty() ? values.get(0) : null;
     }
+
+    /**
+     * Reads a handshake header case-insensitively. HTTP header names are case-insensitive and
+     * containers disagree on how they key the map, so an exact lookup silently misses.
+     */
+    private static String firstHeader(HandshakeRequest request, String name) {
+        java.util.Map<String, java.util.List<String>> headers = request.getHeaders();
+        if (headers == null) {
+            return null;
+        }
+        for (java.util.Map.Entry<String, java.util.List<String>> entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey())) {
+                java.util.List<String> values = entry.getValue();
+                return values != null && !values.isEmpty() ? values.get(0) : null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Establishes the browser's client id for this connection.
+     *
+     * <p>A valid signed cookie is accepted; anything else — absent, tampered with, or expired — mints
+     * a fresh id and sets it on the handshake response. Minting here rather than only when the page
+     * is served means an application whose assets come from somewhere else still gets a working
+     * {@link com.zeroz4j.api.Scope#CLIENT}.</p>
+     *
+     * <p>A rejected token is deliberately indistinguishable from a first visit: the connection
+     * simply becomes a new client, because reporting the difference would tell an attacker whether
+     * a guessed id exists.</p>
+     */
+    private static void resolveClientId(ServerEndpointConfig config,
+                                        HandshakeRequest request,
+                                        HandshakeResponse response) {
+        String presented = ClientIdentity.fromCookieHeader(firstHeader(request, "Cookie"));
+        String clientId = ClientIdentity.verify(presented);
+
+        if (clientId == null) {
+            String issued = ClientIdentity.issue();
+            clientId = ClientIdentity.verify(issued);
+            try {
+                java.util.Map<String, java.util.List<String>> headers = response.getHeaders();
+                if (headers != null) {
+                    java.net.URI uri = request.getRequestURI();
+                    headers.put("Set-Cookie", java.util.Collections.singletonList(
+                            ClientIdentity.cookieHeader(issued,
+                                    ClientIdentity.secureFor(uri != null ? uri.getScheme() : null))));
+                }
+            } catch (RuntimeException ex) {
+                // Some containers expose an immutable response header map. The id still works for
+                // this connection; it just will not persist past it.
+                LOG.fine("[zeroz4j] Could not set the client-id cookie: " + ex.getMessage());
+            }
+        }
+        if (clientId != null) {
+            config.getUserProperties().put(CLIENT_KEY, clientId);
+        }
+    }
+
 }

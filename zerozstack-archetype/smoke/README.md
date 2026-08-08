@@ -31,7 +31,7 @@ Pin the plugin coordinates. The bare `archetype:generate` prefix resolves agains
 project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
 
 ```bash
-mvn -B org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.5.0 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
+mvn -B org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.6.0 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
 ```
 
 Copy the fixtures over the generated sources, keeping each one's subdirectory — the fixture packages

@@ -92,6 +92,51 @@ A failed authentication does not fail the upgrade. A rejected WebSocket handshak
 way to report *why*, so the connection is allowed and then denied at every secured call — which the
 client can surface.
 
+### What the client is told
+
+The server reports its decision in an AUTH frame on every connection, refused ones included, and the
+frame carries that decision as an explicit flag rather than leaving it to be inferred:
+
+```java
+RmiSecurityContext.isAuthenticated()   // true only when an identity was accepted
+RmiSecurityContext.isResolved()        // whether the server has answered yet
+RmiSecurityContext.onResolved(() -> mountUi());               // ready: fires either way
+RmiSecurityContext.onAuthenticated(() -> mountProtectedView()); // identity: real sign-in only
+RmiSecurityContext.onAuthenticationFailed(() -> showLoginError());
+```
+
+Three callbacks, and picking the wrong one is the mistake to avoid:
+
+| Callback | Fires when | Use it for |
+|---|---|---|
+| `onResolved` | the server has answered, authenticated **or** anonymous | "the connection is usable" — mounting the UI |
+| `onAuthenticated` | an identity was accepted | gating a protected view |
+| `onAuthenticationFailed` | the provider declined | showing a sign-in error |
+
+**`onAuthenticated` is not a "connected" signal.** It is a statement about identity, and an
+application with no login is anonymous by design, so it never fires — mount from it and the page stays
+blank. That is what `onResolved` is for.
+
+Conversely, gate a login screen on `onAuthenticated`: it fires only on a real sign-in, so no
+additional role check is needed to tell one from a refusal, and `onAuthenticationFailed` gives the
+positive signal a form needs, since silence cannot be distinguished from a slow network.
+
+!!! warning "Suspending calls in these callbacks"
+    They run on a stack that began in native JavaScript, where TeaVM cannot suspend a coroutine — so
+    a view whose construction makes an RMI call must be built on a green thread:
+    `onResolved(() -> new Thread(this::mountUi).start())`. Otherwise it fails with
+    *"suspension point reached from non-threading context"*.
+
+!!! warning "Fixed in 0.6.0"
+    Before 0.6.0 the frame did not carry the flag, and the client marked *any* AUTH frame as
+    authenticated. A connection the provider had declined arrived named `"anonymous"` with no roles
+    and `isAuthenticated()` returned `true`, so a gate built on `onAuthenticated` let every credential
+    through. If you worked around this by checking for a role your provider only grants on success,
+    that check is no longer needed.
+
+Neither of these is a security boundary. They decide what the client shows; the server re-checks every
+call.
+
 ## Authorizing calls
 
 Put security annotations on the **`@RmiService` interface**, not the implementation. The dispatcher
@@ -147,6 +192,54 @@ matches a `Scope.TENANT` push, so tenant data cannot leak to an unauthenticated 
 
 Tenancy at the storage layer is separate: see `TenantResolver` and the EclipseStore
 `TenantStorageProvider`.
+
+## Client identity without a login
+
+Not every application has users. An open application still needs to keep one browser's state to
+itself — that is what `Scope.CLIENT` and `Signals.scoped(..., Scope.CLIENT)` filter on — and the id
+they filter on has to come from somewhere.
+
+**It cannot come from the browser.** Anything a client says about its own identity is a claim it can
+edit, so the server issues it instead:
+
+* 256 bits from a secure random source, minted server-side when the page is served, and again at the
+  handshake if the browser presents none.
+* Signed with an HMAC, so tampering is detectable and verification needs no server-side registry —
+  which is what lets it survive a restart and work across a cluster.
+* Delivered in an **`HttpOnly`** cookie. This is the part that matters: page script cannot read it,
+  so a cross-site scripting bug cannot steal it the way it could read browser storage. `Secure` and
+  `SameSite=Strict` are set too.
+
+Read it in a service with `RmiRequestContext.getClientId()`.
+
+| Property | Meaning |
+|---|---|
+| `zeroz.clientId.secret` | HMAC key. **Set this in production** — without it a key is generated at startup, so a restart invalidates every id and other nodes reject them. |
+| `zeroz.clientId.ttlDays` | How long an id stays valid; default 365. |
+| `zeroz.clientId.secureCookie` | Forces the `Secure` attribute on or off. Set it to `true` behind a TLS-terminating proxy, where the application only ever sees plain HTTP. |
+
+!!! warning "A browser, not a person"
+    Two people sharing a machine share the id, and clearing cookies mints a new one. It is safe for
+    keeping a browser's own state to itself and **unsafe** for keeping one person's data away from
+    another. That needs `Scope.USER` or `Scope.TENANT`, which need real authentication.
+
+## Origin checks
+
+A browser attaches cookies to **any** connection to your origin, including one opened by a page the
+user happens to be visiting. Since the handshake now carries an identity cookie, an unchecked
+`Origin` would hand that page the victim's client id — so the handshake is refused unless the page
+that opened it is trusted.
+
+| `zeroz.origins` | Behaviour |
+|---|---|
+| unset (default) | Same-origin only: `Origin` must match the `Host` the request was sent to. Correct for the usual deployment. |
+| a comma-separated list | Exactly those origins, e.g. `https://app.example.com,https://admin.example.com`. Needed when the page is served from a different host than the socket. |
+| `*` | No check. Only when something in front of the application already enforces one. |
+
+A handshake carrying no `Origin` at all is allowed: browsers always send one, so its absence means a
+non-browser client, which has no ambient cookies to abuse.
+
+A refused handshake is closed immediately with WebSocket close code 1008.
 
 ## Development authentication
 

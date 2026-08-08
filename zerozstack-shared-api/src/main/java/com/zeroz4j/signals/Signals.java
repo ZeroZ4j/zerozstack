@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.signals;
 
+import com.zeroz4j.api.Scope;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -60,6 +62,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class Signals {
 
     private static final Map<String, SharedValueSignal<?>> registry = new ConcurrentHashMap<>();
+    private static final Map<String, ScopedSignal<?>> scopedFamilies = new ConcurrentHashMap<>();
     private static volatile SignalTransport transport;
 
     private Signals() {}
@@ -139,11 +142,135 @@ public final class Signals {
         return declare(name, initialValue, true, java.util.Collections.unmodifiableSet(roles));
     }
 
+    /**
+     * Declares (or returns the existing) family of signals holding one value per target.
+     *
+     * <p>Where {@link #shared(String, Object)} is a single value the whole server agrees on, this is
+     * one value per tenant, user, browser or session — see {@link ScopedSignal} for how each tier
+     * uses it, and {@link Scope} for what each scope means and which ones survive without a login.</p>
+     *
+     * @param <T>          value type; must be wire-serializable
+     * @param name         unique wire name, e.g. {@code "shop.basket"}
+     * @param initialValue the value a target holds until something sets it
+     * @param scope        which targets the family is keyed by
+     * @return the scoped signal
+     * @throws IllegalArgumentException if the name is blank, the scope is null, or the scope is
+     *                                  {@link Scope#GLOBAL}
+     */
+    public static <T> ScopedSignal<T> scoped(String name, T initialValue, Scope scope) {
+        return declareScoped(name, initialValue, scope, false, java.util.Collections.emptySet());
+    }
+
+    /**
+     * Declares a scoped family that clients may also write, with the same optimistic-write and
+     * server-authority rules as {@link #sharedWritable(String, Object, String...)}.
+     *
+     * <p>A client write lands on that client's own target, never another's: the server resolves the
+     * target from the writing session, and the wire frame carries no target at all.</p>
+     *
+     * @param <T>          value type; must be wire-serializable
+     * @param name         unique wire name
+     * @param initialValue the value a target holds until something sets it
+     * @param scope        which targets the family is keyed by
+     * @param writeRoles   roles allowed to write from a client; empty allows any session
+     * @return the scoped signal
+     */
+    public static <T> ScopedSignal<T> scopedWritable(String name, T initialValue, Scope scope,
+                                                     String... writeRoles) {
+        java.util.Set<String> roles = new java.util.LinkedHashSet<>(java.util.Arrays.asList(writeRoles));
+        return declareScoped(name, initialValue, scope, true,
+                java.util.Collections.unmodifiableSet(roles));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static synchronized <T> ScopedSignal<T> declareScoped(String name, T initialValue,
+                                                                  Scope scope, boolean clientWritable,
+                                                                  java.util.Set<String> writeRoles) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("scoped signal name must not be null or blank");
+        }
+        if (scope == null) {
+            throw new IllegalArgumentException("scoped signal '" + name + "' needs a scope");
+        }
+        if (scope == Scope.GLOBAL) {
+            throw new IllegalArgumentException(
+                    "Scoped signal '" + name + "' cannot use Scope.GLOBAL: a global signal is one "
+                    + "value everyone shares, which is what Signals.shared(\"" + name + "\", ...) "
+                    + "already is. Pick CLIENT, SESSION, USER or TENANT.");
+        }
+        // The family is checked before the plain registry deliberately: once a client has called
+        // get(), the family's own mirror sits in the plain registry under this same name, and
+        // checking that first would make re-running the declaration collide with itself.
+        ScopedSignal<?> existing = scopedFamilies.get(name);
+        if (existing == null && registry.containsKey(name)) {
+            throw new IllegalStateException(
+                    "'" + name + "' is already declared as a plain shared signal. One wire name "
+                    + "cannot be both a single global value and one value per target -- give the "
+                    + "scoped signal its own name.");
+        }
+        if (existing != null) {
+            boolean sameShape = existing.scope() == scope
+                    && existing.isClientWritable() == clientWritable
+                    && existing.writeRoles().equals(writeRoles)
+                    && java.util.Objects.equals(existing.initialValue(), initialValue);
+            if (!sameShape) {
+                throw new IllegalStateException(
+                        "Conflicting declaration of scoped signal '" + name + "'. It is already "
+                        + "declared with a different scope, initial value, writability or role set.");
+            }
+            return (ScopedSignal<T>) existing;
+        }
+        ScopedSignal<T> family = new ScopedSignal<>(name, initialValue, scope, clientWritable, writeRoles);
+        scopedFamilies.put(name, family);
+        SignalTransport current = transport;
+        if (current != null) {
+            current.onScopedFamilyCreated(family);
+        }
+        return family;
+    }
+
+    /**
+     * Returns the client's local mirror of a scoped family, creating and subscribing it on first
+     * use. The mirror is an ordinary shared signal bound to the family's base name — the server
+     * answers its subscribe with whichever target this session belongs to.
+     */
+    @SuppressWarnings("unchecked")
+    static synchronized <T> ValueSignal<T> mirrorFor(ScopedSignal<T> family) {
+        SharedValueSignal<?> existing = registry.get(family.name());
+        if (existing != null) {
+            return (ValueSignal<T>) existing;
+        }
+        SharedValueSignal<T> mirror = new SharedValueSignal<>(family.name(), family.initialValue(),
+                family.isClientWritable(), family.writeRoles());
+        registry.put(family.name(), mirror);
+        SignalTransport current = transport;
+        if (current != null) {
+            current.onSharedSignalCreated(mirror);
+        }
+        return mirror;
+    }
+
+    /**
+     * Looks up a scoped family by wire name.
+     *
+     * @param name base wire name
+     * @return the family, or null if not declared in this runtime yet
+     */
+    public static ScopedSignal<?> lookupScoped(String name) {
+        return scopedFamilies.get(name);
+    }
+
     @SuppressWarnings("unchecked")
     private static synchronized <T> ValueSignal<T> declare(String name, T initialValue,
                                                            boolean clientWritable, java.util.Set<String> writeRoles) {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("shared signal name must not be null or blank");
+        }
+        if (scopedFamilies.containsKey(name)) {
+            throw new IllegalStateException(
+                    "'" + name + "' is already declared as a scoped signal, which holds one value "
+                    + "per target rather than one value for everyone. Declaring it shared as well "
+                    + "would quietly give it two meanings -- give one of them another name.");
         }
         SharedValueSignal<?> existing = registry.get(name);
         if (existing != null) {
@@ -187,6 +314,9 @@ public final class Signals {
             for (SharedValueSignal<?> signal : registry.values()) {
                 newTransport.onSharedSignalCreated(signal);
             }
+            for (ScopedSignal<?> family : scopedFamilies.values()) {
+                newTransport.onScopedFamilyCreated(family);
+            }
         }
     }
 
@@ -209,6 +339,7 @@ public final class Signals {
      */
     public static synchronized void resetForTesting() {
         registry.clear();
+        scopedFamilies.clear();
         transport = null;
     }
 }

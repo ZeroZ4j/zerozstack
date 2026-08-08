@@ -84,6 +84,10 @@
         <module>form-signup</module>
         <module>job-monitor</module>
         <module>inventory-crud</module>
+        <module>routing-tour</module>
+        <module>scoped-signals</module>
+        <module>oidc-login</module>
+        <module>pwa-install</module>
     </modules>
 
 </project>

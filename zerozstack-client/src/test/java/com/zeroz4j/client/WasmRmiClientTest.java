@@ -138,24 +138,121 @@ public class WasmRmiClientTest {
         assertEquals("Server Error Occurred", callback.error.getMessage());
     }
 
+    /** Builds an AUTH frame the way the server does. */
+    private static byte[] authFrame(boolean authenticated, String username, String... roles) {
+        GrowableBuffer frame = new GrowableBuffer();
+        frame.putInt(0); // Correlation ID (0 for broadcast)
+        frame.put((byte) 0x03); // AUTH frame
+        frame.put((byte) 2); // Protocol version
+        frame.put((byte) (authenticated ? 1 : 0));
+        BinarySerializer.writeString(frame, username);
+        frame.putInt(roles.length);
+        for (String role : roles) {
+            BinarySerializer.writeString(frame, role);
+        }
+        return frame.toByteArray();
+    }
+
     @Test
     public void testRouteIncomingAuthFrame() throws Exception {
-        GrowableBuffer authFrame = new GrowableBuffer();
-        authFrame.putInt(0); // Correlation ID (0 for broadcast)
-        authFrame.put((byte) 0x03); // AUTH frame
-        authFrame.put((byte) 1); // Protocol version
-        BinarySerializer.writeString(authFrame, "alice");
-        authFrame.putInt(2); // 2 roles
-        BinarySerializer.writeString(authFrame, "admin");
-        BinarySerializer.writeString(authFrame, "user");
-
-        WasmRmiClient.routeIncomingMessage(authFrame.toByteArray());
+        WasmRmiClient.routeIncomingMessage(authFrame(true, "alice", "admin", "user"));
 
         assertTrue(RmiSecurityContext.isAuthenticated());
+        assertTrue(RmiSecurityContext.isResolved());
         assertEquals("alice", RmiSecurityContext.getUsername());
         assertTrue(RmiSecurityContext.hasAnyRole("admin"));
         assertTrue(RmiSecurityContext.hasAnyRole("user"));
         assertFalse(RmiSecurityContext.hasAnyRole("guest"));
+    }
+
+    /**
+     * The bug this pins: a refused connection used to arrive as an ordinary frame naming it
+     * "anonymous", and the client set authenticated = true regardless — so a login gate hung off
+     * onAuthenticated let anyone straight through.
+     */
+    @Test
+    public void testARejectedConnectionIsNotAuthenticated() throws Exception {
+        RmiSecurityContext.clear();
+        boolean[] succeeded = { false };
+        boolean[] failed = { false };
+        RmiSecurityContext.onAuthenticated(() -> succeeded[0] = true);
+        RmiSecurityContext.onAuthenticationFailed(() -> failed[0] = true);
+
+        WasmRmiClient.routeIncomingMessage(authFrame(false, "anonymous"));
+
+        assertFalse(RmiSecurityContext.isAuthenticated(),
+                "the provider declined; isAuthenticated() must say so without a role check");
+        assertTrue(RmiSecurityContext.isResolved(), "the decision has arrived");
+        assertFalse(succeeded[0], "a login gate on onAuthenticated must not open");
+        assertTrue(failed[0], "the application needs a positive signal to show a login error");
+    }
+
+    @Test
+    public void testAnAuthenticatedUserWithNoRolesIsStillAuthenticated() throws Exception {
+        RmiSecurityContext.clear();
+
+        WasmRmiClient.routeIncomingMessage(authFrame(true, "roleless"));
+
+        assertTrue(RmiSecurityContext.isAuthenticated(),
+                "an empty role set is not a failed sign-in; checking roles cannot substitute");
+        assertEquals("roleless", RmiSecurityContext.getUsername());
+    }
+
+    /**
+     * An application with no login is anonymous by design. Making {@code onAuthenticated} honest
+     * about that broke every such application, because they used it as a "connection ready" signal
+     * and so mounted nothing at all — a blank page. {@code onResolved} is that signal.
+     */
+    @Test
+    public void testAnAnonymousConnectionStillReportsThatTheServerAnswered() throws Exception {
+        RmiSecurityContext.clear();
+        boolean[] resolved = { false };
+        boolean[] authenticated = { false };
+        RmiSecurityContext.onResolved(() -> resolved[0] = true);
+        RmiSecurityContext.onAuthenticated(() -> authenticated[0] = true);
+
+        WasmRmiClient.routeIncomingMessage(authFrame(false, "anonymous"));
+
+        assertTrue(resolved[0], "an open application must still be told the connection is usable");
+        assertFalse(authenticated[0], "but it is not a sign-in, and must not be reported as one");
+    }
+
+    @Test
+    public void testOnResolvedAlsoRunsForARealSignIn() throws Exception {
+        RmiSecurityContext.clear();
+        boolean[] resolved = { false };
+
+        WasmRmiClient.routeIncomingMessage(authFrame(true, "alice", "user"));
+        RmiSecurityContext.onResolved(() -> resolved[0] = true);
+
+        assertTrue(resolved[0], "registering late must not miss a decision already taken");
+    }
+
+    @Test
+    public void testOnResolvedRunsBeforeTheOutcomeSpecificCallback() throws Exception {
+        RmiSecurityContext.clear();
+        java.util.List<String> order = new java.util.ArrayList<>();
+        RmiSecurityContext.onAuthenticated(() -> order.add("authenticated"));
+        RmiSecurityContext.onResolved(() -> order.add("resolved"));
+
+        WasmRmiClient.routeIncomingMessage(authFrame(true, "alice", "user"));
+
+        // The UI is mounted from onResolved, so it must exist before anything reacts to identity.
+        assertEquals(java.util.List.of("resolved", "authenticated"), order);
+    }
+
+    @Test
+    public void testACallbackRegisteredAfterTheDecisionStillRuns() throws Exception {
+        RmiSecurityContext.clear();
+        WasmRmiClient.routeIncomingMessage(authFrame(false, "anonymous"));
+
+        boolean[] failed = { false };
+        boolean[] succeeded = { false };
+        RmiSecurityContext.onAuthenticationFailed(() -> failed[0] = true);
+        RmiSecurityContext.onAuthenticated(() -> succeeded[0] = true);
+
+        assertTrue(failed[0], "a late listener must not miss a decision already taken");
+        assertFalse(succeeded[0]);
     }
 
     @Test

@@ -103,4 +103,56 @@ public interface EventPublisher {
     default <T> void publishToSession(EventTopic<T> topic, T payload, String sessionId) {
         publish(topic, payload, com.zeroz4j.api.Scope.SESSION, sessionId);
     }
+
+    /**
+     * Publishes to every session of one browser — its other tabs, and no other browser.
+     *
+     * <p>The scope for an application with no login: unlike
+     * {@link #publishToUser(EventTopic, Object, String)} it needs no authentication, and unlike
+     * {@link #publishToSession(EventTopic, Object, String)} it survives a reconnect, because the
+     * client id outlives the session id.</p>
+     *
+     * <p>A client id identifies a browser, not a person. Do not use this to deliver something only
+     * one particular user may see.</p>
+     *
+     * @param <T>      payload type bound by the topic
+     * @param topic    shared topic descriptor
+     * @param payload  the payload
+     * @param clientId the browser to reach; typically {@code RmiRequestContext.getClientId()}
+     */
+    default <T> void publishToClient(EventTopic<T> topic, T payload, String clientId) {
+        publish(topic, payload, com.zeroz4j.api.Scope.CLIENT, clientId);
+    }
+
+    /**
+     * Closes every connection belonging to one authenticated user.
+     *
+     * <p>The counterpart to {@link #publishToUser(EventTopic, Object, String)}, and the only way an
+     * application can revoke a signed-in session. <b>Identity is fixed for the life of a
+     * connection</b> — roles are read once at the handshake and never re-checked — so disabling an
+     * account, revoking a role or ending a session has no effect at all on a socket that is already
+     * open. Closing it is what makes the change take effect: the client's automatic reconnect
+     * re-presents whatever credential it still has, the application's
+     * {@link AuthenticationProvider} is asked again, and it either declines or answers with fresh
+     * roles.</p>
+     *
+     * <p>Sessions are closed with {@link jakarta.websocket.CloseReason.CloseCodes#VIOLATED_POLICY},
+     * which the client reports rather than treating as a network drop.</p>
+     *
+     * @param principalName the authenticated user whose connections should end; null or blank
+     *                      closes nothing, because "close everything" must be asked for explicitly
+     * @param reason        a short explanation delivered in the close frame; truncated to fit the
+     *                      123-byte limit the WebSocket protocol places on a close reason
+     * @return how many connections were closed
+     */
+    int disconnect(String principalName, String reason);
+
+    /**
+     * Closes one connection.
+     *
+     * @param sessionId the session to end; typically {@code RmiRequestContext.getSessionId()}
+     * @param reason    a short explanation delivered in the close frame
+     * @return true when a session with that id was open and has been closed
+     */
+    boolean disconnectSession(String sessionId, String reason);
 }

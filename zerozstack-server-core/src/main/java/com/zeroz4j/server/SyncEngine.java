@@ -93,8 +93,9 @@ public class SyncEngine {
      * Broadcasts a LiveSync update for a modified object to clients matching the target scope and filter identifier.
      *
      * @param obj    the modified domain model instance
-     * @param scope  the broadcast radius scope (GLOBAL, SESSION, or USER)
-     * @param target the target session ID or username (ignored if scope is GLOBAL)
+     * @param scope  how far the update reaches
+     * @param target the session id, client id, user name or tenant id the scope filters on; ignored
+     *               when the scope is {@link Scope#GLOBAL}
      *
      * <p><b>Under the hood:</b> Looks up object ID in {@link ObjectMapper#getId(Object)}. Iterates through {@code sessions}.
      * Applies scope filtering. Construct binary SUBSCRIBE frame (0x10) containing serialized object payload, and transmits via {@link WsWrites#send}.</p>
@@ -114,21 +115,11 @@ public class SyncEngine {
         }
 
         for (Session session : sessions.values()) {
-            // Apply scope filtering
-            if (scope == Scope.SESSION && !session.getId().equals(target)) {
+            // One filter for every push mechanism: events and LiveSync answered "who receives this"
+            // with two separate copies of the same rules, so a new scope had to be added twice and
+            // the two could drift.
+            if (!WasmRmiServerEngine.matchesScope(session, scope, target)) {
                 continue;
-            }
-            if (scope == Scope.TENANT) {
-                Object tenant = session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY);
-                if (tenant == null || !tenant.equals(target)) {
-                    continue;
-                }
-            }
-            if (scope == Scope.USER) {
-                java.security.Principal p = (java.security.Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
-                if (p == null || !p.getName().equals(target)) {
-                    continue;
-                }
             }
 
             try {

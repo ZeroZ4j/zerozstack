@@ -1,7 +1,7 @@
 /*
- * Copyright 2026 Franz Schoning
+ * Copyright 2026 Franz Schöning
  * Project: https://www.zeroz4j.com
- * Author: Franz Schoning - Principal Enterprise Architect (https://www.franzschoning.com)
+ * Author: Franz Schöning - Principal Enterprise Architect (https://www.franzschoning.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

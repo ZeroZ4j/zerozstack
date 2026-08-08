@@ -109,3 +109,105 @@ shared. No shading anywhere — the container launches the same plain classpath 
 | To give the app to a person or run it as a plain OS process | Shape 2 (`mvn verify -Ppackage`) |
 | To deploy to a server, Kubernetes, or any cloud | Shape 3 (`docker build`) |
 | One merged jar | Nothing — see the rule at the top |
+
+## Shape 4: a WAR on a Jakarta EE server
+
+Everything above assumes ZeroZ Stack brings its own server. It does not have to. To deploy into an
+application server — WildFly, Payara, Open Liberty, TomEE — take `zerozstack-server-jakarta` instead
+of `zerozstack-server-helidon`:
+
+```xml
+<dependency>
+    <groupId>com.zeroz4j</groupId>
+    <artifactId>zerozstack-server-core</artifactId>
+</dependency>
+<dependency>
+    <groupId>com.zeroz4j</groupId>
+    <artifactId>zerozstack-server-jakarta</artifactId>
+</dependency>
+```
+
+That module carries the three things every WAR otherwise had to work out for itself:
+
+| Class | Does | Needs configuration? |
+|---|---|---|
+| `Zeroz4jServletBootstrap` | Calls `BinaryRegistry.init()` at startup, so the generated serializers load | No — `@WebListener` |
+| `Zeroz4jWebSocketConfig` | Publishes the `/wasm-rmi` endpoint, which container scanning does not find inside a dependency jar | No |
+| `ManagedThreadFactoryProvider` | Runs RMI calls on container threads (see below) | No — registered via `META-INF/services` |
+| `Zeroz4jShellServlet` | Serves the client bundle and the shell for client-route deep links | **Yes** — map it yourself |
+
+The servlet is deliberately unmapped: where it sits is the deployment's decision, and a WAR with its
+own servlets must be able to take this module without something claiming `/`. Map it in `web.xml`:
+
+```xml
+<servlet>
+    <servlet-name>zeroz-shell</servlet-name>
+    <servlet-class>com.zeroz4j.server.jakarta.Zeroz4jShellServlet</servlet-class>
+</servlet>
+<servlet-mapping>
+    <servlet-name>zeroz-shell</servlet-name>
+    <url-pattern>/</url-pattern>
+</servlet-mapping>
+```
+
+**Do not add `zerozstack-server-jaxrs` to a WAR** unless you want its catch-all. That module carries a
+JAX-RS application at `/` answering every unmatched path — right for a standalone server, and a
+collision inside a WAR that has its own servlets. It is a separate module precisely so you can leave
+it out; `zerozstack-server-core` contains no JAX-RS type at all.
+
+### Container threads
+
+By default the framework dispatches RMI calls onto virtual threads it creates itself. Inside an
+application server that is a problem: the container attaches thread-locals — the naming context behind
+`java:comp/env/…`, the transaction context, the security context — before calling application code,
+and a thread the container did not create has none of them. A service doing a JNDI lookup, or holding
+an `@Resource` resolved lazily on the calling thread, then fails a long way from the cause.
+
+It cannot be repaired from inside such a thread by handing the work to a `ManagedExecutorService`:
+there is no context on that thread to capture. It has to be right at thread *creation*, which is why
+the SPI is a `ThreadFactory`:
+
+```java
+public final class MyThreadFactoryProvider implements SessionThreadFactoryProvider {
+    @Override
+    public ThreadFactory threadFactory() {
+        return InitialContext.doLookup("java:comp/DefaultManagedThreadFactory");
+    }
+}
+```
+
+`zerozstack-server-jakarta` already registers exactly this, so the dependency is normally all you
+need. Point it elsewhere with `-Dzeroz.threads.jndiName=…` if your container publishes its factory
+under another name. If the lookup fails the framework logs a warning and falls back to virtual
+threads — degraded but running, rather than a deployment that will not start.
+
+!!! warning "Container threads are platform threads"
+    A Jakarta EE 10 `ManagedThreadFactory` cannot produce virtual threads. Inside a container that is
+    the right trade — context matters more than cheap threads — but it *is* a trade, and worth
+    knowing before a load test surprises you.
+
+The framework's side of this contract is narrow: **calls are dispatched on threads the supplied
+factory produced.** Whether a particular container's factory really carries naming, transaction and
+security context is that container's contract, and worth asserting in your own integration test.
+
+### WebSocket limits
+
+Two properties, both unset by default so the container's own configuration wins:
+
+| Property | Effect |
+|---|---|
+| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts |
+| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing |
+
+**Set the first one.** The engine's `@OnMessage` takes a whole message — there is no partial-message
+handling — so a response larger than the container's binary buffer does not raise an error, it closes
+the socket. Container defaults are small, and one page of records can exceed them. The symptom is a
+connection that drops under load with nothing in the log to explain it.
+
+```
+-Dzeroz.ws.maxBinaryMessageBytes=8388608 -Dzeroz.ws.idleTimeoutMinutes=30
+```
+
+The idle timeout matters for a different reason: without one, an abandoned browser tab holds a
+session and its server-side resources indefinitely. The client's automatic reconnect means closing an
+idle connection is invisible to a user who comes back.

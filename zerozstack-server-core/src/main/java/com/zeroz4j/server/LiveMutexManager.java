@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *   <li><b>Concurrency Control:</b> Maintains a {@link ConcurrentHashMap} of fair {@link Semaphore} instances (1 permit) per object handle ID.</li>
  *   <li><b>Virtual Threads:</b> Calling {@link #lock(String, String)} blocks/suspends the caller's Virtual Thread via {@link Semaphore#tryAcquire} with a 30-second timeout.</li>
- *   <li><b>Ownership & Teardown:</b> Maps object IDs to owner strings (e.g. {@code "session:<sessionId>"}). {@link #releaseAll(String)} cleans up locks when a WebSocket session closes.</li>
+ *   <li><b>Ownership &amp; Teardown:</b> Maps object IDs to owner strings (e.g. {@code "session:<sessionId>"}). {@link #releaseAll(String)} cleans up locks when a WebSocket session closes.</li>
  * </ul>
  */
 @ApplicationScoped

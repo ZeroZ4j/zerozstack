@@ -21,14 +21,14 @@ import java.nio.ByteBuffer;
 
 /**
  * Optional escape hatch for hand-written binary serialization. Application models do NOT
- * implement this — annotate them {@link Portable} and the APT generates their serializer.
+ * implement this — annotate them {@link DataModel} and the APT generates their serializer.
  * Implement this interface only when a class needs custom serialization logic outside the
  * annotation processor (rare; used mainly by framework-internal tests), registering it via
  * {@link BinaryRegistry#register(String, java.util.function.Supplier)}.
  *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
- *   <li><b>Not Required:</b> {@link Portable} models need no interface; serialization is
+ *   <li><b>Not Required:</b> {@link DataModel} models need no interface; serialization is
  *       dispatched via generated {@link BinarySerializerDelegate} instances in {@link BinaryRegistry}.</li>
  *   <li><b>State Mutations:</b> Method calls mutate either the target {@link GrowableBuffer} output during serialization
  *       or the implementing instance's internal field state during deserialization.</li>

@@ -37,20 +37,19 @@ public class ExampleClientApp {
             String wsUrl = getWebSocketUrl()
                     + "?user=" + encode(username) + "&password=" + encode(password);
             Zeroz4jClient.connect(wsUrl, () -> {
-                RmiSecurityContext.onAuthenticated(() -> {
+                // On a green thread: building MainLayout makes an RMI call, and this callback runs
+                // on a stack that began in native JavaScript, where TeaVM cannot suspend.
+                RmiSecurityContext.onAuthenticated(() -> new Thread(() -> {
                     if (started) {
                         return;
                     }
                     started = true;
                     appRoot.setInnerHTML("");
                     appRoot.appendChild(new MainLayout().getElement());
-                });
-                // Invalid credentials leave the session anonymous: no AUTH frame arrives.
-                Window.setTimeout(() -> {
-                    if (!RmiSecurityContext.isAuthenticated()) {
-                        loginHolder[0].showError("Sign-in failed - try demo/demo or admin/admin");
-                    }
-                }, 3000);
+                }).start());
+                // The server says so outright, so there is nothing to infer and nothing to wait for.
+                RmiSecurityContext.onAuthenticationFailed(() ->
+                        loginHolder[0].showError("Sign-in failed - try demo/demo or admin/admin"));
             });
         });
         loginHolder[0].setHint("Demo users: demo / demo · admin / admin (admin unlocks the Admin view)");

@@ -16,6 +16,14 @@
     <description>Helidon specific server bootstrapper for zeroz4j</description>
 
     <dependencies>
+        <!-- Brings the JAX-RS catch-all that serves the client bundle and shell. Separated from
+             server-core so a WAR can take the framework without it; a standalone Helidon server
+             wants it. -->
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-server-jaxrs</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.zeroz4j</groupId>
             <artifactId>zerozstack-server-core</artifactId>

@@ -109,6 +109,8 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     private WasmWebSocket ws;
     private BinaryMessageHandler messageHandler;
     private final String url;
+    /** Recomputes the connect URL per attempt; null means the fixed {@link #url} is used. */
+    private java.util.function.Supplier<String> urlProvider;
     private final Runnable onOpen;
     private ConnectionListener connectionListener;
     private final java.util.List<StateListener> stateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -232,8 +234,26 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
         return state == State.CONNECTED;
     }
 
+    /**
+     * Supplies the URL for each connection attempt, replacing the fixed one.
+     *
+     * <p>Reconnection would otherwise reuse the URL the channel was built with, which is wrong as
+     * soon as that URL carries a credential: an access token valid at first connect has usually
+     * expired by the time a long-lived session drops and recovers, so the reconnect would come back
+     * anonymous and every secured call on it would start failing. {@code OidcClient} installs a
+     * provider that appends whichever token is current.</p>
+     *
+     * <p>The provider is called on the reconnect path and must not block — it reads an already
+     * refreshed token rather than fetching one.</p>
+     *
+     * @param provider computes the URL per attempt, or null to go back to the fixed URL
+     */
+    public void setConnectUrlProvider(java.util.function.Supplier<String> provider) {
+        this.urlProvider = provider;
+    }
+
     private void connect() {
-        this.ws = new WasmWebSocket(url,
+        this.ws = new WasmWebSocket(urlProvider != null ? urlProvider.get() : url,
             data -> {
                 int len = data.getLength();
                 byte[] bytes = new byte[len];

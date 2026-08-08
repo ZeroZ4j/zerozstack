@@ -46,7 +46,7 @@ import com.zeroz4j.api.ObjectMapper;
  *   <li><b>Response Dispatch:</b> Incoming binary WebSocket frames are parsed by {@link #routeIncomingMessage(byte[])}.
  *       Matches correlation ID against {@code pendingRequests}. Calls {@code callback.complete(result)} to resume the suspended coroutine,
  *       or {@code callback.error(e)} if an exception occurred.</li>
- *   <li><b>Push & Auth Frames:</b> Handles 0x02 (PUSH) to trigger topic listeners, 0x03 (AUTH) to populate {@link RmiSecurityContext},
+ *   <li><b>Push &amp; Auth Frames:</b> Handles 0x02 (PUSH) to trigger topic listeners, 0x03 (AUTH) to populate {@link RmiSecurityContext},
  *       and 0x10 (SUBSCRIBE) to deserialize inline LiveSync updates directly into {@link #MAPPER}.</li>
  * </ul>
  */
@@ -353,14 +353,22 @@ public class WasmRmiClient {
             } else if (frameType == SyncFrameTypes.AUTH) {
                 // AUTH frame
                 byte protocolVersion = buffer.get(); // Read protocol version
+                // Version 2 carries the server's decision explicitly. Version 1 did not, and
+                // inferring it from the name or the roles is what let a refused connection look
+                // authenticated -- so an older server is treated as unauthenticated rather than
+                // guessed at.
+                boolean authenticated = protocolVersion >= 2 && buffer.get() != 0;
                 String username = BinarySerializer.readString(buffer);
                 int roleCount = buffer.getInt();
                 Set<String> roles = new LinkedHashSet<>();
                 for (int i = 0; i < roleCount; i++) {
                     roles.add(BinarySerializer.readString(buffer));
                 }
-                RmiSecurityContext.populate(username, roles);
-                System.out.println("[zeroz4j] Authenticated as: " + username + " roles=" + roles + " (protocol v" + protocolVersion + ")");
+                RmiSecurityContext.populate(username, roles, authenticated);
+                System.out.println("[zeroz4j] " + (authenticated
+                        ? "Authenticated as: " + username + " roles=" + roles
+                        : "Not authenticated; connection is anonymous")
+                        + " (protocol v" + protocolVersion + ")");
             } else if (frameType == SyncFrameTypes.SUBSCRIBE) {
                 // Sync notification from server (formerly SNAPSHOT)
                 // We just deserialize it, which will update the mapper instance inline!

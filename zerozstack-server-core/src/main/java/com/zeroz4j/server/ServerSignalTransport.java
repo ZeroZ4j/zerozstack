@@ -18,6 +18,8 @@
 package com.zeroz4j.server;
 
 import com.zeroz4j.api.ObjectMapper;
+import com.zeroz4j.api.Scope;
+import com.zeroz4j.signals.ScopedSignal;
 import com.zeroz4j.signals.SharedValueSignal;
 import com.zeroz4j.signals.SignalTransport;
 import com.zeroz4j.signals.Signals;
@@ -26,6 +28,7 @@ import jakarta.websocket.Session;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 /**
  * Server-side {@link SignalTransport}: makes shared signals authoritative on this tier.
@@ -45,6 +48,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  */
 public final class ServerSignalTransport implements SignalTransport {
+
+    private static final Logger LOG = Logger.getLogger(ServerSignalTransport.class.getName());
 
     private static volatile ServerSignalTransport instance;
 
@@ -83,10 +88,53 @@ public final class ServerSignalTransport implements SignalTransport {
         SharedValueSignal<?> signal = Signals.lookup(signalName);
         if (signal != null) {
             WasmRmiServerEngine.sendSignalUpdate(session, signalName, signal.get(), transport.mapper);
-        } else {
-            transport.pendingSubscriptions
-                    .computeIfAbsent(signalName, k -> ConcurrentHashMap.newKeySet())
-                    .add(session);
+            return;
+        }
+        ScopedSignal<?> family = Signals.lookupScoped(signalName);
+        if (family != null) {
+            // The client asked for "the basket"; which basket is this server's decision, taken from
+            // the handshake. The wire name stays the family's, so the client never learns its target
+            // and cannot ask for another.
+            String target = targetFor(session, family.scope());
+            if (target == null) {
+                // No tenant on an anonymous session, no user when not logged in. Sending the initial
+                // value would be a guess; sending someone else's would be a leak. Send nothing.
+                LOG.fine("[zeroz4j] Session " + session.getId() + " subscribed to scoped signal '"
+                        + signalName + "' but has no " + family.scope() + " target; nothing sent.");
+                return;
+            }
+            WasmRmiServerEngine.sendSignalUpdate(session, signalName,
+                    family.instanceFor(target).get(), transport.mapper);
+            return;
+        }
+        transport.pendingSubscriptions
+                .computeIfAbsent(signalName, k -> ConcurrentHashMap.newKeySet())
+                .add(session);
+    }
+
+    /**
+     * Resolves which target of a scoped family a session belongs to.
+     *
+     * <p>Read from the handshake, never from the frame: a client that could name its own target
+     * could name anyone's.</p>
+     *
+     * @return the target, or null when this session has none — anonymous sessions have no user and
+     *         no tenant, and must not be quietly folded into somebody else's value
+     */
+    static String targetFor(Session session, Scope scope) {
+        switch (scope) {
+            case SESSION:
+                return session.getId();
+            case CLIENT:
+                return (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
+            case TENANT:
+                return (String) session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY);
+            case USER:
+                java.security.Principal principal = (java.security.Principal)
+                        session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
+                return principal != null ? principal.getName() : null;
+            default:
+                return null;
         }
     }
 
@@ -109,16 +157,35 @@ public final class ServerSignalTransport implements SignalTransport {
             return;
         }
         SharedValueSignal<?> signal = Signals.lookup(signalName);
-        if (signal == null) {
-            return;
+        boolean clientWritable;
+        Set<String> writeRoles;
+
+        if (signal != null) {
+            clientWritable = signal.isClientWritable();
+            writeRoles = signal.writeRoles();
+        } else {
+            ScopedSignal<?> family = Signals.lookupScoped(signalName);
+            if (family == null) {
+                return;
+            }
+            String target = targetFor(session, family.scope());
+            if (target == null) {
+                LOG.fine("[zeroz4j] Session " + session.getId() + " wrote scoped signal '"
+                        + signalName + "' but has no " + family.scope() + " target; write dropped.");
+                return;
+            }
+            // The target comes from the handshake, so a client writes only ever to its own value.
+            signal = family.instanceFor(target);
+            clientWritable = family.isClientWritable();
+            writeRoles = family.writeRoles();
         }
 
-        boolean allowed = signal.isClientWritable();
-        if (allowed && !signal.writeRoles().isEmpty()) {
+        boolean allowed = clientWritable;
+        if (allowed && !writeRoles.isEmpty()) {
             Set<String> userRoles = (Set<String>) session.getUserProperties().get(RmiEndpointConfigurator.ROLES_KEY);
             boolean hasRole = false;
             if (userRoles != null) {
-                for (String required : signal.writeRoles()) {
+                for (String required : writeRoles) {
                     if (userRoles.contains(required)) {
                         hasRole = true;
                         break;
@@ -132,10 +199,11 @@ public final class ServerSignalTransport implements SignalTransport {
                 : java.util.Collections.emptyList();
 
         if (allowed && violations.isEmpty()) {
-            // Server-side set: broadcasts to all sessions, including the writer's echo.
+            // Server-side set: broadcasts to the sessions in scope, including the writer's echo.
             ((SharedValueSignal<Object>) signal).set(newValue);
         } else {
-            // Corrective update: revert the writer's optimistic apply to server truth.
+            // Corrective update: revert the writer's optimistic apply to server truth. Addressed by
+            // the name the client knows, which for a scoped signal is the family's, not the instance's.
             WasmRmiServerEngine.sendSignalUpdate(session, signalName, signal.get(), transport.mapper);
         }
     }
@@ -166,12 +234,38 @@ public final class ServerSignalTransport implements SignalTransport {
     }
 
     @Override
+    public void onScopedFamilyCreated(ScopedSignal<?> family) {
+        Set<Session> parked = pendingSubscriptions.remove(family.name());
+        if (parked == null) {
+            return;
+        }
+        for (Session session : parked) {
+            String target = targetFor(session, family.scope());
+            if (target != null) {
+                WasmRmiServerEngine.sendSignalUpdate(session, family.name(),
+                        family.instanceFor(target).get(), mapper);
+            }
+        }
+    }
+
+    @Override
     public boolean canSet(SharedValueSignal<?> signal) {
         return true;
     }
 
     @Override
+    public boolean resolvesScopeTargets() {
+        return true;
+    }
+
+    @Override
     public void afterSet(SharedValueSignal<?> signal, Object newValue) {
+        if (signal.isScoped()) {
+            // Addressed by the family's name, delivered only to the sessions matching this target.
+            WasmRmiServerEngine.broadcastSignalUpdateScoped(signal.scopeFamily(), newValue,
+                    signal.scope(), signal.scopeTarget(), mapper);
+            return;
+        }
         WasmRmiServerEngine.broadcastSignalUpdate(signal.name(), newValue, mapper);
     }
 }

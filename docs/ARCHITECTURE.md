@@ -61,7 +61,14 @@ When an RMI stub is called, it packs the request into a contiguous `ByteBuffer`:
 
 ### Server-to-Client Response Frame
 
-The backend is modularized into `zerozstack-server-core` (the agnostic CDI engine and RMI dispatcher) and a specific HTTP/WebSocket binding like `zerozstack-server-helidon`. The backend unpacks the frame, routes it to the CDI bean implementing the interface, invokes the method using Virtual Threads (Project Loom), and writes the response:
+The backend is modularized into `zerozstack-server-core` (the agnostic CDI engine and RMI dispatcher)
+and a specific HTTP/WebSocket binding — `zerozstack-server-helidon` for a standalone server, or
+`zerozstack-server-jakarta` to deploy as a WAR into WildFly, Payara, Open Liberty or TomEE. The core
+carries no JAX-RS or servlet type at all, which is what makes "agnostic" true rather than
+aspirational: it can sit inside somebody else's WAR without claiming a URL. The backend unpacks the
+frame, routes it to the CDI bean implementing the interface, invokes the method on a thread from the
+configured factory — virtual by default, container-managed when a `SessionThreadFactoryProvider`
+supplies one — and writes the response:
 
 ```
  0                   1                   2                   3

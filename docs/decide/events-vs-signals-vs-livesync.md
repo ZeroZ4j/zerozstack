@@ -45,18 +45,25 @@ events.publishToSession(UiEvents.TOAST, "Saved", RmiRequestContext.getSessionId(
 
 LiveSync scopes the same way, with `Scope.SESSION` or `Scope.USER`.
 
-**Shared signals cannot be scoped at all** — a shared signal is one value the whole server agrees on,
-held in a static registry. If the value differs per user, it is not a shared signal.
-
-Shared signals go further — the registry behind `Signals.shared` is static, so there is exactly
-**one value per signal name for the whole JVM**, shared across every user and every tenant.
+Signals scope too, but through a different declaration. `Signals.shared` is one value the whole
+server agrees on — the registry behind it is static, so there is exactly **one value per signal name
+for the whole JVM**, across every user and every tenant. For state that belongs to somebody, declare
+it with `Signals.scoped(...)` instead, which holds one retained value per target and sends each client
+only its own.
 
 So this is not a performance trade-off. It is a security boundary:
 
 ```java
 // WRONG — every connected session receives this user's private balance.
 public static final ValueSignal<Money> ACCOUNT_BALANCE = Signals.shared(Money.zero());
+
+// RIGHT — one balance per user, and a client is never told another's.
+public static final ScopedSignal<Money> ACCOUNT_BALANCE =
+        Signals.scoped("account.balance", Money.zero(), Scope.USER);
 ```
+
+See [Signals](../SIGNALS.md#scoped-signals-one-value-per-tenant-user-or-browser) for the scopes and
+which of them work without a login.
 
 When the data belongs to one user or session, use LiveSync and say so:
 

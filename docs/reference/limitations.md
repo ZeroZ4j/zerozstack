@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.5.0, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.6.0, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 
@@ -13,10 +13,8 @@ These exist in the source as annotations or constants and do nothing. Do not bui
 
 | Item | Status |
 |---|---|
-| `@Route` | The annotation exists. **There is no router** — no registry, no resolution, no usages. There is no framework-provided navigation story; multi-view applications wire views by hand. |
 | Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x15 REJECT`, `0x16 SIGNAL_SUB`, `0x18 PUSH` | Declared and unreferenced. Reserved for future protocol work. |
 | Versioned mutations, acknowledgement and conflict rejection | Reserved in the protocol. The implemented sync path has no version field, no ACK and no conflict detection. |
-| `@RequiresRole` | A `@Target(TYPE)` guard intended for **client-side views**, checked by the router against `RmiSecurityContext.hasAnyRole`. Unimplemented for the same reason `@Route` is — there is no router. It is not a substitute for `@RolesAllowed`, which is a server-side RMI check; gate views by hand with `RmiSecurityContext.hasAnyRole(...)` and always enforce on the server. |
 | Coalesced LiveSync mutations and UI-scheduler dispatch of inbound frames | Both are conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework. So every setter sends its own mutation frame, and all inbound frames are applied inline on the WebSocket callback. |
 
 ## Connection and reconnection
@@ -78,10 +76,16 @@ edits and writes made while offline are sent on reconnect, and RMI calls fail im
 
 ## Shared signals
 
-- **JVM-global.** The registry is static: one value per signal name for the whole server, across every
-  user and tenant. There is no per-session or per-tenant shared signal, and unlike events there is no
-  scoped `set()` — a shared signal is by definition one value everyone agrees on. For per-user state
-  use a scoped event or LiveSync with `Scope.USER`.
+- **`Signals.shared` is JVM-global.** The registry is static: one value per signal name for the whole
+  server, across every user and tenant. That is the definition, not a gap — for one value per tenant,
+  user, browser or session use `Signals.scoped(name, initialValue, scope)` instead
+  (see [SIGNALS.md](../SIGNALS.md#scoped-signals-one-value-per-tenant-user-or-browser)).
+- **Scoped signals hold every target's value for the process lifetime.** Targets are created on first
+  use and never evicted, so a `Scope.CLIENT` signal in a long-running server accumulates one entry per
+  browser that ever connected. Nothing pages them out or persists them across a restart.
+- **A scoped signal's targets are not enumerable from a client**, and `knownTargets()` on the server
+  reports only targets that have been touched — a target that has never been written is absent even
+  though subscribing to it works and yields the initial value.
 - **One default signal per payload type.** The default wire name is the payload's class name, so two
   unnamed declarations of the same type collide. A conflicting redeclaration now throws
   `IllegalStateException` rather than silently keeping the first; give signals explicit names.
@@ -237,16 +241,96 @@ WebAssembly today.
 ## Client environment
 
 - Only TeaVM-supported JDK APIs are available in client modules.
-- Client code runs on a cooperative single-threaded scheduler. Creating a `java.lang.Thread` in client
-  code is unsupported.
+- **Client code runs on a cooperative single-threaded scheduler.** `java.lang.Thread` exists and is
+  what TeaVM calls a green thread — starting one re-enters TeaVM's scheduler and is the documented
+  way to reach a context where a call may suspend. It buys **no parallelism**: nothing runs at the
+  same time as anything else, and code that assumes real concurrency is wrong here.
+- **A suspending call cannot start on a stack that began in native JavaScript.** An RMI call inside a
+  DOM event handler, a `setTimeout` callback, or a WebSocket frame handler fails with "suspension
+  point reached from non-threading context". The router hits this on every navigation and handles it
+  by running each navigation on a green thread; application code fetching from such a callback must
+  do the same.
+
+## Routing
+
+- **Loaders run in sequence, not in parallel.** A layout's loader and its child's cannot overlap,
+  because of the single-threaded scheduler above. The guarantee routing gives is ordering — data
+  before render, shared data fetched once in a layout — not concurrency.
+- **The whole chain is rebuilt on every navigation.** A layout is not kept mounted while its children
+  swap, so moving between two children of the same layout re-runs that layout's loader and rebuilds
+  its components.
+- **One child per layout.** Sibling outlets are not modelled.
+- **No wildcard or optional segments.** Patterns are literal segments and `:params` with a fixed
+  count; `/files/*path` is not supported.
+- **No lazy loading, transitions or scroll restoration.** Everything is in one bundle and the
+  container's contents are replaced outright.
+- **Route guards are client-side only.** `@RequiresRole` decides what to show; the server re-checks
+  every call, and that is what protects data.
+
+## PWA
+
+- **Installing does not make an application work offline, and is not intended to.** Every view loads
+  its data over the WebSocket, signals get their retained values from the server on subscribe, and
+  LiveSync objects live server-side. There is no client-side store, so with no connection there is
+  nothing to render. Opened offline, an application shows `/zeroz4j-offline.html` and stops there.
+  This is a property of the architecture. Do not read the presence of a service worker as a promise
+  of offline operation.
+- **The service worker caches the shell only** — the client bundle and the offline page. No data,
+  and no application assets beyond what a page happens to request.
+- **Its caching strategy is fixed.** Navigations are network-first, same-origin assets are
+  cache-first, `/wasm-rmi` and cross-origin requests are never intercepted. An application needing
+  different behaviour registers its own worker with `Pwa.install(path)` and takes on the
+  cache-invalidation problem the shipped one solves.
+- **No background sync and no queued writes.** An action taken with no connection is lost, not
+  replayed later.
+- **Push delivery is not implemented.** The framework collects a subscription; posting to it needs a
+  signed VAPID JWT and RFC 8291 payload encryption, which is a library's job. Subscription lifecycle
+  — deleting one after a 404 or 410 from the push service — is the application's.
+- **No icon generation.** Applications supply their own PNGs at the sizes browsers want, including a
+  maskable one.
+- **Installation and push need a secure origin.** `http://localhost` counts; any other host needs
+  HTTPS, and browsers offer neither without it.
+
+## Deployment and transport
+
+- **Messages are whole, never partial.** `@OnMessage` takes a complete `ByteBuffer`; there is no
+  partial-message handling and no chunking. A response larger than the container's binary buffer does
+  not raise an error — it closes the socket, with nothing in the log to say why. Raise the limit with
+  `zeroz.ws.maxBinaryMessageBytes`, and design against sending very large payloads over RMI at all.
+- **No limits are imposed by default.** `zeroz.ws.maxBinaryMessageBytes` and
+  `zeroz.ws.idleTimeoutMinutes` are unset, so the container's own values apply — which for the message
+  size is usually small. Without an idle timeout an abandoned browser tab holds a session and its
+  server-side resources indefinitely.
+- **Container-managed threads are platform threads.** A Jakarta EE 10 `ManagedThreadFactory` cannot
+  produce virtual threads, so a WAR deployment supplying one through
+  `SessionThreadFactoryProvider` trades cheap threads for the container's naming, transaction and
+  security context. Without such a provider, RMI calls run on framework-created virtual threads that
+  carry none of that, and a `java:comp/env/…` lookup inside a service fails.
+- **The framework does not verify what a container's factory carries.** Its contract is only that
+  calls are dispatched on threads the supplied factory produced; whether those threads have the
+  container's context is the container's contract, and worth an integration test in the application.
+- **`zerozstack-server-jaxrs` is a catch-all at `/`.** Do not add it to a WAR that has its own
+  servlets. `zerozstack-server-core` carries no JAX-RS or servlet type at all, which is what makes it
+  safe inside somebody else's deployment.
+- **`Zeroz4jShellServlet` is not auto-mapped.** Deliberately: mapping it at `/` from inside the
+  framework would reintroduce the collision the module split exists to prevent. The deployment
+  declares the mapping.
 
 ## Multi-tenancy
 
 `README` describes multi-tenancy as available out of the box. Be precise about where it exists:
-tenant isolation is provided at the **storage layer** by `TenantResolver` and the EclipseStore
-`TenantStorageProvider`. It does **not** extend to the propagation mechanisms — server events and
-shared signals cross tenant boundaries, and the `ObjectMapper` handle namespace is shared across
-tenants.
+
+- **Storage** — isolated by `TenantResolver` and the EclipseStore `TenantStorageProvider`.
+- **Server events and LiveSync** — isolated when published with `Scope.TENANT`, which requires an
+  `AuthenticationProvider` that reports a tenant. `publish(topic, payload)` with no scope still
+  reaches every connected session.
+- **Signals** — `Signals.scoped(name, initialValue, Scope.TENANT)` holds one value per tenant.
+  `Signals.shared(...)` is a single global value by definition and crosses every boundary.
+- **Not isolated:** the `ObjectMapper` handle namespace is shared across tenants, and scoped signals
+  keep every target's value in memory for the process lifetime with no eviction.
+
+Nothing here is automatic: a tenant-scoped push is a scope you pass, and choosing `GLOBAL` — or
+leaving the scope off — is what leaks.
 
 ## Examples
 

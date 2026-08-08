@@ -53,4 +53,27 @@ public interface SignalTransport {
      * @param newValue the value just assigned
      */
     void afterSet(SharedValueSignal<?> signal, Object newValue);
+
+    /**
+     * Invoked when a {@link ScopedSignal} family is declared, so a transport can release
+     * subscriptions parked before the declaring class was loaded.
+     *
+     * @param family the newly declared family
+     */
+    default void onScopedFamilyCreated(ScopedSignal<?> family) {
+        // Most transports do not park anything.
+    }
+
+    /**
+     * Whether this tier decides which target a session belongs to.
+     *
+     * <p>True on the server, which reads the tenant, user or client id from the handshake and can
+     * therefore address any target of a {@link ScopedSignal}. False on a client, which has exactly
+     * one target — its own — and is never told its name, so that it cannot ask for another's.</p>
+     *
+     * @return true on the server tier
+     */
+    default boolean resolvesScopeTargets() {
+        return false;
+    }
 }

@@ -81,6 +81,65 @@ Semantics and current limits, stated plainly:
 * **Naming** — the wire name defaults to the payload's class name (the same runtime identity the binary serializer already puts on the wire), giving one default signal per type. Need several signals of the same type, or a stable name across payload-class renames? Use `Signals.shared("explicit.name", initialValue)`.
 * **Reconnection is automatic.** When a dropped WebSocket restores itself, every shared signal re-subscribes and snaps its mirror to the current retained value — updates broadcast during the outage are not missed, they arrive as the fresh value. A write made to a `sharedWritable` signal *while offline* is applied optimistically on screen, queued, and sent on reconnect (last value only); the server then accepts and broadcasts it, or corrects the writer, exactly as it would have online.
 
+## Scoped signals: one value per tenant, user or browser
+
+A shared signal is one value the whole server agrees on. That is wrong for anything belonging to
+somebody. `Signals.scoped(name, initialValue, scope)` declares the same thing narrowed: one retained
+value per target, and a client only ever sees its own.
+
+```java
+// shared module
+public final class BasketSignals {
+    public static final ScopedSignal<Basket> BASKET =
+            Signals.scoped("shop.basket", Basket.empty(), Scope.CLIENT);
+}
+```
+
+```java
+// server — name the target, so who receives it is never accidental:
+BasketSignals.BASKET.forTarget(RmiRequestContext.getClientId()).set(updated);
+
+// client — indistinguishable from any other signal:
+Effect.create(() -> badge.setText(BasketSignals.BASKET.mine().get().itemCount() + " items"));
+```
+
+The client calls `mine()` with no argument and never learns its own target. That is the point: a
+browser that could name a target could name somebody else's. The server resolves it from the
+handshake, and the wire frame carries the family's name, not the target's — so no client can tell
+that other targets exist, let alone what they hold.
+
+### Choosing a scope
+
+Picking one is a security decision, not a preference.
+
+| Scope | Keyed by | Needs a login? | Survives reconnect? |
+|---|---|---|---|
+| `Scope.SESSION` | the WebSocket session id | no | **no** — session ids change on every drop |
+| `Scope.CLIENT` | the browser's client id | no | yes, and page reloads too |
+| `Scope.USER` | the authenticated user name | yes | yes |
+| `Scope.TENANT` | the authenticated tenant | yes | yes |
+
+`Scope.CLIENT` is the one for an application with no login: the client id is issued by the server and
+stored in an `HttpOnly` cookie, so it outlives both reconnects and reloads. See
+[client identity](guides/security-auth.md#client-identity-without-a-login).
+
+**`CLIENT` and `SESSION` are not a boundary between people.** They identify a browser, not a person:
+two people sharing a machine share the id. Anything one user must not see needs `USER` or `TENANT`,
+which require real authentication.
+
+### Rules
+
+* **One name, one meaning.** A wire name is either shared or scoped, never both — declaring it twice
+  throws rather than quietly giving it two meanings.
+* **`Scope.GLOBAL` is refused**, because a global signal is what `Signals.shared` already is.
+* **A session with no target receives nothing.** An anonymous session has no user and no tenant, so
+  it never matches a `USER` or `TENANT` signal — no initial value is guessed and nobody else's is
+  sent.
+* **Each tier gets one method.** On the server `forTarget(...)` works and `mine()` throws; on a client
+  it is the other way round. With no transport installed — a plain unit test — both work locally.
+* **Client writes** use `Signals.scopedWritable(...)` and land on the writer's own target. Roles and
+  validation are checked exactly as for a writable shared signal.
+
 ## Component binding
 
 Fields support two-way binding to a signal:

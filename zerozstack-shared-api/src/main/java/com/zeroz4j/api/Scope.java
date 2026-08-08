@@ -46,6 +46,21 @@ public enum Scope {
     SESSION,
 
     /**
+     * Every session belonging to one browser, identified by its client id.
+     *
+     * <p>The scope for an application with no login at all: the client id is issued by the server
+     * and stored in the browser, so it survives both a reconnect (unlike {@link #SESSION}, whose id
+     * changes on every drop) and a page reload. A user's two tabs share it; a different browser,
+     * device or private window does not.</p>
+     *
+     * <p><b>Not a security boundary.</b> A client id identifies a browser, not a person: two people
+     * sharing a machine share it, and clearing cookies mints a new one. Use it to keep a browser's
+     * own state to itself, never to keep one person's data away from another — that is what
+     * {@link #USER} and {@link #TENANT} are for, and they require real authentication.</p>
+     */
+    CLIENT,
+
+    /**
      * Every session belonging to one authenticated principal, identified by user name.
      *
      * <p>Reaches the same person's other tabs and devices, and nobody else's. This is the scope for

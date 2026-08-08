@@ -8,9 +8,215 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.6.0] — 2026-08-07
+
+Three features that every non-trivial application had to build for itself, and one security fix.
+State that belongs to one tenant, user or browser is now a first-class kind of signal; logging in
+against an OpenID Connect provider is a dependency rather than a project; and URLs map to views with
+their data declared alongside them.
 
 ### Added
+
+- **Scoped signals — one value per tenant, user, browser or session.** `Signals.shared` is one value
+  the whole server agrees on, which is wrong for anything belonging to somebody.
+  `Signals.scoped(name, initialValue, scope)` declares the same thing narrowed. The server names the
+  target; the client calls `get()` and is never told its own, so it cannot ask for another's, and the
+  wire frame carries the family name only — no client learns that other targets exist. See
+  [SIGNALS.md](docs/SIGNALS.md#scoped-signals-one-value-per-tenant-user-or-browser).
+
+- **`Scope.CLIENT` and a client identity that works with no login at all.** An open application still
+  needs to keep one browser's state to itself. The id cannot come from the browser — anything a
+  client claims about itself it can edit — so the server mints 256 random bits, signs them, and
+  delivers them in an **`HttpOnly`** cookie that page script cannot read. Unlike a session id it
+  survives reconnects and reloads. It identifies a browser, not a person, and the docs say so.
+
+- **Origin checking at the handshake.** Required by the above rather than optional: a browser attaches
+  cookies to any connection to your origin, including one opened by a page the user is merely
+  visiting, so an unchecked `Origin` would have handed that page the visitor's identity. Same-origin
+  by default, `zeroz.origins` for an allowlist.
+
+- **OpenID Connect authentication, both halves.** A new optional module `zerozstack-auth-oidc`
+  verifies an access token at the handshake — signature, issuer, audience and expiry, against a cached
+  JWKS — and maps its claims to a name, roles and a tenant, reading Keycloak's split
+  `realm_access`/`resource_access` role structure. In the browser, `OidcClient` runs the
+  authorization-code flow with PKCE (S256 only; it refuses rather than downgrading to `plain`),
+  checks `state`, strips the used code from the address bar, and refreshes ahead of expiry so
+  reconnects carry a live token. See [the OIDC guide](docs/guides/oidc-auth.md).
+
+- **Routing, with each route's data declared alongside its path.** `@Route("/tasks/:id")` on a
+  `RouteView<Task>`: `load` runs to completion before `render` is called, so a view never exists
+  half-loaded and never fetches from inside a mounted component. Real URLs through the history API,
+  nested layouts, typed parameters, and `@RequiresRole` guards. The route table is generated at
+  compile time, so there is no reflection and four classes of mistake are compile errors. See
+  [ROUTING.md](docs/ROUTING.md).
+
+- **The framework deploys as a WAR on a Jakarta EE server.** Three things blocked it, all fixed
+  together:
+  - **`SessionThreadFactoryProvider`**, a `ServiceLoader` SPI supplying the threads RMI calls run on.
+    The engine previously created its own virtual threads, and a thread the application server did
+    not create carries none of the container's thread-locals — no naming context behind
+    `java:comp/env/…`, no transaction context, no security context. A service doing a JNDI lookup
+    failed a long way from the cause. It cannot be repaired from *inside* such a thread by handing
+    work to a `ManagedExecutorService`, because there is no context there to capture; it has to be
+    right at thread creation, hence a factory. No provider registered means virtual threads, exactly
+    as before.
+  - **`zeroz.ws.maxBinaryMessageBytes` and `zeroz.ws.idleTimeoutMinutes`.** `@OnMessage` takes a whole
+    message — there is no partial-message handling — so a response larger than the container's binary
+    buffer did not raise an error, it closed the socket. Both properties are unset by default, leaving
+    the container's own values rather than imposing a framework default.
+  - **`zerozstack-server-jakarta`**, the servlet-container counterpart to `-helidon`: WebSocket
+    endpoint registration, `BinaryRegistry.init()` at startup, the container's `ManagedThreadFactory`,
+    and an optional shell servlet for deep links. Adding the dependency is normally the whole
+    integration.
+
+- **PWA: an application can be installed, and can receive web push.** `Pwa.install()` in the client's
+  `main`, a manifest and three tags in `index.html` — that is the whole opt-in. It buys a home-screen
+  launch in its own window, a fast second start because the client bundle is cached, an install
+  button that appears when the browser actually offers (`Pwa.installable()` is a signal, because
+  `beforeinstallprompt` arrives long after the UI is built), and `Pwa.subscribeToPush(...)` returning
+  the endpoint and keys a push library needs.
+
+  **It does not make an application work offline, and that is deliberate.** Every view loads its data
+  over the WebSocket and there is no client-side store, so with no connection there is nothing to
+  render; opened offline, the app shows `/zeroz4j-offline.html` and says why. Vaadin Flow makes the
+  same trade for the same reason. The service worker ships inside `zerozstack-server-core` — no
+  application copies it — and its cache name carries the build version, so a deployment evicts the
+  previous shell instead of serving stale JavaScript against a newer server. `PwaManifest` builds the
+  manifest per request, because in a multi-tenant product the name, icons and colour belong to the
+  tenant. See [PWA.md](docs/PWA.md).
+
+- **`EventPublisher.publishToClient(...)`** and `RmiRequestContext.getClientId()`.
+
+- **`RmiSecurityContext.onAuthenticationFailed(...)`, `onResolved(...)` and `isResolved()`.** Three
+  callbacks that used to be one: `onResolved` fires once the server has answered either way and is
+  the "connection is usable" signal an application mounts its UI from; `onAuthenticated` is now
+  strictly about identity; `onAuthenticationFailed` lets a login form show an error rather than wait
+  forever on silence.
+
+  `onResolved` exists because making `onAuthenticated` honest (see Fixed) broke every application
+  that connects anonymously and used it as a readiness signal — including three of the examples,
+  which rendered a blank page. Mounting a UI is a question about the connection, not about identity,
+  and the two now have separate hooks.
+
+### Fixed
+
+- **`RmiSecurityContext.isAuthenticated()` returned `true` for a connection the application's
+  `AuthenticationProvider` had rejected.** The server sent an AUTH frame on every connection, naming a
+  refused one `"anonymous"` with no roles, and the client set `authenticated = true` for any AUTH
+  frame it received. A login gate built the documented way — hanging the protected view off
+  `onAuthenticated(...)` — therefore let every credential through, and the only way to tell a real
+  sign-in from a refused one was to check for a role the provider granted on success. Reported
+  against a consuming application whose beta login gate this silently defeated.
+
+  The AUTH frame now carries the server's decision explicitly (protocol version 2), separate from the
+  name and roles, because neither can stand in for it: a refused connection still has a name, and a
+  genuinely authenticated user may hold no application roles at all. `isAuthenticated()` now means
+  what its name says with no additional role check. The frame is still sent for refused and anonymous
+  connections — silence cannot distinguish a rejection from a slow network — and a client talking to
+  an older server treats the connection as unauthenticated rather than guessing.
+
+- **An anonymous connection never mounted its UI.** Making `onAuthenticated` fire only on a real
+  sign-in was right, but `todo-signals`, `form-signup` and `inventory-crud` used it as a "connection
+  ready" hook, so they rendered a blank page. They now mount from `onResolved`. Fixing it also
+  uncovered a second fault the blank page had been hiding: those examples built their view — and so
+  made their first RMI call — directly inside the callback, which runs on a stack that began in
+  native JavaScript, where TeaVM cannot suspend a coroutine. They failed with *"suspension point
+  reached from non-threading context"* the moment they did render. Each now builds its view on a
+  green thread, as the router already does internally.
+
+- **Every stock Keycloak token was rejected.** A normal Keycloak access token carries
+  `aud: "account"` and names the client in `azp`; the provider defaulted the expected audience to the
+  client id, so no real token could pass. The unit tests missed it because they minted the audience
+  the implementation expected rather than the one Keycloak issues. `zeroz.oidc.audience` is now unset
+  by default, and with nothing configured a token is accepted when `aud` contains the client id *or*
+  `azp` equals it — while a token issued to a *different* client on the same realm is still refused.
+  Found by running the new example against a real Keycloak.
+
+- **A deep link into a client route returned 404.** Real URLs mean the browser asks the *server* for
+  `/projects/42` whenever such a link is opened, reloaded or shared, and `StaticContentResource`
+  answered 404 for any path with no file behind it — so every client route worked exactly until it
+  was refreshed. An unmatched path that does not look like a file now falls back to the application
+  shell; a missing *asset* still returns 404, because serving HTML where a script was expected turns
+  a missing file into an unreadable syntax error. Found by running the routing tour, not by a test.
+
+- **Navigation failed outright wherever a loader had to suspend.** Navigations start in browser
+  callbacks — a click, a popstate, the frame that reports authentication — and TeaVM cannot suspend a
+  coroutine on a stack that began in native JavaScript, so a loader making an RMI call died with
+  "suspension point reached from non-threading context". Each navigation now runs on a green thread,
+  which re-enters TeaVM's own scheduler. Also found by running the tour.
+
+- **Tenant-scoped pushes reached nobody.** `onOpen` never copied the tenant from the handshake into
+  the session, but the scope filter reads it from the session — so `Scope.TENANT` events and LiveSync
+  updates matched no session in a real deployment. Tests passed because they set session properties
+  directly. Found while adding scoped signals; `SyncEngine`'s duplicate copy of the scope filter has
+  been collapsed onto the shared one, which is what let the bug hide in one path and not the other.
+
+### Breaking
+
+- **`RmiSecurityContext.populate(String, Set)` is now `populate(String, Set, boolean)`.** Framework-
+  internal — only the client runtime calls it — but a fork or a test that calls it directly must pass
+  the authentication outcome rather than having it assumed `true`.
+- **The AUTH frame gained a byte** (protocol version 2). Client and server ship together, so this
+  only matters if you mix versions across the wire.
+- **`Zeroz4jApplication` and `StaticContentResource` moved to a new `zerozstack-server-jaxrs`
+  module.** Both are catch-alls at `/`, and living in `zerozstack-server-core` meant *any* WAR
+  depending on the framework acquired a JAX-RS application answering every unmatched path — a
+  collision the deployer could not opt out of, because an auto-discovered JAX-RS application is very
+  hard to suppress from outside. `zerozstack-server-helidon` depends on the new module, so a
+  standalone server is unaffected; a WAR simply does not take it. `zerozstack-server-core` now
+  contains no JAX-RS type at all. The shell-fallback and content-type rules moved to
+  `StaticContent` in core, shared by the JAX-RS resource and the new servlet so the two cannot drift.
+
+- **`@DataModel` on a record, interface or enum is now a compile error.** It was silently skipped —
+  no serializer, no warning — and the failure arrived at runtime on the first call that tried to send
+  one. Records are the obvious shape to reach for, so this was a trap rather than an edge case. The
+  message names the element and, for a record, explains that a persistence root must be a plain class
+  in any case because EclipseStore reaches fields directly. `@Route` had the identical silence and
+  the identical fix. **Records are still not supported as wire types** — this makes that visible at
+  compile time rather than at runtime.
+
+- **`@Route` changed shape.** It previously declared hash-fragment paths for a router that was never
+  implemented; it now takes real paths and an optional `layout`. Nothing could have depended on the
+  old behaviour, since nothing read the annotation.
+- **`ScopedSignal.get()` is now `ScopedSignal.mine()`.** It returns the *signal*, not the value, so
+  sharing a name with `ValueSignal.get()` made `BASKET.get().get()` read as a mistake.
+  `BASKET.mine().get()` says what it does. Renamed before release rather than lived with.
+
+### Examples
+
+- **`routing-tour`** — every routing feature in one application: nested layouts, path and query
+  parameters, literal-beats-parameter, a role guard, and not-found/forbidden fallbacks.
+- **`scoped-signals`** — the three reaches side by side. Open it twice in one browser as two different
+  users and watch the basket stay shared while the per-user notice does not.
+- **`oidc-login`** — a real Keycloak login with PKCE, then three RMI calls showing what the identity
+  is worth server-side. The README includes the realm setup and the two Keycloak defaults that
+  otherwise cost an afternoon.
+- **`pwa-install`** — installability, a per-request manifest, an install button bound to a signal, and
+  a push subscription round trip with the VAPID key generated by the server. Stop the server and
+  reload to see the one thing installing does not buy you.
+
+  The twelve example pages also lost a leftover snippet that *unregistered* service workers on every
+  load — a workaround for cache pain during development, which would have quietly defeated the real
+  worker.
+
+### Dependencies
+
+- **ZeroZ DB 0.1.0 → 0.2.0.** Purely additive; no API this framework uses changed shape. It brings
+  diagnostics for a write-block that was never ended, and one of them fixes a real failure mode in
+  `TenantStorageProvider.shutdownAll()` without any change on our side: `close()` used to park for
+  ever on a leaked write transaction, so one wedged tenant hung shutdown and every remaining tenant
+  went unclosed. It is now bounded (30s, or `-Dzerozdb.closeTimeoutSeconds=N`) and throws
+  `StoreBusyException` naming the thread that holds the block — which the existing per-node `catch`
+  logs before moving on to the next tenant.
+
+  Also available to applications, though nothing in the framework calls them yet:
+  `hasOpenWriteBlock()`, `writeBlockOwner()` and `describeLockState()` answer "is a block open, and
+  who opened it" across threads, which `isWriteActive()` cannot because it reads a ThreadLocal;
+  `ZeroZDb.traceWriteBlockOrigins(true)` records the stack that opened each block; and a
+  `WriteTransaction` collected without `commit()`, `rollback()` or `close()` now logs a warning
+  naming the thread that opened it.
+
+### Packaging (also new in 0.6.0)
 
 - **A packaging story, so "how do I ship this" stops being every application's research
   project.** Shading was the recurring dead end: Weld treats each jar as its own bean archive,
@@ -24,8 +230,6 @@ upgrading.
     below the app jar, so a routine rebuild pushes kilobytes rather than the framework.
   - A new guide, [Packaging and running](docs/guides/packaging.md), states the never-shade rule
     and why, and when to pick which shape.
-
-### Fixed
 
 - **WebSocket handshakes no longer 404 on Linux.** A `libs/*` classpath wildcard expands in
   directory order — alphabetical on Windows, arbitrary on Linux — and one of the arbitrary

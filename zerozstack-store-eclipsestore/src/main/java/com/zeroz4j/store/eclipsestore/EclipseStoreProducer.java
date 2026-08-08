@@ -97,7 +97,7 @@ public class EclipseStoreProducer {
      * int total = db.query(new CountProducts());
      * }</pre>
      *
-     * <h2>Why {@code @Dependent} and not a normal scope</h2>
+     * <h4>Why {@code @Dependent} and not a normal scope</h4>
      * A normal scope ({@code @RequestScoped}, {@code @ApplicationScoped}) makes the container
      * inject a client proxy, and a proxy is a generated subclass. {@code ZeroZDbNode} is
      * {@code final} and its only constructor is private, so it cannot be subclassed and the
@@ -110,7 +110,7 @@ public class EclipseStoreProducer {
      * cleanly. It also means the node is reachable from threads with no active request context —
      * schedulers, virtual threads, startup code — which a request-scoped node never was.</p>
      *
-     * <h2>The tenant is resolved once, when the injecting bean is created</h2>
+     * <h4>The tenant is resolved once, when the injecting bean is created</h4>
      * A {@code @Dependent} producer runs when the bean holding the injection point is created, not
      * on every call. For an {@code @ApplicationScoped} service — which is what a
      * {@code @RmiService} implementation is — that means one node for the life of the application.

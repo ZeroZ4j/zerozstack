@@ -41,10 +41,20 @@ public final class JobSignals {
 
 ## Three things to know before sharing
 
-**It is JVM-global.** The registry behind `Signals.shared` is static — one value per name for the
-whole server, across every user and every tenant. There is no per-session shared signal. If the value
-is not the same for everybody, do not use one; see
+**`Signals.shared` is JVM-global.** Its registry is static — one value per name for the whole server,
+across every user and every tenant. If the value is not the same for everybody, do not use one; see
 [Unbounded broadcast](antipatterns.md#unbounded-broadcast).
+
+**Use `Signals.scoped` when it belongs to somebody.** Same declaration style, but one retained value
+per tenant, user, browser or session, and a client only ever receives its own:
+
+```java
+public static final ScopedSignal<Basket> BASKET =
+        Signals.scoped("shop.basket", Basket.empty(), Scope.CLIENT);
+```
+
+`Scope.CLIENT` needs no login and survives reconnects and reloads, which makes it the default for an
+open application. See [Signals](../SIGNALS.md#scoped-signals-one-value-per-tenant-user-or-browser).
 
 **The default name is the payload's class name.** So there is exactly one default shared signal per
 type, and a second declaration silently returns the first — ignoring its initial value, its

@@ -79,6 +79,25 @@
     </dependencies>
 
     <build>
+        <resources>
+            <!-- The service worker stamps its cache name with the build version, so a new
+                 deployment evicts the previous shell instead of serving a stale bundle. Filtered
+                 on its own so nothing else risks accidental token substitution. -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>META-INF/resources/zeroz4j-sw.js</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>META-INF/resources/zeroz4j-sw.js</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>io.smallrye</groupId>

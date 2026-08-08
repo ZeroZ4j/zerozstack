@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Without this file the module is an IMPLICIT bean archive, and only classes carrying a
+  bean-defining annotation are discovered. StaticContentResource carries none - it is a plain
+  JAX-RS resource - so it is never registered, and every deployment answers 404 for index.html,
+  the client bundle and every route.
+
+  zerozstack-server-core has always carried an equivalent file; it was not copied when these two
+  classes moved out of it. The scan excludes in that one are not needed here: neither class touches
+  the servlet API.
+-->
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="all">
+</beans>

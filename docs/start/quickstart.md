@@ -24,7 +24,7 @@ mvn clean install -DskipTests
 
 Expect a couple of minutes with a warm Maven cache, and considerably longer on the first run while
 dependencies download.
-The build compiles the framework, runs the annotation processor, compiles all seven example clients
+The build compiles the framework, runs the annotation processor, compiles all ten example clients
 with TeaVM, and installs everything into your local repository.
 
 !!! warning "Always include `clean`"
@@ -73,10 +73,14 @@ remaining count are `Computed` values, and the rendering is driven by `Effect`.
 
 ### Examples that do require signing in
 
-Four of the seven examples enable development authentication by setting
-`zeroz.security.mode=dev` in their `ExampleServer.main`, and show a `Login` component:
-**`chat-events`**, **`chat-livesync`**, **`job-monitor`** and **`components-showcase`**. The other
-three — `todo-signals`, `form-signup` and `inventory-crud` — do not, and connect anonymously.
+Four examples enable development authentication by setting `zeroz.security.mode=dev` in their
+`ExampleServer.main`, and show a `Login` component: **`chat-events`**, **`chat-livesync`**,
+**`job-monitor`** and **`components-showcase`**. `todo-signals`, `form-signup` and `inventory-crud`
+connect anonymously.
+
+**`routing-tour`** and **`scoped-signals`** also use development authentication, but take the
+credentials from the URL — `?user=admin&password=admin` — so two windows can be open as different
+users at once. **`oidc-login`** signs in against a real Keycloak instead; see its README.
 
 When an example does ask you to sign in:
 
@@ -122,7 +126,7 @@ Helidon already wired up.
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=0.5.0 \
+  -DarchetypeVersion=0.6.0 \
   -DgroupId=com.example \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT

@@ -23,37 +23,74 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Declares the route path fragment for a client-side UI view component.
+ * Binds a URL path to a client-side view.
  *
- * <p>Used by the client router to map URL hash fragments (e.g. {@code #/dashboard}) to view classes.</p>
+ * <p>The annotated class implements {@code RouteView} — which declares both the data the route needs
+ * and how to render it — or {@code RouteLayout} for a view that wraps a nested one. The annotation
+ * processor finds every annotated class at compile time and generates the route table, so no
+ * reflection is involved and a route that does not compile is not a route.</p>
  *
- * <p><b>AI Agent Execution Notes:</b></p>
- * <ul>
- *   <li><b>Route Registry:</b> Annotated classes are scanned and registered into {@code RouteRegistry} at client initialization.</li>
- *   <li><b>Navigation:</b> Browser hash change events trigger router navigation matching URL path against {@link #value()}.</li>
- * </ul>
+ * <pre>{@code
+ * @Route("/tasks")
+ * public class TaskListView implements RouteView<List<Task>> {
+ *     public List<Task> load(RouteParams params) { return tasks.findAll(); }
+ *     public Component render(List<Task> data, RouteParams params) { ... }
+ * }
+ *
+ * @Route(value = "/tasks/:id", layout = AppShell.class)
+ * public class TaskDetailView implements RouteView<Task> {
+ *     public Task load(RouteParams params) { return tasks.byId(params.getLong("id")); }
+ *     public Component render(Task task, RouteParams params) { ... }
+ * }
+ * }</pre>
+ *
+ * <h2>Paths</h2>
+ * <p>Real paths, handled through the browser's history API — {@code /tasks/42}, not
+ * {@code #/tasks/42}. A segment beginning with {@code :} is a parameter, readable from
+ * {@code RouteParams}. Matching prefers the more specific route, so {@code /tasks/new} wins over
+ * {@code /tasks/:id} regardless of declaration order.</p>
+ *
+ * <p>Because the paths are real, the server must serve the application's HTML for any path the
+ * router owns — otherwise a reload or a shared link is a 404. {@code StaticContentResource} already
+ * matches every path, so this works out of the box.</p>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface Route {
+
     /**
-     * The route URL path fragment (e.g., "/dashboard" or "").
+     * The URL path, e.g. {@code "/tasks"} or {@code "/tasks/:id"}. Use {@code "/"} for the
+     * application's landing view.
      *
-     * @return route path string
+     * @return the path pattern
      */
     String value();
 
     /**
-     * Display label used in navigation layouts. Defaults to empty string (derived from class name).
+     * A {@code RouteLayout} to wrap this view in, for chrome shared across several routes — a
+     * navigation bar, a sidebar, a page frame.
      *
-     * @return display label string
+     * <p>The layout declares its own data, loaded once per navigation before any of its children
+     * render, so shared state is fetched in one place rather than by every view underneath. Note
+     * that the chain is rebuilt on each navigation: moving between two children of the same layout
+     * re-runs that layout's loader.</p>
+     *
+     * @return the layout class, or {@link NoLayout} when this view stands alone
+     */
+    Class<?> layout() default NoLayout.class;
+
+    /**
+     * Display label for generated navigation. Defaults to the class name with any {@code View}
+     * suffix removed.
+     *
+     * @return the label
      */
     String label() default "";
 
     /**
-     * Sort order ranking in navigation menus (lower numbers appear further left/top).
+     * Sort order in generated navigation; lower comes first.
      *
-     * @return int order value
+     * @return the order
      */
     int order() default 100;
 }

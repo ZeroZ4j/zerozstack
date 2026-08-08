@@ -36,6 +36,7 @@ public final class RmiRequestContext {
     private static final ThreadLocal<Set<String>> rolesHolder = new ThreadLocal<>();
     private static final ThreadLocal<String> sessionIdHolder = new ThreadLocal<>();
     private static final ThreadLocal<String> tenantIdHolder = new ThreadLocal<>();
+    private static final ThreadLocal<String> clientIdHolder = new ThreadLocal<>();
 
     private RmiRequestContext() {}
 
@@ -62,7 +63,22 @@ public final class RmiRequestContext {
      */
     public static void setContext(Principal principal, Set<String> roles, String sessionId,
                                   String tenantId) {
+        setContext(principal, roles, sessionId, tenantId, null);
+    }
+
+    /**
+     * Binds the caller's identity, roles, session, tenant and client id to the current thread.
+     *
+     * @param principal the authenticated principal, or null for an anonymous connection
+     * @param roles     the granted roles
+     * @param sessionId the WebSocket session id
+     * @param tenantId  the tenant reported by the {@link AuthenticationProvider}, or null
+     * @param clientId  the browser's client id, or null when the handshake carried none
+     */
+    public static void setContext(Principal principal, Set<String> roles, String sessionId,
+                                  String tenantId, String clientId) {
         tenantIdHolder.set(tenantId);
+        clientIdHolder.set(clientId);
         principalHolder.set(principal);
         rolesHolder.set(roles != null ? roles : Collections.emptySet());
         sessionIdHolder.set(sessionId);
@@ -105,6 +121,23 @@ public final class RmiRequestContext {
         return tenantIdHolder.get();
     }
 
+    /**
+     * The browser this call came from, as issued by {@link ClientIdentity}.
+     *
+     * <p>Present whether or not the connection is authenticated, which is what makes
+     * {@link com.zeroz4j.api.Scope#CLIENT} the scope for an application with no login. Null only
+     * when the handshake carried no client id and none could be issued.</p>
+     *
+     * <p><b>Identifies a browser, not a person.</b> Never use it to decide whether the caller may
+     * see something that belongs to a particular user — that is what {@link #getPrincipal()} and
+     * {@link #getRoles()} are for.</p>
+     *
+     * @return the client id, or null
+     */
+    public static String getClientId() {
+        return clientIdHolder.get();
+    }
+
     public static String getSessionId() {
         return sessionIdHolder.get();
     }
@@ -119,5 +152,6 @@ public final class RmiRequestContext {
         rolesHolder.remove();
         sessionIdHolder.remove();
         tenantIdHolder.remove();
+        clientIdHolder.remove();
     }
 }

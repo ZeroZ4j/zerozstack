@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.zeroz4j</groupId>
+        <artifactId>routing-tour</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>routing-tour-client</artifactId>
+    <packaging>jar</packaging>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.teavm</groupId>
+            <artifactId>teavm-classlib</artifactId>
+            <version>${teavm.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>routing-tour-shared</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- The route table is generated here, from the @Route classes in this module. Without
+                 the processor on this module's compile path there is no table and no routing. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>com.zeroz4j</groupId>
+                            <artifactId>zerozstack-apt</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.teavm</groupId>
+                <artifactId>teavm-maven-plugin</artifactId>
+                <version>${teavm.version}</version>
+                <executions>
+                    <execution>
+                        <id>compile-js</id>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <targetDirectory>${project.build.directory}/js</targetDirectory>
+                            <mainClass>com.zeroz4j.example.routing.client.RoutingTourApp</mainClass>
+                            <targetType>JAVASCRIPT</targetType>
+                            <minifying>false</minifying>
+                            <optimizationLevel>SIMPLE</optimizationLevel>
+                            <debugInformationGenerated>true</debugInformationGenerated>
+                            <sourceMapsGenerated>true</sourceMapsGenerated>
+                            <strict>false</strict>
+                            <properties>
+                                <java.util.ServiceLoader.parseServiceConfiguration>true</java.util.ServiceLoader.parseServiceConfiguration>
+                            </properties>
+                            <compileScopes>
+                                <scope>compile</scope>
+                                <scope>provided</scope>
+                                <scope>system</scope>
+                                <scope>runtime</scope>
+                            </compileScopes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

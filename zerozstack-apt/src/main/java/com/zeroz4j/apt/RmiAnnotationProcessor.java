@@ -20,7 +20,9 @@ package com.zeroz4j.apt;
 import com.zeroz4j.api.ClientWritable;
 import com.zeroz4j.api.DataModel;
 import com.zeroz4j.api.LiveSync;
+import com.zeroz4j.api.RequiresRole;
 import com.zeroz4j.api.RmiService;
+import com.zeroz4j.api.Route;
 import com.zeroz4j.api.validation.Max;
 import com.zeroz4j.api.validation.Min;
 import com.zeroz4j.api.validation.NotBlank;
@@ -56,7 +58,8 @@ import java.util.*;
  */
 @SupportedAnnotationTypes({
     "com.zeroz4j.api.DataModel",
-    "com.zeroz4j.api.RmiService"
+    "com.zeroz4j.api.RmiService",
+    "com.zeroz4j.api.Route"
 })
 public class RmiAnnotationProcessor extends AbstractProcessor {
 
@@ -67,6 +70,19 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
     private final List<String> clientWritableModels = new ArrayList<>();
     /** FQCNs of enum types reachable from @DataModel fields, for enum-resolver registrar generation. */
     private final Set<String> enumTypes = new LinkedHashSet<>();
+    /** One entry per @Route class, for route-table generation. */
+    private final List<RouteEntry> routes = new ArrayList<>();
+
+    /** What the processor learned about one {@code @Route} class. */
+    private static final class RouteEntry {
+        String fqcn;
+        String pattern;
+        String layoutFqcn;      // null when the route stands alone
+        String label;
+        int order;
+        boolean layout;         // implements RouteLayout rather than RouteView
+        List<String> roles = new ArrayList<>();
+    }
 
     /**
      * Specifies the supported Java source version (latest supported).
@@ -101,6 +117,24 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         // Process Portables
         Set<? extends Element> models = roundEnv.getElementsAnnotatedWith(DataModel.class);
         for (Element element : models) {
+            if (element.getKind() != ElementKind.CLASS) {
+                // Silence here was the defect. @DataModel on a record used to be skipped without a
+                // word: no serializer, no warning, and the failure arriving at the first call that
+                // tried to send it, far from the annotation. A record is the obvious shape to reach
+                // for, so this was a trap rather than an edge case.
+                env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "@DataModel is only supported on a class. " + describeKind(element.getKind())
+                    + " cannot be given a generated serializer, and skipping it silently would fail "
+                    + "at runtime on the first call that sent one."
+                    + (element.getKind() == ElementKind.RECORD
+                        ? " Records are not yet supported as wire types: use a class with a public "
+                          + "no-argument constructor and getters. Note that a persistence root must "
+                          + "be a plain class in any case, because EclipseStore reaches fields "
+                          + "directly and the JVM refuses that for records."
+                        : ""),
+                    element);
+                continue;
+            }
             if (element.getKind() == ElementKind.CLASS) {
                 TypeElement typeElement = (TypeElement) element;
                 String fqcn = typeElement.getQualifiedName().toString();
@@ -147,6 +181,29 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                     env.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to generate RMI stub for " + fqcn + ": " + e.getMessage(), element);
                 }
             }
+        }
+
+        // Process @Route views and layouts
+        for (Element element : roundEnv.getElementsAnnotatedWith(Route.class)) {
+            if (element.getKind() != ElementKind.CLASS) {
+                // Same rule as @DataModel above, and for the same reason: a route that is quietly
+                // absent from the table is a URL that 404s with nothing to explain why.
+                env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "@Route is only supported on a class. " + describeKind(element.getKind())
+                    + " cannot be registered as a route: the router needs a public no-argument "
+                    + "constructor to build it without reflection.", element);
+                continue;
+            }
+            collectRoute((TypeElement) element, typeUtils);
+        }
+        if (!routes.isEmpty()) {
+            try {
+                generateRouteRegistrar();
+            } catch (IOException e) {
+                env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "Failed to generate the route table: " + e.getMessage());
+            }
+            routes.clear();
         }
 
         // Generate Registrar on the final processing round or when models are collected
@@ -608,6 +665,193 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             }
         }
         return methods;
+    }
+
+    /** Names an element kind the way a developer would, for a diagnostic they have to act on. */
+    private static String describeKind(ElementKind kind) {
+        switch (kind) {
+            case RECORD:     return "A record";
+            case INTERFACE:  return "An interface";
+            case ENUM:       return "An enum";
+            case ANNOTATION_TYPE: return "An annotation type";
+            default:         return "A " + kind.toString().toLowerCase().replace('_', ' ');
+        }
+    }
+
+    private static final String ROUTE_VIEW = "com.zeroz4j.client.router.RouteView";
+    private static final String ROUTE_LAYOUT = "com.zeroz4j.client.router.RouteLayout";
+    private static final String NO_LAYOUT = "com.zeroz4j.api.NoLayout";
+
+    /**
+     * Reads one {@code @Route} class into a {@link RouteEntry}, reporting at compile time anything
+     * that would otherwise only show up as a route that silently never matches.
+     */
+    private void collectRoute(TypeElement typeElement, Types typeUtils) {
+        RouteEntry entry = new RouteEntry();
+        entry.fqcn = typeElement.getQualifiedName().toString();
+
+        Route route = typeElement.getAnnotation(Route.class);
+        entry.pattern = route.value();
+        entry.label = route.label().isEmpty()
+                ? defaultLabel(typeElement.getSimpleName().toString()) : route.label();
+        entry.order = route.order();
+
+        // An annotation member of type Class cannot be read directly during processing -- the class
+        // may not be compiled yet -- so it arrives as a mirror via this exception.
+        String layoutFqcn = null;
+        try {
+            route.layout();
+        } catch (javax.lang.model.type.MirroredTypeException mirrored) {
+            layoutFqcn = mirrored.getTypeMirror().toString();
+        }
+        entry.layoutFqcn = NO_LAYOUT.equals(layoutFqcn) ? null : layoutFqcn;
+
+        RequiresRole requiresRole = typeElement.getAnnotation(RequiresRole.class);
+        if (requiresRole != null) {
+            entry.roles.addAll(Arrays.asList(requiresRole.value()));
+        }
+
+        boolean isView = implementsInterface(typeElement, typeUtils, ROUTE_VIEW);
+        boolean isLayout = implementsInterface(typeElement, typeUtils, ROUTE_LAYOUT);
+        if (!isView && !isLayout) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "@Route classes must implement RouteView (a view) or RouteLayout (chrome that wraps "
+                + "one). Without either there is nothing for the router to render.", typeElement);
+            return;
+        }
+        if (isView && isLayout) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "@Route class implements both RouteView and RouteLayout, so whether it renders a "
+                + "child is ambiguous. Pick one.", typeElement);
+            return;
+        }
+        entry.layout = isLayout;
+
+        if (!hasAccessibleNoArgConstructor(typeElement)) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "@Route classes need a public no-argument constructor: the router creates them "
+                + "without reflection, which the browser runtime does not have.", typeElement);
+            return;
+        }
+        if (!entry.pattern.startsWith("/")) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "Route path '" + entry.pattern + "' must start with '/'.", typeElement);
+            return;
+        }
+        routes.add(entry);
+    }
+
+    /** Strips a trailing {@code View}/{@code Layout} so the default navigation label reads well. */
+    private static String defaultLabel(String simpleName) {
+        if (simpleName.endsWith("View") && simpleName.length() > 4) {
+            return simpleName.substring(0, simpleName.length() - 4);
+        }
+        if (simpleName.endsWith("Layout") && simpleName.length() > 6) {
+            return simpleName.substring(0, simpleName.length() - 6);
+        }
+        return simpleName;
+    }
+
+    /** Walks the type hierarchy looking for an interface by name, generics erased. */
+    private boolean implementsInterface(TypeElement typeElement, Types typeUtils, String interfaceName) {
+        for (TypeMirror candidate : typeUtils.directSupertypes(typeElement.asType())) {
+            String name = typeUtils.erasure(candidate).toString();
+            if (interfaceName.equals(name)) {
+                return true;
+            }
+            Element candidateElement = typeUtils.asElement(candidate);
+            if (candidateElement instanceof TypeElement
+                    && implementsInterface((TypeElement) candidateElement, typeUtils, interfaceName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAccessibleNoArgConstructor(TypeElement typeElement) {
+        boolean sawConstructor = false;
+        for (Element member : typeElement.getEnclosedElements()) {
+            if (member.getKind() != ElementKind.CONSTRUCTOR) {
+                continue;
+            }
+            sawConstructor = true;
+            ExecutableElement constructor = (ExecutableElement) member;
+            if (constructor.getParameters().isEmpty()
+                    && constructor.getModifiers().contains(Modifier.PUBLIC)) {
+                return true;
+            }
+        }
+        return !sawConstructor;   // no declared constructor means the default one
+    }
+
+    /**
+     * Writes the route table: a registrar that adds every {@code @Route} in this module, plus its
+     * ServiceLoader entry.
+     */
+    private void generateRouteRegistrar() throws IOException {
+        String packageName = "com.zeroz4j.generated";
+        String className = "RouteRegistrar_" + routeRegistrarSuffix();
+
+        JavaFileObject builderFile =
+            processingEnv.getFiler().createSourceFile(packageName + "." + className);
+        try (Writer writer = builderFile.openWriter()) {
+            writer.write("package " + packageName + ";\n\n");
+            writer.write("import com.zeroz4j.client.router.RouteDefinition;\n");
+            writer.write("import com.zeroz4j.client.router.RouteRegistrar;\n");
+            writer.write("import com.zeroz4j.client.router.RouteRegistry;\n");
+            writer.write("import java.util.LinkedHashSet;\n");
+            writer.write("import java.util.Set;\n\n");
+            writer.write("// Auto-generated by zeroz4j APT — do not edit\n");
+            writer.write("public class " + className + " implements RouteRegistrar {\n");
+            writer.write("    @Override\n");
+            writer.write("    public void registerAll() {\n");
+            for (RouteEntry entry : routes) {
+                writer.write("        {\n");
+                writer.write("            Set<String> roles = new LinkedHashSet<>();\n");
+                for (String role : entry.roles) {
+                    writer.write("            roles.add(\"" + role + "\");\n");
+                }
+                writer.write("            RouteRegistry.register(new RouteDefinition(\n");
+                writer.write("                \"" + entry.pattern + "\",\n");
+                writer.write("                \"" + entry.fqcn + "\",\n");
+                writer.write("                " + (entry.layoutFqcn == null
+                        ? "null" : "\"" + entry.layoutFqcn + "\"") + ",\n");
+                writer.write("                roles,\n");
+                writer.write("                " + entry.fqcn + "::new,\n");
+                writer.write("                " + entry.layout + ",\n");
+                writer.write("                \"" + entry.label + "\",\n");
+                writer.write("                " + entry.order + "));\n");
+                writer.write("        }\n");
+            }
+            writer.write("    }\n");
+            writer.write("}\n");
+        }
+
+        try {
+            javax.tools.FileObject resourceFile = processingEnv.getFiler().createResource(
+                javax.tools.StandardLocation.CLASS_OUTPUT, "",
+                "META-INF/services/com.zeroz4j.client.router.RouteRegistrar");
+            try (Writer writer = resourceFile.openWriter()) {
+                writer.write(packageName + "." + className + "\n");
+            }
+        } catch (IOException e) {
+            // Already created in an earlier round.
+        }
+    }
+
+    /** Unique-per-module suffix, so two modules' route registrars do not collide on one FQCN. */
+    private String routeRegistrarSuffix() {
+        java.util.TreeSet<String> all = new java.util.TreeSet<>();
+        for (RouteEntry entry : routes) {
+            all.add(entry.fqcn + "@" + entry.pattern);
+        }
+        long h = 1125899906842597L;
+        for (String s : all) {
+            for (int i = 0; i < s.length(); i++) {
+                h = 31 * h + s.charAt(i);
+            }
+        }
+        return Long.toHexString(h & 0x7fffffffffffffffL);
     }
 
     private void generateRegistrar() throws IOException {

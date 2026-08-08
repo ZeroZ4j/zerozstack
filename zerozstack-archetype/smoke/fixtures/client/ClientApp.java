@@ -30,7 +30,9 @@ import org.teavm.jso.dom.html.HTMLElement;
 public class ClientApp {
     public static void main(String[] args) {
         Zeroz4jClient.connect(getWebSocketUrl(), () -> {
-            RmiSecurityContext.onAuthenticated(() -> {
+            // onResolved, not onAuthenticated: this connects anonymously, so it is never
+            // authenticated and would never mount. Defect 0, in effect.
+            RmiSecurityContext.onResolved(() -> {
                 HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
                 appRoot.setInnerHTML("<h1>Zeroz4j App is running!</h1>"
                     + "<p id='tick'>tick: waiting</p><p id='echo'>echo: waiting</p>");

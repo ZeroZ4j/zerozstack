@@ -169,18 +169,24 @@ public class WasmRmiServerEngineTest {
         @Override public String getNegotiatedSubprotocol() { return null; }
         @Override public List<Extension> getNegotiatedExtensions() { return null; }
         @Override public boolean isSecure() { return false; }
-        @Override public boolean isOpen() { return true; }
-        @Override public long getMaxIdleTimeout() { return 0; }
-        @Override public void setMaxIdleTimeout(long milliseconds) {}
-        @Override public void setMaxBinaryMessageBufferSize(int length) {}
-        @Override public int getMaxBinaryMessageBufferSize() { return 0; }
+        @Override public boolean isOpen() { return !closed; }
+        /** Recorded rather than ignored, so the configured limits can be asserted. */
+        public long maxIdleTimeout;
+        public int maxBinaryBufferSize;
+        /** Recorded so a disconnect can be asserted on: which sessions closed, and why. */
+        public boolean closed;
+        public CloseReason closeReason;
+        @Override public long getMaxIdleTimeout() { return maxIdleTimeout; }
+        @Override public void setMaxIdleTimeout(long milliseconds) { maxIdleTimeout = milliseconds; }
+        @Override public void setMaxBinaryMessageBufferSize(int length) { maxBinaryBufferSize = length; }
+        @Override public int getMaxBinaryMessageBufferSize() { return maxBinaryBufferSize; }
         @Override public void setMaxTextMessageBufferSize(int length) {}
         @Override public int getMaxTextMessageBufferSize() { return 0; }
         @Override public RemoteEndpoint.Async getAsyncRemote() { return null; }
         @Override public RemoteEndpoint.Basic getBasicRemote() { return basic; }
         @Override public String getId() { return id; }
-        @Override public void close() {}
-        @Override public void close(CloseReason closeReason) {}
+        @Override public void close() { closed = true; }
+        @Override public void close(CloseReason reason) { closed = true; closeReason = reason; }
         @Override public Map<String, List<String>> getRequestParameterMap() { return null; }
         @Override public String getQueryString() { return null; }
         @Override public Map<String, String> getPathParameters() { return null; }
@@ -224,11 +230,58 @@ public class WasmRmiServerEngineTest {
         ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
-        assertEquals((byte) 1, buf.get());
+        assertEquals((byte) 2, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 1, buf.get(), "authenticated flag");
         assertEquals("testUser", BinarySerializer.readString(buf));
         int numRoles = buf.getInt();
         assertEquals(1, numRoles);
         assertEquals("user", BinarySerializer.readString(buf));
+    }
+
+    /**
+     * A connection whose credentials the application's provider declined has no principal. Reporting
+     * it as an ordinary connection named "anonymous" made it indistinguishable from a real sign-in,
+     * which silently defeated login gates built the documented way.
+     */
+    @Test
+    public void testOnOpenMarksARejectedConnectionUnauthenticated() throws Exception {
+        FakeEndpointConfig config = new FakeEndpointConfig();
+        config.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, Set.of());
+
+        engine.onOpen(fakeSession, config);
+
+        assertEquals(1, fakeSession.basic.sentBuffers.size(),
+                "the frame is still sent: silence cannot tell a refusal from a slow network");
+
+        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        assertEquals(0, buf.getInt());
+        assertEquals((byte) 0x03, buf.get());
+        assertEquals((byte) 2, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 0, buf.get(),
+                "a declined connection must be marked unauthenticated, not merely role-less");
+        assertEquals("anonymous", BinarySerializer.readString(buf));
+        assertEquals(0, buf.getInt(), "no roles");
+    }
+
+    /**
+     * The narrower case the roles alone cannot express: a real user who happens to hold no
+     * application roles is authenticated, and must not be lumped in with a refused connection.
+     */
+    @Test
+    public void testAnAuthenticatedUserWithNoRolesIsStillAuthenticated() throws Exception {
+        FakeEndpointConfig config = new FakeEndpointConfig();
+        config.getUserProperties().put(RmiEndpointConfigurator.PRINCIPAL_KEY,
+                (Principal) () -> "roleless");
+        config.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, Set.of());
+
+        engine.onOpen(fakeSession, config);
+
+        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        buf.getInt();
+        buf.get();
+        buf.get();
+        assertEquals((byte) 1, buf.get(), "an empty role set is not a failed authentication");
+        assertEquals("roleless", BinarySerializer.readString(buf));
     }
 
     @Test

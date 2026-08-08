@@ -36,16 +36,75 @@ public final class SharedValueSignal<T> extends ValueSignal<T> {
     /** Retained so a conflicting re-declaration of the same wire name can be detected and refused. */
     private final T declaredInitialValue;
 
+    /** Base wire name of the {@link ScopedSignal} this instance belongs to; null when unscoped. */
+    private final String scopeFamily;
+    /** How far a change to this instance reaches; null when unscoped. */
+    private final com.zeroz4j.api.Scope scope;
+    /** The one tenant, user, client or session this instance holds the value for; null when unscoped. */
+    private final String scopeTarget;
+
     SharedValueSignal(String name, T initialValue, boolean clientWritable, java.util.Set<String> writeRoles) {
+        this(name, initialValue, clientWritable, writeRoles, null, null, null);
+    }
+
+    SharedValueSignal(String name, T initialValue, boolean clientWritable,
+                      java.util.Set<String> writeRoles, String scopeFamily,
+                      com.zeroz4j.api.Scope scope, String scopeTarget) {
         super(initialValue);
         this.name = name;
         this.clientWritable = clientWritable;
         this.writeRoles = writeRoles;
         this.declaredInitialValue = initialValue;
+        this.scopeFamily = scopeFamily;
+        this.scope = scope;
+        this.scopeTarget = scopeTarget;
     }
 
     /**
-     * @return the value this signal was originally declared with, regardless of later writes
+     * Whether this instance holds one target's value of a {@link ScopedSignal} rather than a single
+     * value shared by everyone.
+     *
+     * @return true when scoped
+     */
+    public boolean isScoped() {
+        return scope != null;
+    }
+
+    /**
+     * The wire name clients know this signal by. For a scoped instance this is the family's base
+     * name, shared by every target — {@link #name()} is per-target and never goes on the wire.
+     *
+     * @return the base wire name, or null when unscoped
+     */
+    public String scopeFamily() {
+        return scopeFamily;
+    }
+
+    /**
+     * What the owning family is keyed by, which is what the transport filters sessions on when
+     * broadcasting this instance.
+     *
+     * @return the scope, or null when this is an ordinary shared signal
+     */
+    public com.zeroz4j.api.Scope scope() {
+        return scope;
+    }
+
+    /**
+     * Whose value this instance holds — one tenant, user, browser or session, according to
+     * {@link #scope()}.
+     *
+     * @return the target id, or null when this is an ordinary shared signal
+     */
+    public String scopeTarget() {
+        return scopeTarget;
+    }
+
+    /**
+     * The value passed at declaration, kept unchanged by later writes so a second declaration of the
+     * same wire name can be compared against it and refused if it disagrees.
+     *
+     * @return the declared initial value
      */
     T declaredInitialValue() {
         return declaredInitialValue;

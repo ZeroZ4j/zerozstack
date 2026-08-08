@@ -5,7 +5,7 @@ your network layer is a binary RPC protocol over a persistent WebSocket, and you
 object graph on disk. You write no JavaScript, no JSON, no REST routes and no SQL.
 
 !!! warning "Experimental"
-    ZeroZ Stack is an experimental proof-of-concept at version **0.5.0**. It is a working demonstration,
+    ZeroZ Stack is an experimental proof-of-concept at version **0.6.0**. It is a working demonstration,
     not an industrialised production framework. Known gaps are listed in
     [Limitations](reference/limitations.md), and every page states its own limits where the feature is
     taught.
@@ -85,6 +85,52 @@ public class ChatServiceImpl implements ChatService {
 ChatService chat = new ChatService_Stub();
 sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text)));
 ```
+
+## New in 0.6.0
+
+<div class="grid cards" markdown>
+
+- **State that belongs to somebody**
+
+    `Signals.shared` is one value for the whole server. `Signals.scoped` holds one per tenant, user
+    or browser — and a client only ever sees its own. `Scope.CLIENT` needs no login at all.
+
+    [Scoped signals →](SIGNALS.md#scoped-signals-one-value-per-tenant-user-or-browser)
+
+- **URLs mapped to views**
+
+    Real paths, nested layouts, typed parameters — and each route declares the data it needs, loaded
+    before anything renders. The route table is generated at compile time.
+
+    [Routing →](ROUTING.md)
+
+- **Logging in for real**
+
+    Authorization-code flow with PKCE against Keycloak in the browser, token verification at the
+    handshake, and its claims becoming roles and a tenant.
+
+    [OpenID Connect →](guides/oidc-auth.md)
+
+- **Deployment into an application server**
+
+    Take `zerozstack-server-jakarta` instead of the Helidon binding and a WAR runs on WildFly,
+    Payara, Open Liberty or TomEE — with RMI calls on container threads, so `java:comp` lookups
+    work inside a service.
+
+    [Packaging and running →](guides/packaging.md)
+
+- **Installable, with push**
+
+    One call and three tags make an application installable and push-capable. It does not make it
+    work offline — nothing here can, and the page says so plainly rather than pretending.
+
+    [PWA →](PWA.md)
+
+</div>
+
+Alongside those: a server-issued, `HttpOnly` **client identity** so an application with no login can
+still keep one browser's state to itself, and an **origin check** on every handshake. Both are
+described in [Authentication and authorization](guides/security-auth.md).
 
 ## If you read one page
 

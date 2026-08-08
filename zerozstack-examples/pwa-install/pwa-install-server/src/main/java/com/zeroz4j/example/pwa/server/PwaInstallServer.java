@@ -1,0 +1,37 @@
+/*
+ * Copyright 2026 Franz Schöning
+ * Project: https://www.zeroz4j.com
+ * Author: Franz Schöning - Principal Enterprise Architect (https://www.franzschoning.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.zeroz4j.example.pwa.server;
+
+import com.zeroz4j.server.Zeroz4jServer;
+
+/**
+ * Runs the PWA example on http://localhost:8083.
+ *
+ * <p>No login: installability has nothing to do with authentication, and the example is clearer
+ * without one.</p>
+ *
+ * <p>Browsers only offer installation, and only allow push, on a secure origin —
+ * {@code http://localhost} counts as one, so this works as it stands. Any other hostname needs
+ * HTTPS.</p>
+ */
+public final class PwaInstallServer {
+
+    public static void main(String[] args) {
+        Zeroz4jServer.start(8083, "zeroz4j PWA Install").join();
+    }
+}

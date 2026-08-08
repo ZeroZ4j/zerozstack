@@ -25,14 +25,19 @@ import java.util.List;
 import java.util.logging.Logger;
 
 /**
- * Security context populated from the AUTH frame (0x03) received from the server following WebSocket connection.
- * Provides the authenticated username and granted role set to client views and application code.
+ * Who the server says this connection is, as reported by the AUTH frame (0x03) it sends once the
+ * WebSocket opens.
  *
- * <p><b>AI Agent Execution Notes:</b></p>
- * <ul>
- *   <li><b>State Mutations:</b> Mutates static fields {@code username}, {@code roles}, and {@code authenticated}.</li>
- *   <li><b>Callbacks:</b> Stores post-authentication listeners in {@code authCallbacks} list and executes them on population.</li>
- * </ul>
+ * <p>The server decides; this is a mirror of that decision for the client's own use — showing a name,
+ * hiding a menu item, gating a route. It is never a security boundary: every {@code @Secured} and
+ * {@code @RolesAllowed} check is made again server-side, on every call.</p>
+ *
+ * <h2>Authenticated, anonymous, and not yet known</h2>
+ * <p>These are three different states and the API keeps them apart. A connection whose credentials
+ * the application's {@code AuthenticationProvider} declined is <b>anonymous</b>, not authenticated —
+ * {@link #isAuthenticated()} stays false and {@link #onAuthenticated(Runnable)} never fires, so a
+ * login gate hung off that callback holds. Before the server has answered at all, {@link #isResolved()}
+ * is false and neither callback has run.</p>
  */
 public final class RmiSecurityContext {
 
@@ -40,24 +45,38 @@ public final class RmiSecurityContext {
     private static volatile String username;
     private static volatile Set<String> roles = Collections.emptySet();
     private static volatile boolean authenticated;
+    private static volatile boolean resolved;
     private static final List<Runnable> authCallbacks = new CopyOnWriteArrayList<>();
+    private static final List<Runnable> failureCallbacks = new CopyOnWriteArrayList<>();
+    private static final List<Runnable> resolvedCallbacks = new CopyOnWriteArrayList<>();
 
     private RmiSecurityContext() {}
 
     /**
-     * Populates the security context with identity details received from the server.
+     * Records the server's decision about this connection.
      *
-     * @param user  the authenticated username string
-     * @param roles the set of granted role names
+     * <p>Called by the client runtime when an AUTH frame arrives; applications never call it.</p>
      *
-     * <p><b>Under the hood:</b> Sets username and unmodifiable roles set, sets {@code authenticated = true},
-     * and executes all registered callbacks in {@code authCallbacks}.</p>
+     * @param user          the user name, or the anonymous sentinel when not authenticated
+     * @param roles         the granted roles; empty for an anonymous connection
+     * @param authenticated whether the server actually accepted an identity. <b>Not</b> inferred from
+     *                      the other two arguments: a rejected connection still carries a name, and a
+     *                      genuinely authenticated user may hold no application roles at all, so
+     *                      guessing from either one gets a real case wrong.
      */
-    public static void populate(String user, Set<String> roles) {
+    public static void populate(String user, Set<String> roles, boolean authenticated) {
         RmiSecurityContext.username = user;
         RmiSecurityContext.roles = Collections.unmodifiableSet(new LinkedHashSet<>(roles));
-        RmiSecurityContext.authenticated = true;
-        for (Runnable callback : authCallbacks) {
+        RmiSecurityContext.authenticated = authenticated;
+        RmiSecurityContext.resolved = true;
+        // Resolved first: an application that mounts its UI here should have done so before the
+        // outcome-specific callbacks run and start reacting to the identity.
+        run(resolvedCallbacks);
+        run(authenticated ? authCallbacks : failureCallbacks);
+    }
+
+    private static void run(List<Runnable> callbacks) {
+        for (Runnable callback : callbacks) {
             try {
                 callback.run();
             } catch (Exception e) {
@@ -67,14 +86,28 @@ public final class RmiSecurityContext {
     }
 
     /**
-     * Returns true if an AUTH frame has been received from the server.
+     * Whether the server accepted an identity for this connection.
      *
-     * @return boolean authentication status
+     * <p>False for a connection the application's {@code AuthenticationProvider} declined, and false
+     * before the server has answered. It means what its name says: no additional role check is needed
+     * to tell a real sign-in from a refused one.</p>
      *
-     * <p><b>Under the hood:</b> Evaluates volatile boolean {@code authenticated}.</p>
+     * @return true only when authentication succeeded
      */
     public static boolean isAuthenticated() {
         return authenticated;
+    }
+
+    /**
+     * Whether the server has reported its decision yet.
+     *
+     * <p>Lets a caller tell "declined" from "still waiting", which {@link #isAuthenticated()} alone
+     * cannot — both are false.</p>
+     *
+     * @return true once an AUTH frame has arrived
+     */
+    public static boolean isResolved() {
+        return resolved;
     }
 
     /**
@@ -113,17 +146,63 @@ public final class RmiSecurityContext {
     }
 
     /**
-     * Registers a listener callback to be executed upon authentication completion.
-     * If already authenticated at registration time, executes callback immediately.
+     * Registers a listener for a successful sign-in, run immediately if one has already happened.
+     *
+     * <p>Fires <b>only</b> when the server accepted an identity, which is what makes it safe to gate
+     * a protected view on. A connection the provider declined does not reach it.</p>
+     *
+     * <p><b>Not a "connected" signal.</b> An application with no login is anonymous by design and
+     * never reaches this callback, so mounting a UI from it renders nothing at all. Use
+     * {@link #onResolved(Runnable)} for readiness and keep this one for identity.</p>
      *
      * @param callback the {@link Runnable} to execute
-     *
-     * <p><b>Under the hood:</b> Appends callback to thread-safe {@code authCallbacks} list. Checks {@code authenticated} boolean;
-     * if true, executes {@code callback.run()} inline.</p>
      */
     public static void onAuthenticated(Runnable callback) {
         authCallbacks.add(callback);
         if (authenticated) {
+            callback.run();
+        }
+    }
+
+    /**
+     * Registers a listener for the server declining this connection, run immediately if that has
+     * already happened.
+     *
+     * <p>The counterpart to {@link #onAuthenticated(Runnable)}: an application with a login screen
+     * needs a positive signal that the credentials were refused, otherwise a wrong password is
+     * indistinguishable from a slow network and the screen waits forever.</p>
+     *
+     * @param callback the {@link Runnable} to execute
+     */
+    public static void onAuthenticationFailed(Runnable callback) {
+        failureCallbacks.add(callback);
+        if (resolved && !authenticated) {
+            callback.run();
+        }
+    }
+
+    /**
+     * Registers a listener for the server having answered at all, run immediately if it already has.
+     *
+     * <p><b>This is the "connection is ready" hook, and the one an application with no login wants.</b>
+     * It fires whether the connection ended up authenticated or anonymous — the point is that the
+     * server has reported, so identity is now known and the application can build its UI.</p>
+     *
+     * <p>Do not use {@link #onAuthenticated(Runnable)} for this. That one is a statement about
+     * <em>identity</em>, not about readiness, and it deliberately never fires for an anonymous
+     * connection — so an open application that mounts from it renders nothing at all.</p>
+     *
+     * <pre>{@code
+     * RmiSecurityContext.onResolved(() -> mountUi());              // open app: always runs
+     * RmiSecurityContext.onAuthenticated(() -> showAdminMenu());   // only for a real sign-in
+     * RmiSecurityContext.onAuthenticationFailed(() -> showError()); // credentials refused
+     * }</pre>
+     *
+     * @param callback the {@link Runnable} to execute
+     */
+    public static void onResolved(Runnable callback) {
+        resolvedCallbacks.add(callback);
+        if (resolved) {
             callback.run();
         }
     }
@@ -137,5 +216,6 @@ public final class RmiSecurityContext {
         username = null;
         roles = Collections.emptySet();
         authenticated = false;
+        resolved = false;
     }
 }

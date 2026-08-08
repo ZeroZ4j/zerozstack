@@ -23,9 +23,9 @@ package com.zeroz4j.api;
  *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
- *   <li><b>Suspension & Concurrency:</b> Calling {@link #lock()} suspends the current Wasm coroutine on the client
+ *   <li><b>Suspension &amp; Concurrency:</b> Calling {@link #lock()} suspends the current Wasm coroutine on the client
  *       or virtual thread on the server without blocking OS threads.</li>
- *   <li><b>Dependencies:</b> Uses {@link LiveMutexProvider} discovered via Java {@link ServiceLoader}.</li>
+ *   <li><b>Dependencies:</b> Uses {@link LiveMutexProvider} discovered via Java {@link java.util.ServiceLoader}.</li>
  * </ul>
  */
 public interface LiveMutex {

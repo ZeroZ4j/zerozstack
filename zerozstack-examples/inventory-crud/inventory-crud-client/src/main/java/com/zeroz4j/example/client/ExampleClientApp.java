@@ -29,12 +29,17 @@ public class ExampleClientApp {
         String wsUrl = getWebSocketUrl();
 
         Zeroz4jClient.connect(wsUrl, () -> {
-            RmiSecurityContext.onAuthenticated(() -> {
-                // Switch to Main Layout when connected and authenticated
+            // onResolved, not onAuthenticated: this example connects anonymously by design, so it
+            // is never "authenticated" and would never mount. What it is waiting for is the server
+            // having answered, which is what onResolved reports.
+            //
+            // On a green thread because building the view makes an RMI call, and this callback runs
+            // on a stack that began in native JavaScript, where TeaVM cannot suspend a coroutine.
+            RmiSecurityContext.onResolved(() -> new Thread(() -> {
                 MainLayout mainLayout = new MainLayout();
                 HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
                 appRoot.appendChild(mainLayout.getElement());
-            });
+            }).start());
         });
     }
 

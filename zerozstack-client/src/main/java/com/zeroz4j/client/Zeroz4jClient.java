@@ -33,6 +33,7 @@ public final class Zeroz4jClient {
 
     private static WasmRmiClientChannel channel;
     private static boolean bannerEnabled = true;
+    private static java.util.function.Supplier<String> urlProvider;
 
     private Zeroz4jClient() {
         // Prevent instantiation
@@ -79,10 +80,32 @@ public final class Zeroz4jClient {
      * <p><b>Under the hood:</b> Calls {@link BinaryRegistry#init()} to load serializers via SPI. Instantiates {@link WasmRmiClientChannel}
      * with {@code wsUrl} and {@code onReady}. Passes channel to {@link WasmRmiClient#initialize(WasmWebSocketChannel)}.</p>
      */
+    /**
+     * Recomputes the connect URL for every attempt, including reconnects.
+     *
+     * <p>Set by {@code OidcClient.appendToken} so a reconnect carries whichever access token is
+     * current, rather than the one that happened to be valid when the page loaded. Applications
+     * that manage their own credentials can use it for the same reason.</p>
+     *
+     * <p>Called on the reconnect path, so it must return promptly and must not block on the network.</p>
+     *
+     * @param provider computes the URL per attempt, or null to keep using the URL passed to
+     *                 {@link #connect(String, Runnable)}
+     */
+    public static void setConnectUrlProvider(java.util.function.Supplier<String> provider) {
+        urlProvider = provider;
+        if (channel != null) {
+            channel.setConnectUrlProvider(provider);
+        }
+    }
+
     public static void connect(String wsUrl, Runnable onReady) {
         BinaryRegistry.init();
         System.out.println("[zeroz4j] Connecting to " + wsUrl + "...");
         channel = new WasmRmiClientChannel(wsUrl, onReady);
+        if (urlProvider != null) {
+            channel.setConnectUrlProvider(urlProvider);
+        }
         WasmRmiClient.initialize(channel);
         channel.addStateListener(state -> {
             if (!bannerEnabled) {

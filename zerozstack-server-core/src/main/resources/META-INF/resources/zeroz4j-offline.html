@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!--
+  Shown when the application is opened and the page cannot be fetched.
+
+  A complete document, not a fragment: the service worker serves this as the navigation response, so
+  it is the whole page.
+
+  Deliberately self-contained: no stylesheet, no font, no script, no image from anywhere. A page
+  whose job is to appear when the network is gone cannot depend on the network, and that includes
+  the CDN the examples style themselves from.
+
+  Replace it by putting your own zeroz4j-offline.html in META-INF/resources — yours wins, because
+  the application's own resources are found before the framework's.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Offline</title>
+    <style>
+        html, body {
+            height: 100%; margin: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: #0f172a; color: #e2e8f0;
+        }
+        .panel { max-width: 26rem; padding: 2rem; text-align: center; }
+        h1 { margin: 0 0 .75rem; font-size: 1.5rem; font-weight: 600; }
+        p { margin: 0 0 1.5rem; line-height: 1.6; color: #94a3b8; }
+        button {
+            font: inherit; padding: .6rem 1.4rem; border: 0; border-radius: .5rem;
+            background: #3b82f6; color: #fff; cursor: pointer;
+        }
+        button:hover { background: #2563eb; }
+        .dot {
+            width: .6rem; height: .6rem; border-radius: 50%; background: #ef4444;
+            display: inline-block; margin-right: .5rem; vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <h1><span class="dot"></span><span id="title">You are offline</span></h1>
+        <p id="message">
+            This application keeps its data on the server, so it needs a connection to show you
+            anything.
+        </p>
+        <button type="button" onclick="location.reload()">Try again</button>
+    </div>
+    <script>
+        // Two different failures land on the same page, and telling someone whose network is fine
+        // that they are offline would just send them looking in the wrong place.
+        if (navigator.onLine) {
+            document.title = 'Cannot reach the server';
+            document.getElementById('title').textContent = 'Cannot reach the server';
+            document.getElementById('message').textContent =
+                'Your connection is working, but the server did not answer. It may be restarting.';
+        }
+        // Reload by itself the moment the network comes back, so nobody is left staring at this page.
+        window.addEventListener('online', function () { location.reload(); });
+    </script>
+</body>
+</html>

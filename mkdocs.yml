@@ -83,9 +83,12 @@ nav:
       - Saving data: guides/persistence.md
       - Store modes — embedded or hosted: store-modes.md
       - Authentication and authorization: guides/security-auth.md
+      - Logging in with OpenID Connect: guides/oidc-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
       - Packaging and running: guides/packaging.md
       - Troubleshooting: guides/troubleshooting.md
+      - Routing: ROUTING.md
+      - Installing as an app (PWA): PWA.md
       - Signals: SIGNALS.md
       - Server events: SERVER_EVENTS.md
       - LiveSync: LIVESYNC.md

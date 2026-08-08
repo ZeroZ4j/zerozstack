@@ -44,6 +44,21 @@
             </dependency>
             <dependency>
                 <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-jaxrs</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-jakarta</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-auth-oidc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-ui-components</artifactId>
                 <version>${project.version}</version>
             </dependency>

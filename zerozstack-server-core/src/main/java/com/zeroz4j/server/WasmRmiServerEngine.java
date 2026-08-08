@@ -66,7 +66,7 @@ import java.util.concurrent.RejectedExecutionException;
  *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
- *   <li><b>CDI Discovery & Scanning:</b> At startup ({@link #scanServiceRegistry()}), scans the CDI bean manager for beans implementing {@link RmiService}
+ *   <li><b>CDI Discovery &amp; Scanning:</b> At startup ({@link #scanServiceRegistry()}), scans the CDI bean manager for beans implementing {@link RmiService}
  *       interfaces, builds service/method reflection registries, and populates security whitelists ({@code @Secured}, {@code @RolesAllowed}).</li>
  *   <li><b>Virtual Thread Concurrency:</b> Per-session {@link ExecutorService} (Project Loom virtual threads) handles inbound frames without blocking I/O threads.</li>
  *   <li><b>Frame Dispatch:</b> Operates on incoming binary frames in {@link #processIncomingBinaryPayload(ByteBuffer, Session)}. Reads correlation ID, interface name, method name, unmarshals arguments using {@link BinarySerializer}, enforces security, populates {@link RmiRequestContext}, invokes method via reflection, and writes return value (0x01 SUCCESS) or exception (0x0F ERROR).</li>
@@ -77,6 +77,21 @@ import java.util.concurrent.RejectedExecutionException;
 public class WasmRmiServerEngine implements EventPublisher {
 
     private static final Logger LOG = Logger.getLogger(WasmRmiServerEngine.class.getName());
+
+    /**
+     * AUTH frame layout version. Version 2 added the explicit {@code authenticated} flag; version 1
+     * carried only a name and roles, which could not distinguish a refused connection from a real
+     * sign-in with no roles.
+     */
+    static final byte AUTH_PROTOCOL_VERSION = 2;
+
+    /** The name reported for a connection with no accepted identity. */
+    static final String ANONYMOUS_USER = "anonymous";
+
+    /** Largest binary message this endpoint will accept; unset leaves the container's own limit. */
+    static final String MAX_BINARY_BYTES_PROPERTY = "zeroz.ws.maxBinaryMessageBytes";
+    /** How long a silent connection is held; unset leaves the container's own timeout. */
+    static final String IDLE_TIMEOUT_MINUTES_PROPERTY = "zeroz.ws.idleTimeoutMinutes";
 
     @Inject
     SyncEngine syncEngine;
@@ -115,7 +130,8 @@ public class WasmRmiServerEngine implements EventPublisher {
      * and registers them in the service/method whitelist. Also collects security
      * annotations and populates the known roles for the handshake configurator.
      *
-     * <p><b>Under the hood:</b> Executed automatically via {@code @PostConstruct}. Queries {@link BeanManager#getBeans(Class)}.
+     * <p><b>Under the hood:</b> Executed automatically via {@code @PostConstruct}. Queries {@link BeanManager}
+     * with {@code getBeans(Object.class)}.
      * Populates {@code serviceRegistry}, {@code methodRegistry}, {@code securedInterfaces}, and {@code interfaceRoles}.</p>
      */
     @PostConstruct
@@ -198,8 +214,28 @@ public class WasmRmiServerEngine implements EventPublisher {
     @OnOpen
     @SuppressWarnings("unchecked")
     public void onOpen(Session session, EndpointConfig config) {
+        // A handshake refused by OriginPolicy is closed here: the upgrade cannot be failed from the
+        // configurator in a container-independent way, so the connection is accepted and then shut
+        // immediately, before it is registered anywhere or told anything about itself.
+        if (Boolean.TRUE.equals(config.getUserProperties().get(RmiEndpointConfigurator.REJECTED_KEY))) {
+            try {
+                session.close(new jakarta.websocket.CloseReason(
+                        jakarta.websocket.CloseReason.CloseCodes.VIOLATED_POLICY,
+                        "Origin not allowed"));
+            } catch (Exception e) {
+                LOG.warning("[zeroz4j] Failed to close a refused handshake: " + e.getMessage());
+            }
+            return;
+        }
+
         activeSessions.add(session);
-        sessionExecutors.put(session.getId(), Executors.newVirtualThreadPerTaskExecutor());
+        applyWebSocketLimits(session);
+        // Threads come from the resolved factory rather than being created here, so a deployment
+        // inside a Jakarta EE server can supply a ManagedThreadFactory whose threads carry the
+        // container's naming, transaction and security context. With no provider registered this is
+        // a virtual-thread factory, identical to newVirtualThreadPerTaskExecutor().
+        sessionExecutors.put(session.getId(),
+                Executors.newThreadPerTaskExecutor(SessionThreads.factory()));
 
         // Propagate principal and roles from handshake
         Principal principal = (Principal) config.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
@@ -212,11 +248,28 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
         session.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, roles);
 
-        // Send AUTH frame (0x03) to client
-        String username = principal != null ? principal.getName() : "anonymous";
-        sendAuthFrame(session, username, roles);
+        // Tenant and client id ride along the same way: both are decided at handshake, and both are
+        // what their scopes filter on. The client id is present even with no authentication at all.
+        String tenantId = (String) config.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY);
+        if (tenantId != null) {
+            session.getUserProperties().put(RmiEndpointConfigurator.TENANT_KEY, tenantId);
+        }
+        String clientId = (String) config.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
+        if (clientId != null) {
+            session.getUserProperties().put(RmiEndpointConfigurator.CLIENT_KEY, clientId);
+        }
 
-        LOG.info("[zeroz4j] Client connected: " + username + " roles=" + roles);
+        // Send AUTH frame (0x03) to client. A connection whose credentials the application's
+        // AuthenticationProvider declined has no principal, and the frame must say so: reporting it
+        // as an ordinary connection named "anonymous" is indistinguishable from a real sign-in
+        // unless the client also inspects the roles, which defeated login gates built the
+        // documented way.
+        boolean authenticated = principal != null;
+        String username = authenticated ? principal.getName() : ANONYMOUS_USER;
+        sendAuthFrame(session, username, roles, authenticated);
+
+        LOG.info("[zeroz4j] Client connected: " + username + " roles=" + roles
+                + (authenticated ? "" : " (not authenticated)"));
 
         // LiveSync: add session to SyncEngine
         syncEngine.addSession(session);
@@ -268,12 +321,75 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
     }
 
-    private void sendAuthFrame(Session session, String username, Set<String> roles) {
+    /**
+     * Tells the client who the server decided it is.
+     *
+     * <p>Sent on every connection, including a refused one — silence would leave a login screen
+     * unable to tell a wrong password from a slow network. The {@code authenticated} flag is carried
+     * separately from the name and roles because neither of those can stand in for it: a refused
+     * connection still has a name, and a real user may hold no application roles at all.</p>
+     *
+     * @param session       the connection
+     * @param username      the user name, or {@link #ANONYMOUS_USER}
+     * @param roles         granted roles; empty when not authenticated
+     * @param authenticated whether an identity was actually accepted
+     */
+    /**
+     * Applies the configured message-size and idle limits to a new connection.
+     *
+     * <p>Both are unset by default, leaving whatever the container chose. That matters: imposing a
+     * framework default would silently override a deployment's own tuning.</p>
+     *
+     * <p>The size limit is worth setting. {@code @OnMessage} here takes a whole {@link ByteBuffer} —
+     * there is no partial-message handling — so a response larger than the container's binary buffer
+     * does not raise an error, it closes the socket. Containers default this small, and a service
+     * returning one page of records can exceed it.</p>
+     */
+    private static void applyWebSocketLimits(Session session) {
+        Integer maxBinaryBytes = positiveIntProperty(MAX_BINARY_BYTES_PROPERTY);
+        if (maxBinaryBytes != null) {
+            session.setMaxBinaryMessageBufferSize(maxBinaryBytes);
+        }
+        Integer idleMinutes = positiveIntProperty(IDLE_TIMEOUT_MINUTES_PROPERTY);
+        if (idleMinutes != null) {
+            session.setMaxIdleTimeout(idleMinutes * 60_000L);
+        }
+    }
+
+    /**
+     * Reads a positive integer system property.
+     *
+     * @return the value, or null when unset, unparseable or not positive — an unusable setting is
+     *         logged and ignored rather than applied, because a zero or negative limit means
+     *         something different to each container
+     */
+    private static Integer positiveIntProperty(String name) {
+        String configured = System.getProperty(name);
+        if (configured == null || configured.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            int value = Integer.parseInt(configured.trim());
+            if (value <= 0) {
+                LOG.warning("[zeroz4j] Ignoring " + name + "=" + configured
+                        + ": it must be a positive number.");
+                return null;
+            }
+            return value;
+        } catch (NumberFormatException ex) {
+            LOG.warning("[zeroz4j] Ignoring non-numeric " + name + "='" + configured + "'.");
+            return null;
+        }
+    }
+
+    private void sendAuthFrame(Session session, String username, Set<String> roles,
+                               boolean authenticated) {
         try {
             GrowableBuffer buffer = new GrowableBuffer();
             buffer.putInt(0); // no correlation ID
             buffer.put(SyncFrameTypes.AUTH); // AUTH frame type
-            buffer.put((byte) 1); // protocol version
+            buffer.put(AUTH_PROTOCOL_VERSION);
+            buffer.put((byte) (authenticated ? 1 : 0));
             BinarySerializer.writeString(buffer, username);
             buffer.putInt(roles.size());
             for (String role : roles) {
@@ -386,8 +502,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
         if (scope != Scope.GLOBAL && (target == null || target.isEmpty())) {
             throw new IllegalArgumentException(
-                    "publish with scope " + scope + " needs a target: the "
-                    + (scope == Scope.SESSION ? "session id" : "user name")
+                    "publish with scope " + scope + " needs a target: the " + targetNameFor(scope)
                     + " to reach. Without it the event would silently reach nobody.");
         }
         assertSerializable(payload, "event payload for topic '" + topic.name() + "'");
@@ -395,6 +510,91 @@ public class WasmRmiServerEngine implements EventPublisher {
             if (matchesScope(session, scope, target)) {
                 sendPush(session, topic.name(), payload);
             }
+        }
+    }
+
+    /** The WebSocket protocol allows a close reason of at most 123 bytes. */
+    private static final int MAX_CLOSE_REASON_BYTES = 123;
+
+    @Override
+    public int disconnect(String principalName, String reason) {
+        if (principalName == null || principalName.trim().isEmpty()) {
+            // Deliberately not "close everything": an application computing a principal name that
+            // came back null would otherwise sign every one of its users out.
+            LOG.warning("[zeroz4j] disconnect() called with no principal name; nothing was closed.");
+            return 0;
+        }
+        int closed = 0;
+        for (Session session : activeSessions) {
+            if (matchesScope(session, Scope.USER, principalName) && closeSession(session, reason)) {
+                closed++;
+            }
+        }
+        LOG.info("[zeroz4j] Disconnected " + closed + " connection(s) of '" + principalName
+                + "': " + reason);
+        return closed;
+    }
+
+    @Override
+    public boolean disconnectSession(String sessionId, String reason) {
+        if (sessionId == null || sessionId.isEmpty()) {
+            return false;
+        }
+        for (Session session : activeSessions) {
+            if (sessionId.equals(session.getId())) {
+                boolean closed = closeSession(session, reason);
+                if (closed) {
+                    LOG.info("[zeroz4j] Disconnected session " + sessionId + ": " + reason);
+                }
+                return closed;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Closes one session, never throwing.
+     *
+     * <p>A revocation loop must reach every session even if one of them is already half-dead, so a
+     * failure here is logged and counted as not-closed rather than propagated to the caller.</p>
+     */
+    private static boolean closeSession(Session session, String reason) {
+        try {
+            session.close(new jakarta.websocket.CloseReason(
+                    jakarta.websocket.CloseReason.CloseCodes.VIOLATED_POLICY, truncate(reason)));
+            activeSessions.remove(session);
+            return true;
+        } catch (Exception ex) {
+            LOG.warning("[zeroz4j] Could not close session " + session.getId() + ": " + ex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Trims a close reason to what the protocol allows.
+     *
+     * <p>Containers reject an over-long reason by throwing, which would turn "revoke this account"
+     * into "revoke nothing" over a message nobody reads carefully. Measured in bytes, not
+     * characters, because the limit is on the encoded frame.
+     */
+    static String truncate(String reason) {
+        if (reason == null) {
+            return "";
+        }
+        byte[] bytes = reason.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (bytes.length <= MAX_CLOSE_REASON_BYTES) {
+            return reason;
+        }
+        java.nio.ByteBuffer truncated = java.nio.ByteBuffer.wrap(bytes, 0, MAX_CLOSE_REASON_BYTES);
+        java.nio.charset.CharsetDecoder decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE);
+        try {
+            return decoder.decode(truncated).toString();
+        } catch (java.nio.charset.CharacterCodingException impossible) {
+            // IGNORE was configured above, so a malformed trailing sequence is dropped rather than
+            // thrown. Kept as a belt-and-braces fallback.
+            return new String(bytes, 0, MAX_CLOSE_REASON_BYTES - 3,
+                    java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 
@@ -424,12 +624,26 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param target  session id or user name, per the scope
      * @return whether this session should receive the push
      */
-    private static boolean matchesScope(Session session, Scope scope, String target) {
+    /** Names what a scope's target actually is, so a missing one is reported in the caller's terms. */
+    static String targetNameFor(Scope scope) {
+        switch (scope) {
+            case SESSION: return "session id";
+            case CLIENT:  return "client id";
+            case TENANT:  return "tenant id";
+            default:      return "user name";
+        }
+    }
+
+    static boolean matchesScope(Session session, Scope scope, String target) {
         if (scope == Scope.GLOBAL) {
             return true;
         }
         if (scope == Scope.SESSION) {
             return session.getId().equals(target);
+        }
+        if (scope == Scope.CLIENT) {
+            Object clientId = session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
+            return clientId != null && clientId.equals(target);
         }
         if (scope == Scope.TENANT) {
             Object tenant = session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY);
@@ -728,6 +942,29 @@ public class WasmRmiServerEngine implements EventPublisher {
     }
 
     /**
+     * Sends one target's value of a scoped signal to the sessions belonging to that target.
+     *
+     * <p>The frame carries the family's wire name, not the per-target one: every client subscribes
+     * under the same name and is told only its own value, so no client learns that other targets
+     * exist, let alone what they hold.</p>
+     *
+     * @param familyName the family's base wire name
+     * @param value      the new value
+     * @param scope      which targets the family is keyed by
+     * @param target     the target whose sessions should receive it
+     * @param mapper     object mapper for serialization
+     */
+    static void broadcastSignalUpdateScoped(String familyName, Object value, Scope scope,
+                                            String target, ObjectMapper mapper) {
+        assertSerializable(value, "value of scoped signal '" + familyName + "'");
+        for (Session session : activeSessions) {
+            if (matchesScope(session, scope, target)) {
+                sendSignalUpdate(session, familyName, value, mapper);
+            }
+        }
+    }
+
+    /**
      * Sends a server-initiated push notification to a specific client session.
      *
      * @param session the target client WebSocket session
@@ -922,7 +1159,9 @@ public class WasmRmiServerEngine implements EventPublisher {
                     try {
                         RmiRequestContext.setContext(principal, userRoles, session.getId(),
                                 (String) session.getUserProperties()
-                                        .get(RmiEndpointConfigurator.TENANT_KEY));
+                                        .get(RmiEndpointConfigurator.TENANT_KEY),
+                                (String) session.getUserProperties()
+                                        .get(RmiEndpointConfigurator.CLIENT_KEY));
                         executionResult = targetMethod.invoke(beanInstance, extractedArguments);
                     } finally {
                         RmiRequestContext.clear();

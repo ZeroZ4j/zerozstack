@@ -73,7 +73,7 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
         <dependency>
             <groupId>com.zeroz4j</groupId>
             <artifactId>zerozstack-bom</artifactId>
-            <version>0.5.0</version>
+            <version>0.6.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -95,7 +95,7 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
 Or start from the archetype, which generates the three-module shape for you:
 
 ```bash
-mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.5.0
+mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.6.0
 ```
 
 Publication to Maven Central is planned; see
@@ -111,7 +111,7 @@ This repository contains the core framework and reference implementations.
 * **[Quickstart](docs/start/quickstart.md)** — build the framework and run a working example in about five minutes. Every command verified.
 * **[Choosing how state moves](docs/decide/index.md)** — ZeroZ Stack gives you five ways to propagate state (local signals, RMI, server events, shared signals, LiveSync). Picking the wrong one is the most common source of trouble in ZeroZ Stack applications; this is the decision procedure.
 * **[Troubleshooting](docs/guides/troubleshooting.md)** — symptom-first, and specifically covering the cases where nothing happens and there is no exception to search for.
-* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.5.0, stated plainly.
+* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.6.0, stated plainly.
 * **[Changelog](CHANGELOG.md)** — what changed and what breaks. Read the Breaking section before upgrading; 0.4.0 renames an artifact and changes several silent behaviours into thrown exceptions.
 * **[Glossary](docs/reference/glossary.md)** — event, signal, push, sync and mutation are not interchangeable terms here.
 
@@ -122,7 +122,11 @@ This repository contains the core framework and reference implementations.
 * **[Code Walkthrough: End-to-End Java](docs/CODE_WALKTHROUGH.md)** - Examples of Models, RMI Interfaces, and Wasm UI binding.
 * **[Detailed Protocol Specification](docs/PROTOCOL.md)** - Deep dive into the binary WebSocket frame structure and architecture.
 * **[Server Events: Typed Push Topics](docs/SERVER_EVENTS.md)** - Broadcasting typed, fire-and-forget events from the server to connected clients.
-* **[Signals: Client-Side Reactive State](docs/SIGNALS.md)** - Reactive UI state with `ValueSignal`, `Computed`, and `Effect`.
+* **[Signals: Client-Side Reactive State](docs/SIGNALS.md)** - Reactive UI state with `ValueSignal`, `Computed`, and `Effect` — and `Signals.scoped` for state belonging to one tenant, user or browser.
+* **[Routing: URLs, Views and Colocated Loading](docs/ROUTING.md)** - Real URLs mapped to Java views, with each route declaring the data it needs so nothing renders half-loaded.
+* **[PWA: Installing, Fast Startup and Push](docs/PWA.md)** - One call makes an application installable and push-capable. It does not make it work offline, and the page says why.
+* **[Logging in with OpenID Connect](docs/guides/oidc-auth.md)** - Authorization-code flow with PKCE against Keycloak, and how its claims become roles and a tenant.
+* **[Packaging and running](docs/guides/packaging.md)** - The four shapes a ZeroZ Stack server ships in, including a WAR on WildFly, Payara, Open Liberty or TomEE.
 * **[Validation: Annotate Once, Enforce Everywhere](docs/VALIDATION.md)** - Model annotations enforced by the client binder and automatically by the server.
 * **[LiveSync: Two-Way Object Synchronization](docs/LIVESYNC.md)** - In-place state sync down, and `@ClientWritable` automatic mutation propagation up.
 * **[Agent Prompts: Build a ZeroZ Stack App](docs/AGENT_PROMPTS.md)** - Ready-to-paste prompts for building ZeroZ Stack apps with an AI coding agent.

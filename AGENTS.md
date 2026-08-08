@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.5.0**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.6.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
@@ -49,11 +49,14 @@ cache.
 | `zerozstack-client` | TeaVM client runtime: `Zeroz4jClient`, `WasmRmiClient`, `ServerEvents`. Renamed from `zerozstack-client-wasm`. |
 | `zerozstack-ui-components` | Java component library styled with Tailwind/DaisyUI. Components wrap a TeaVM `HTMLElement`, reachable via `getElement()`; there is no server-side DOM state. |
 | `zerozstack-bom` | Dependency BOM — the intended way for applications to import versions. |
-| `zerozstack-server-core` | CDI engine, RMI dispatcher, `SyncEngine`, `EventPublisher`, dev auth. |
-| `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. |
+| `zerozstack-server-core` | CDI engine, RMI dispatcher, `SyncEngine`, `EventPublisher`, dev auth. **Carries no JAX-RS or servlet type**, which is what makes it safe inside somebody else's WAR. |
+| `zerozstack-server-jaxrs` | The JAX-RS catch-all at `/` serving the client bundle and the shell. A standalone server wants it; a WAR with its own servlets must be able to leave it out, which is why it is separate. |
+| `zerozstack-server-jakarta` | Servlet-container binding: WebSocket registration, serializer bootstrap, the container `ManagedThreadFactory`, and an optional shell servlet. Take this instead of `-helidon` for a WAR. |
+| `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. Depends on `-jaxrs`. |
+| `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
-| `zerozstack-examples` | Seven runnable reference applications. |
+| `zerozstack-examples` | Eleven runnable reference applications. |
 
 An application has three modules: **shared** (`@DataModel` classes, `@RmiService` interfaces),
 **client** (the UI, compiled for the browser by TeaVM), **server** (`@ApplicationScoped`
@@ -199,11 +202,12 @@ This is the decision developers most often get wrong. Ask in order:
    ("approve", "checkout", "log in")?
    Yes -> RMI call on an @RmiService. Stop.
 
-3. Is the data private to one user or session?
-   Yes -> scope the push, then continue to 4 to pick the mechanism.
-          Events: publishToUser / publishToSession.
-          LiveSync: Scope.SESSION or Scope.USER.
-          Shared signals CANNOT be scoped, so per-user state is never one.
+3. Does the data belong to somebody rather than to everybody?
+   Yes -> scope it, then continue to 4 to pick the mechanism.
+          Events:  publishToUser / publishToSession / publishToClient.
+          LiveSync: notifyChanged(obj, Scope.X, target).
+          Signals:  Signals.scoped(name, initial, Scope.X)  -- NOT Signals.shared,
+                    which is one value for the whole JVM by definition.
           The unscoped forms reach every session with no principal check.
 
 4. Would keeping only the latest value lose information?
@@ -219,6 +223,64 @@ Two rules of thumb: **state edits sync, operations call**, and **events are news
 facts** — news is missed if you were not listening, facts are true when you arrive.
 
 Full guide: [docs/decide/](docs/decide/).
+
+### Picking a scope (0.6.0+)
+
+| Scope | Keyed by | Needs a login? | Survives reconnect? |
+|---|---|---|---|
+| `SESSION` | WebSocket session id | no | **no** — the id changes on every drop |
+| `CLIENT` | server-issued browser id | no | yes, and page reloads too |
+| `USER` | authenticated user name | yes | yes |
+| `TENANT` | authenticated tenant | yes | yes |
+
+`Scope.CLIENT` is the default for an application with no login. **`CLIENT` and `SESSION` identify a
+browser, not a person** — never use them to keep one user's data from another; that needs `USER` or
+`TENANT`.
+
+On the server name the target explicitly, and take it from the connection, never from an argument:
+
+```java
+BasketSignals.BASKET.forTarget(RmiRequestContext.getClientId()).set(updated);   // server
+Effect.create(() -> label.setText(BasketSignals.BASKET.mine().get().size()));   // client
+```
+
+`forTarget` throws on a client and `mine()` throws on the server — deliberately, so a browser cannot
+name someone else's target. See [docs/SIGNALS.md](docs/SIGNALS.md).
+
+## Routing (0.6.0+)
+
+`@Route` on a class implementing `RouteView<T>`; the annotation processor generates the route table
+at compile time, so there is no reflection and a malformed route is a compile error.
+
+```java
+@Route(value = "/tasks/:id", layout = AppShell.class)
+public class TaskDetailView implements RouteView<Task> {
+    public Task load(RouteParams p) { return tasks.byId(p.getLong("id")); }   // runs first
+    public Component render(Task task, RouteParams p) { ... }                 // then this
+}
+```
+
+- **`load` completes before `render` is called.** Never fetch from inside a mounted component.
+- Real URLs via the history API. Deep links work because `StaticContentResource` serves the shell for
+  any path with no file behind it.
+- `Router.start("app-root")` once; `Router.navigate(path)`, or an `<a data-route href="...">`.
+- Guard with `@RequiresRole`; it decides what to *show*, the server still decides what is allowed.
+
+See [docs/ROUTING.md](docs/ROUTING.md).
+
+## Suspending calls and green threads
+
+An RMI call suspends a TeaVM coroutine, and **a coroutine cannot suspend on a stack that began in
+native JavaScript**. Click handlers, `setTimeout` callbacks and framework callbacks such as
+`RmiSecurityContext.onAuthenticated` are all such stacks, and calling a service directly from one
+fails with *"suspension point reached from non-threading context"*.
+
+```java
+button.addClickListener(e -> new Thread(() -> service.save(item)).start());
+```
+
+That is a green thread re-entering TeaVM's scheduler, not parallelism. The router does this
+internally for every navigation.
 
 ## When nothing happens
 
@@ -271,22 +333,33 @@ empties the handle registry that re-sync restores from.
 
 ## Running the examples
 
-All seven examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the root,
-each has a `run.bat` (Windows). They serve on `http://localhost:8080`; run one at a time.
+All ten examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the root,
+the seven original ones have a `run.bat` (Windows) and serve on `http://localhost:8080`; run one at a
+time.
 
-There is no executable jar and no `exec-maven-plugin` — `java -jar` and `mvn exec:java` both fail
-regardless of what older docs say. The working invocation is the one `run.bat` uses:
+For those seven there is no executable jar and no `exec-maven-plugin` — `java -jar` and
+`mvn exec:java` both fail regardless of what older docs say. The working invocation is the one
+`run.bat` uses:
 
 ```bash
 cd zerozstack-examples/todo-signals/todo-signals-server
 java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer   # ';' on Windows, ':' on POSIX
 ```
 
-Every example uses the same main class, `com.zeroz4j.example.server.ExampleServer`.
+They share the main class `com.zeroz4j.example.server.ExampleServer`. **The three added in 0.6.0 do
+not**: they build runnable jars and have their own main classes and ports, so two can run at once.
 
-**Four of the seven require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
+| Example | Run | Port |
+|---|---|---|
+| `routing-tour` | `java -jar routing-tour-server/target/routing-tour-server-0.6.0.jar` | 8080 |
+| `oidc-login` | `java -jar oidc-login-server/target/oidc-login-server-0.6.0.jar` | 8081 (needs Keycloak) |
+| `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.6.0.jar` | 8082 |
+
+**Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
 `components-showcase` set `zeroz.security.mode=dev` in their `ExampleServer.main` and show a client-side
 `Login` component. `todo-signals`, `form-signup` and `inventory-crud` connect anonymously.
+`routing-tour` and `scoped-signals` take credentials from the URL — `?user=admin&password=admin` —
+which is how you open two windows as different users.
 
 Dev credentials are `demo` / `demo` (role `user`) and `admin` / `admin` (roles `user`, `admin`). The
 client passes them as WebSocket handshake parameters and `DevAuth` validates them. (`DevLoginServlet` is
@@ -298,6 +371,50 @@ CDI, because the handshake runs before the endpoint exists. Return an `Authentic
 name, roles and optionally a tenant; return null to leave the connection anonymous. Registering a
 provider disables the `DevAuth` fallback entirely.
 
+**For OpenID Connect, do not write a provider** — depend on `zerozstack-auth-oidc` and register
+`com.zeroz4j.server.oidc.OidcAuthenticationProvider`, configured with `zeroz.oidc.issuer` and
+`zeroz.oidc.clientId`. In the browser, `OidcClient.start(config, onReady)` runs the whole
+authorization-code + PKCE flow. Leave `zeroz.oidc.audience` unset unless the realm has an audience
+mapper: a stock Keycloak token carries `aud: "account"` and names the client in `azp`.
+See [docs/guides/oidc-auth.md](docs/guides/oidc-auth.md).
+
+**A rejected sign-in is not authenticated.** `RmiSecurityContext.isAuthenticated()` is false and
+`onAuthenticated(...)` does not fire, so gate a login screen on that callback and report failure from
+`onAuthenticationFailed(...)`. Do not check for a specific role as a proxy for "did the login work" —
+that workaround existed because of a bug fixed in 0.6.0.
+
+**Mount the UI from `onResolved(...)`, never `onAuthenticated(...)`.** `onResolved` fires once the
+server has answered, authenticated or anonymous — that is the "connection is usable" signal.
+`onAuthenticated` is about *identity* and never fires for an anonymous connection, so an app with no
+login that mounts from it renders a blank page. Build the view on a green thread if it makes an RMI
+call: `onResolved(() -> new Thread(this::mountUi).start())`.
+
+**Deploying as a WAR:** take `zerozstack-server-jakarta` instead of `zerozstack-server-helidon`. It
+registers the WebSocket endpoint, calls `BinaryRegistry.init()` at startup, and supplies the
+container's `ManagedThreadFactory` so RMI calls carry naming, transaction and security context —
+without which a `java:comp/env/…` lookup inside a service fails. Map `Zeroz4jShellServlet` yourself;
+it is deliberately unmapped so it cannot claim `/` in a WAR that has its own servlets. **Do not add
+`zerozstack-server-jaxrs` to a WAR**: it is a catch-all at `/`. `zerozstack-server-core` contains no
+JAX-RS type, which is what makes it safe inside somebody else's WAR.
+
+**Set `zeroz.ws.maxBinaryMessageBytes`** in any real deployment. `@OnMessage` takes a whole message,
+so a response bigger than the container's binary buffer closes the socket rather than raising an
+error. `zeroz.ws.idleTimeoutMinutes` stops an abandoned tab holding a session forever. Both unset by
+default, leaving the container's own values.
+
+**Client identity without a login:** every connection carries a server-issued, HMAC-signed browser id
+in an `HttpOnly` cookie, readable as `RmiRequestContext.getClientId()` and used by `Scope.CLIENT`. It
+identifies a browser, not a person. Handshakes are also origin-checked; set `zeroz.origins` when the
+page is served from a different host than the socket.
+
+**Making an app installable:** `Pwa.install()` in `main` before `connect`, plus a manifest and
+`<link rel="manifest">`. **Never tell a user this makes the application work offline** — every view
+loads its data over the socket and there is no client-side store, so opened offline it shows
+`/zeroz4j-offline.html` and nothing else. Do not write a service worker: the framework ships one from
+`zerozstack-server-core`, version-stamped so a deployment evicts the old shell. Gate an install button
+on the `Pwa.installable()` signal, not a one-shot boolean — the browser's offer arrives after the UI
+is built. See [docs/PWA.md](docs/PWA.md).
+
 | Example | Demonstrates |
 |---|---|
 | `todo-signals` | Local signals, `Computed`, `Effect` in isolation |
@@ -307,10 +424,19 @@ provider disables the `DevAuth` fallback entirely.
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |
 | `components-showcase` | The component library gallery |
+| `routing-tour` | `@Route`, nested `RouteLayout`, path and query parameters, `@RequiresRole` guards, colocated loaders |
+| `scoped-signals` | `Signals.scoped` with `Scope.CLIENT` and `Scope.USER` beside a global `Signals.shared` |
+| `oidc-login` | `OidcClient` PKCE login against Keycloak, and `@Secured`/`@RolesAllowed` enforced from its claims |
+| `pwa-install` | `Pwa.install()`, `Pwa.installable()`, `PwaManifest` per request, push subscription, and the offline page |
 
 ## Not implemented — do not generate code against these
 
-- `@Route` exists as an annotation but **there is no router**. It has no usages and no registry.
+- Route loaders **do not run in parallel**. Client code is a single cooperative scheduler, so a
+  layout's loader and its child's are sequential. The guarantee routing gives is ordering — data
+  before render — not concurrency.
+- The route chain is **rebuilt on every navigation**; a layout is not kept mounted while its children
+  swap, so its loader re-runs.
+- Routing has no wildcard or optional segments, no lazy loading, and one child per layout.
 - Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x15 REJECT`,
   `0x16 SIGNAL_SUB` and `0x18 PUSH` are declared but unreferenced. There is no version field, no
   acknowledgement and no conflict rejection in the implemented sync path.
