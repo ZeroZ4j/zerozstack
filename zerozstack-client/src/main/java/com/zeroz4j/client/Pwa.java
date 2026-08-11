@@ -40,9 +40,14 @@ import org.teavm.jso.JSObject;
  * {@code PwaManifest} when it varies per tenant:</p>
  *
  * <pre>{@code
- * <link rel="manifest" href="/manifest.webmanifest">
+ * <link rel="manifest" href="manifest.webmanifest">
  * <meta name="theme-color" content="#1f2937">
  * }</pre>
+ *
+ * <p>Relative, not {@code /manifest.webmanifest} — the shell is served with a {@code <base href>} for
+ * its context path, so relative references land inside the deployment wherever it is deployed, and
+ * an absolute one escapes it. The manifest's own {@code start_url} and {@code scope} follow the same
+ * rule: {@code "."} rather than {@code "/"}.</p>
  *
  * <h2>What installing gives you, stated plainly</h2>
  * <p>A home-screen launch in a standalone window, a faster second start because the shell is cached,
@@ -59,8 +64,15 @@ import org.teavm.jso.JSObject;
  */
 public final class Pwa {
 
-    /** Where the framework's own service worker is served from. */
-    private static final String DEFAULT_WORKER = "/zeroz4j-sw.js";
+    /**
+     * The framework's own service worker, relative to the application root.
+     *
+     * <p>Resolved through {@link AppBase} rather than written with a leading slash. A worker
+     * registered at {@code /zeroz4j-sw.js} from an application deployed at {@code /coachapp} is a
+     * 404, and a 404 here means no install, no offline page and — the expensive one — no web push,
+     * reported only as one line in the browser console.</p>
+     */
+    private static final String DEFAULT_WORKER = "zeroz4j-sw.js";
 
     /** Driven by the browser's own {@code beforeinstallprompt} and {@code appinstalled} events. */
     private static final ValueSignal<Boolean> INSTALLABLE = new ValueSignal<>(Boolean.FALSE);
@@ -105,7 +117,7 @@ public final class Pwa {
      * block startup.</p>
      */
     public static void install() {
-        install(DEFAULT_WORKER);
+        install(AppBase.url(DEFAULT_WORKER));
     }
 
     /**
@@ -115,7 +127,12 @@ public final class Pwa {
      * caches only the shell — anything more ambitious runs into the fact that there is no
      * client-side data to cache.</p>
      *
-     * @param path the worker's URL, absolute from the site root
+     * <p>A worker's <b>scope</b> is the directory it is served from, and it can never be wider than
+     * that. Serving it from anywhere but the application root therefore silently narrows what it
+     * controls, so build the path with {@code AppBase.url(...)} rather than writing a leading
+     * slash.</p>
+     *
+     * @param path the worker's URL; a leading slash means the site root, not the application root
      */
     public static void install(String path) {
         hookInstallOffer();

@@ -179,10 +179,33 @@ Note this is only about **opening** the application with no connection. A connec
 the app is running is unrelated and already handled: `Zeroz4jClient` shows a reconnecting banner and
 recovers by itself.
 
+## Under a context path
+
+`Pwa.install()` registers the worker at **`AppBase.url("zeroz4j-sw.js")`** — inside the application,
+not at the site root. That matters twice over. A worker registered at `/zeroz4j-sw.js` from an
+application deployed at `/coachapp` is a 404, and a failed registration means no install, no offline
+page and no push, reported as one line in the browser console. And a worker's scope can never be
+wider than the directory it is served from, so even a copy placed at the site root would control the
+wrong tree.
+
+Everything inside the worker is already scope-relative: `self.registration.scope` is what it caches,
+what it treats as the offline page, and where a clicked notification with no `url` sends the browser.
+
+The manifest follows the same rule — reference it relatively and give it a relative `start_url` and
+`scope`:
+
+```html
+<link rel="manifest" href="manifest.webmanifest">
+```
+
+```json
+{ "start_url": ".", "scope": "." }
+```
+
 ## Your own service worker
 
 ```java
-Pwa.install("/my-sw.js");
+Pwa.install(AppBase.url("my-sw.js"));
 ```
 
 Before you do: the framework's worker caches only the shell, and anything more ambitious runs into

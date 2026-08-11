@@ -20,6 +20,17 @@ handshake ──▶ AuthenticationProvider ──▶ AuthenticatedPrincipal ─�
 Everything downstream reads from that: `@Secured`, `@RolesAllowed`, `@ClientWritable`,
 `Scope.USER` and `Scope.TENANT` pushes, and `RmiRequestContext`.
 
+**The framework puts no gate in front of HTTP.** Pages, the client bundle and any other static
+resource are served to anyone who asks, signed in or not — which is what has to happen, since the
+page is what opens the socket that decides identity in the first place. An anonymous visitor loads
+the application and sees whatever it shows a signed-out visitor; a sign-in screen is a view like any
+other. If you want HTTP itself gated — an intranet application behind SSO, say — that is your
+container's job through a `<security-constraint>`, not the framework's.
+
+Up to and including 0.5.0 a servlet filter in `zerozstack-server-core` contradicted this: deployed in
+a WAR it answered 401 to every page unless the *container* had authenticated the request, which the
+model above never does. It has been removed — see the 0.6.0 changelog.
+
 ## Replacing the development provider
 
 Implement `AuthenticationProvider` and register it through `ServiceLoader`. It is discovered that way
@@ -259,10 +270,10 @@ gone.
 - **Identity is fixed for the life of the connection.** Roles are read once at handshake, so a user
   whose roles change must reconnect. Re-evaluating per frame would put a security check on the hot
   path.
-- **No handshake origin check.** ZeroZ Stack does not verify the `Origin` header; put that in front of the
-  application, or in your provider.
 - **No session expiry.** A connection stays authenticated until it closes.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.
+- **Nothing gates HTTP.** Every page and asset is public; only RMI calls are checked. An application
+  that needs the documents themselves protected uses a container `<security-constraint>`.
 
 ## See also
 

@@ -210,6 +210,42 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         }
     }
 
+    /**
+     * Hands the container the CDI-managed engine rather than a bare {@code new}.
+     *
+     * <h2>The failure this exists to stop</h2>
+     * {@link WasmRmiServerEngine} is an {@code @ApplicationScoped} bean with three injected
+     * collaborators, and the container asks the configurator for the endpoint instance. The Jakarta
+     * API's default implementation delegates to the container's default configurator, and whether
+     * that one knows about CDI is entirely the container's business: WildFly's does, and
+     * <b>Tomcat's does not</b> — {@code DefaultServerEndpointConfigurator.getEndpointInstance} is
+     * literally {@code clazz.getConstructor().newInstance()}. On Tomcat the engine therefore came up
+     * with three null fields and the very first connection died in {@code onOpen} with
+     * {@code NullPointerException: ... "this.syncEngine" is null}, followed by an endless reconnect
+     * loop from a client that had done nothing wrong.
+     *
+     * <p>Asking CDI first fixes that and changes nothing anywhere else: where the container already
+     * resolves the bean, this returns the same one.
+     *
+     * <p>Falling back rather than failing matters too. An application may register endpoints that
+     * are not beans, and CDI may not be running at all in a plain embedded test — in both cases the
+     * container's own behaviour is the right answer.
+     */
+    @Override
+    public <T> T getEndpointInstance(Class<T> endpointClass) throws InstantiationException {
+        try {
+            jakarta.enterprise.inject.Instance<T> resolvable =
+                    jakarta.enterprise.inject.spi.CDI.current().select(endpointClass);
+            if (!resolvable.isUnsatisfied() && !resolvable.isAmbiguous()) {
+                return resolvable.get();
+            }
+        } catch (RuntimeException | LinkageError noCdi) {
+            LOG.fine("[zeroz4j] No CDI instance for " + endpointClass.getName()
+                    + "; letting the container construct it: " + noCdi);
+        }
+        return super.getEndpointInstance(endpointClass);
+    }
+
     private static String firstParam(java.util.Map<String, java.util.List<String>> params, String name) {
         java.util.List<String> values = params != null ? params.get(name) : null;
         return values != null && !values.isEmpty() ? values.get(0) : null;

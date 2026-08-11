@@ -99,6 +99,25 @@ public final class Zeroz4jClient {
         }
     }
 
+    /**
+     * The WebSocket endpoint for this deployment, wherever it is deployed.
+     *
+     * <pre>{@code
+     * Zeroz4jClient.connect(Zeroz4jClient.defaultWebSocketUrl(), () -> Router.start("app-root"));
+     * }</pre>
+     *
+     * <p>Prefer it to a hand-written URL. The hand-written ones tend to be either
+     * {@code location.host + "/wasm-rmi"}, which is wrong under a context path, or the last segment
+     * stripped off {@code location.pathname}, which is right on the landing page and wrong on every
+     * deep link.</p>
+     *
+     * @return e.g. {@code "wss://example.com/coachapp/wasm-rmi"}
+     * @see AppBase
+     */
+    public static String defaultWebSocketUrl() {
+        return AppBase.webSocketUrl();
+    }
+
     public static void connect(String wsUrl, Runnable onReady) {
         BinaryRegistry.init();
         System.out.println("[zeroz4j] Connecting to " + wsUrl + "...");

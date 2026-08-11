@@ -7,23 +7,9 @@
        bean-discovery-mode="all">
 
     <!--
-      RmiSecurityFilter and DevLoginServlet implement the servlet API, which is not on the Helidon
-      server's runtime classpath. Weld would otherwise log three WELD-000119 "underlying class
-      loading error" lines on every boot — harmless, but alarming enough to send people debugging
-      the wrong thing.
-
-      The condition matters: in a servlet container jakarta.servlet.Filter *is* available, these
-      stay beans, and nothing is excluded.
+      No <scan> exclusions. There were two, for RmiSecurityFilter and DevLoginServlet, which
+      implemented the servlet API and so failed to load on the Helidon runtime. Both classes are
+      gone; this module now references no servlet type at all, which is what makes it safe to drop
+      into somebody else's WAR.
     -->
-    <scan>
-        <exclude name="com.zeroz4j.server.RmiSecurityFilter">
-            <if-class-not-available name="jakarta.servlet.Filter"/>
-        </exclude>
-        <exclude name="com.zeroz4j.server.DevLoginServlet">
-            <if-class-not-available name="jakarta.servlet.http.HttpServlet"/>
-        </exclude>
-        <exclude name="com.zeroz4j.server.DevLoginServlet$DevUser">
-            <if-class-not-available name="jakarta.servlet.http.HttpServlet"/>
-        </exclude>
-    </scan>
 </beans>

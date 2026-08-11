@@ -18,6 +18,7 @@
 package com.zeroz4j.server.jakarta;
 
 import com.zeroz4j.server.StaticContent;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,18 +67,25 @@ public class Zeroz4jShellServlet extends HttpServlet {
             throws IOException {
         String path = request.getPathInfo() != null ? request.getPathInfo() : request.getServletPath();
 
-        String resolved = StaticContent.resolve(path);
+        StaticContent.Assets assets = assetsFor(request);
+        String resolved = StaticContent.resolve(path, assets);
         if (resolved == null) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-        InputStream content = StaticContent.open(resolved);
-        if (content == null) {
+        String contentType = StaticContent.contentType(resolved);
+
+        // The shell is the one resource that depends on where the application is deployed: it gets a
+        // <base href> for this context path, so a deep link three segments down still finds
+        // js/classes.js, and the client reads the application's own root from document.baseURI.
+        byte[] shell = StaticContent.SHELL.equals(resolved)
+                ? StaticContent.shellBytes(request.getContextPath(), assets) : null;
+        InputStream content = shell != null ? null : assets.open(resolved);
+        if (shell == null && content == null) {
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
 
-        String contentType = StaticContent.contentType(resolved);
         response.setContentType(contentType);
 
         String cookie = StaticContent.clientIdCookieFor(
@@ -86,8 +94,58 @@ public class Zeroz4jShellServlet extends HttpServlet {
             response.addHeader("Set-Cookie", cookie);
         }
 
+        if (shell != null) {
+            response.setCharacterEncoding("UTF-8");
+            response.setContentLength(shell.length);
+            try (OutputStream out = response.getOutputStream()) {
+                out.write(shell);
+            }
+            return;
+        }
+
         try (InputStream in = content; OutputStream out = response.getOutputStream()) {
             in.transferTo(out);
         }
+    }
+
+    /**
+     * The classpath first, then the WAR's own web content.
+     *
+     * <p><b>Both, because a WAR has two plausible homes for a static file and only one of them is on
+     * the classpath.</b> The framework's service worker and offline page travel inside
+     * {@code zerozstack-server-core}, so they are classpath resources under
+     * {@code /META-INF/resources/}. An application's {@code index.html} and client bundle normally
+     * live in {@code src/main/webapp}, which lands in the archive root — and a WAR's classloader sees
+     * {@code WEB-INF/classes} and {@code WEB-INF/lib}, not the root. Mapped at {@code /} this servlet
+     * <em>replaces</em> the container's default servlet, so nothing else is left to serve them: a WAR
+     * packaged the obvious way answered 404 to every request, its own shell included.</p>
+     *
+     * <p>Classpath first so that a jar-packaged asset cannot be shadowed by a file dropped into the
+     * archive root, and so the framework's own two files always resolve.</p>
+     */
+    private static StaticContent.Assets assetsFor(HttpServletRequest request) {
+        ServletContext context = request.getServletContext();
+        return new StaticContent.Assets() {
+
+            @Override
+            public boolean exists(String path) {
+                return StaticContent.CLASSPATH.exists(path) || webResource(path) != null;
+            }
+
+            @Override
+            public InputStream open(String path) {
+                InputStream fromClasspath = StaticContent.CLASSPATH.open(path);
+                return fromClasspath != null ? fromClasspath : webResource(path);
+            }
+
+            private InputStream webResource(String path) {
+                if (context == null || path.startsWith("WEB-INF/") || path.startsWith("META-INF/")) {
+                    // WEB-INF and META-INF are not public web content, and getResourceAsStream will
+                    // happily hand them over. Serving web.xml would be a rather large mistake.
+                    return null;
+                }
+                return context.getResourceAsStream("/" + path);
+            }
+        };
     }
 }

@@ -66,13 +66,19 @@ public class StaticContentResource {
         if (resolved == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
-        InputStream content = StaticContent.open(resolved);
-        if (content == null) {
+
+        // The shell carries a <base href> for wherever the application is deployed. This binding is a
+        // catch-all at the application root, so that is "/" — but it goes through the same method the
+        // servlet binding uses, because a shell that differed between the two would mean deep links
+        // resolving their assets under one and not the other.
+        Object entity = StaticContent.SHELL.equals(resolved)
+                ? StaticContent.shellBytes(contextPath()) : StaticContent.open(resolved);
+        if (entity == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
 
         String contentType = StaticContent.contentType(resolved);
-        Response.ResponseBuilder response = Response.ok(content, contentType);
+        Response.ResponseBuilder response = Response.ok(entity, contentType);
 
         String cookie = StaticContent.clientIdCookieFor(contentType,
                 httpHeaders == null ? null : httpHeaders.getHeaderString(HttpHeaders.COOKIE),
@@ -82,5 +88,19 @@ public class StaticContentResource {
             response.header("Set-Cookie", cookie);
         }
         return response.build();
+    }
+
+    /**
+     * Where this application is mounted, for the shell's {@code <base href>}.
+     *
+     * <p>{@code UriInfo.getBaseUri()} is the JAX-RS application root — the servlet context plus the
+     * {@code @ApplicationPath}. In the standalone server that is {@code "/"}; in a WAR that took this
+     * module anyway it is the context path, which is the answer the base element needs.</p>
+     */
+    private String contextPath() {
+        if (uriInfo == null || uriInfo.getBaseUri() == null) {
+            return "/";
+        }
+        return uriInfo.getBaseUri().getPath();
     }
 }

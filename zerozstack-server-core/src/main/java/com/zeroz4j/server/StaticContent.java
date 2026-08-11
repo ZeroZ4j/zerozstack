@@ -17,8 +17,11 @@
  */
 package com.zeroz4j.server;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 /**
  * How a request path becomes a file from {@code /META-INF/resources/}, independent of how it arrived.
@@ -41,6 +44,59 @@ public final class StaticContent {
     private StaticContent() {}
 
     /**
+     * Where the served files are, for a deployment that does not keep them all on the classpath.
+     *
+     * <p>The framework's own assets — the service worker and the offline page — travel inside
+     * {@code zerozstack-server-core} and are therefore classpath resources under
+     * {@code /META-INF/resources/}, which is {@link #CLASSPATH} and the default everywhere.</p>
+     *
+     * <p>A WAR is the case that needs more. Its natural home for {@code index.html} and the client
+     * bundle is {@code src/main/webapp}, which lands in the archive root — <b>not</b> on the
+     * classloader's path, because a WAR's resource roots are {@code WEB-INF/classes} and
+     * {@code WEB-INF/lib}. A WAR packaged that way and served by {@code Zeroz4jShellServlet} answered
+     * 404 to every request including its own shell, and would have gone on doing so until somebody
+     * deployed it. The servlet therefore supplies an implementation that asks the classpath first and
+     * the {@code ServletContext} second, so both layouts work and neither has to be documented as the
+     * one that does.</p>
+     */
+    public interface Assets {
+
+        /**
+         * @param path a normalised path, with no leading slash
+         * @return whether something is there to serve
+         */
+        boolean exists(String path);
+
+        /**
+         * @param path a normalised path, with no leading slash
+         * @return the content, or null when it has vanished since it was resolved
+         */
+        InputStream open(String path);
+    }
+
+    /** The classpath under {@code /META-INF/resources/}: the default, and all a standalone server has. */
+    public static final Assets CLASSPATH = new Assets() {
+
+        @Override
+        public boolean exists(String path) {
+            return StaticContent.class.getResource(ROOT + path) != null;
+        }
+
+        @Override
+        public InputStream open(String path) {
+            URL resource = StaticContent.class.getResource(ROOT + path);
+            if (resource == null) {
+                return null;
+            }
+            try {
+                return resource.openStream();
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+    };
+
+    /**
      * Decides which classpath resource answers a request.
      *
      * <p>A client route like {@code /projects/42} has no file behind it. Real URLs mean the browser
@@ -53,17 +109,28 @@ public final class StaticContent {
      * @return the resource path to serve, or null when nothing should be
      */
     public static String resolve(String path) {
+        return resolve(path, CLASSPATH);
+    }
+
+    /**
+     * {@link #resolve(String)} against somewhere other than the classpath.
+     *
+     * @param path   the requested path, with or without a leading slash
+     * @param assets where to look
+     * @return the resource path to serve, or null when nothing should be
+     */
+    public static String resolve(String path, Assets assets) {
         String candidate = normalize(path);
         if (candidate.isEmpty()) {
-            return exists(SHELL) ? SHELL : null;
+            return assets.exists(SHELL) ? SHELL : null;
         }
-        if (exists(candidate)) {
+        if (assets.exists(candidate)) {
             return candidate;
         }
         if (looksLikeAsset(candidate)) {
             return null;
         }
-        return exists(SHELL) ? SHELL : null;
+        return assets.exists(SHELL) ? SHELL : null;
     }
 
     /**
@@ -122,15 +189,101 @@ public final class StaticContent {
      * @return the stream, or null when the resource has vanished since it was resolved
      */
     public static InputStream open(String path) {
-        URL resource = StaticContent.class.getResource(ROOT + path);
-        if (resource == null) {
+        return CLASSPATH.open(path);
+    }
+
+    /**
+     * The application shell with a {@code <base href>} for the deployment's context path.
+     *
+     * <p><b>Why the shell cannot be served byte-for-byte.</b> A shell answers two kinds of URL: its
+     * own, and every client route that falls back to it. Relative asset references therefore resolve
+     * against a <em>different</em> directory depending on which route the browser happened to ask
+     * for — {@code js/classes.js} on {@code /messages/42} means {@code /messages/js/classes.js},
+     * which is a 404 and a blank page. Writing the references absolute (`/js/classes.js`) fixes that
+     * and breaks the moment the application is deployed under a context path, because the leading
+     * slash escapes it.</p>
+     *
+     * <p>One {@code <base>} fixes both, and only the server knows what to put in it. Everything the
+     * page and the client then resolve relatively — the bundle, the manifest, the icons, a form
+     * action, {@code document.baseURI} itself, which is where {@code AppBase} on the client reads the
+     * application's root from — lands inside the deployment wherever it was deployed.</p>
+     *
+     * <p>An application that already declares its own {@code <base>} is left alone.</p>
+     *
+     * @param contextPath the deployment's context path, e.g. {@code "/coachapp"}; {@code null} or
+     *                    empty for an application served from the site root
+     * @return the shell, UTF-8 encoded, or null when there is no shell to serve
+     */
+    public static byte[] shellBytes(String contextPath) {
+        return shellBytes(contextPath, CLASSPATH);
+    }
+
+    /**
+     * {@link #shellBytes(String)} against somewhere other than the classpath.
+     *
+     * @param contextPath the deployment's context path
+     * @param assets      where the shell is
+     * @return the shell, UTF-8 encoded, or null when there is no shell to serve
+     */
+    public static byte[] shellBytes(String contextPath, Assets assets) {
+        InputStream in = assets.open(SHELL);
+        if (in == null) {
             return null;
         }
-        try {
-            return resource.openStream();
-        } catch (Exception ex) {
+        String html;
+        try (InputStream stream = in) {
+            html = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
             return null;
         }
+        return withBaseHref(html, contextPath).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Inserts a {@code <base href>} into a document that has none.
+     *
+     * <p>Split out from {@link #shellBytes(String)} so the rule is testable without a shell on the
+     * classpath, and shared by both HTTP bindings so they cannot disagree about it.</p>
+     *
+     * @param html        the document
+     * @param contextPath the deployment's context path
+     * @return the document, with a base element when it needed one
+     */
+    public static String withBaseHref(String html, String contextPath) {
+        if (html == null) {
+            return null;
+        }
+        String lower = html.toLowerCase(Locale.ROOT);
+        if (lower.contains("<base ") || lower.contains("<base>")) {
+            return html;                              // the application has said what it wants
+        }
+        int head = lower.indexOf("<head");
+        if (head < 0) {
+            return html;                              // not a document we can safely rewrite
+        }
+        int insertAt = html.indexOf('>', head);
+        if (insertAt < 0) {
+            return html;
+        }
+        return html.substring(0, insertAt + 1)
+                + "\n<base href=\"" + baseHref(contextPath) + "\">"
+                + html.substring(insertAt + 1);
+    }
+
+    /**
+     * The value a {@code <base href>} takes for a context path: always absolute, always ending in a
+     * slash, because a base without a trailing slash resolves relative URLs against the parent
+     * directory and would silently strip the context path back off again.
+     *
+     * @param contextPath the deployment's context path, possibly null or empty
+     * @return the href, e.g. {@code "/coachapp/"} or {@code "/"}
+     */
+    public static String baseHref(String contextPath) {
+        if (contextPath == null || contextPath.isEmpty() || "/".equals(contextPath)) {
+            return "/";
+        }
+        String path = contextPath.startsWith("/") ? contextPath : "/" + contextPath;
+        return path.endsWith("/") ? path : path + "/";
     }
 
     /**
@@ -154,10 +307,6 @@ public final class StaticContent {
             return null;
         }
         return ClientIdentity.cookieHeader(ClientIdentity.issue(), ClientIdentity.secureFor(scheme));
-    }
-
-    private static boolean exists(String path) {
-        return StaticContent.class.getResource(ROOT + path) != null;
     }
 
     /** Strips a leading slash and treats null, empty and "/" alike, so both bindings agree. */

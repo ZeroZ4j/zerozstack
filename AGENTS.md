@@ -362,8 +362,9 @@ not**: they build runnable jars and have their own main classes and ports, so tw
 which is how you open two windows as different users.
 
 Dev credentials are `demo` / `demo` (role `user`) and `admin` / `admin` (roles `user`, `admin`). The
-client passes them as WebSocket handshake parameters and `DevAuth` validates them. (`DevLoginServlet` is
-a separate servlet-container path at `/dev-login`, not what the examples use.)
+client passes them as WebSocket handshake parameters and `DevAuth` validates them. There is no HTTP
+login page and no HTTP-level gate: **authentication happens at the handshake, and an unauthenticated
+visitor loads the page normally** and is refused at every `@Secured` call.
 
 **To replace it:** implement `com.zeroz4j.server.AuthenticationProvider` and register it in
 `META-INF/services/com.zeroz4j.server.AuthenticationProvider`. Discovery is via `ServiceLoader`, not

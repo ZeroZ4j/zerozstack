@@ -18,6 +18,7 @@
 package com.zeroz4j.client.router;
 
 import com.zeroz4j.api.RmiSecurityContext;
+import com.zeroz4j.client.AppBase;
 import com.zeroz4j.ui.component.Component;
 
 import java.util.ArrayList;
@@ -48,6 +49,16 @@ import java.util.Map;
  *
  * <p>Nothing reaches the screen until every loader has returned, so there is no intermediate state
  * to design around — and no view that mounts, discovers it needs data, and re-renders.</p>
+ *
+ * <h2>Deployed under a context path</h2>
+ * <p>Route paths are written the way {@code @Route} declares them, and stay that way whether the
+ * application is served from {@code /} or from {@code /coachapp}. The router translates in both
+ * directions through {@link com.zeroz4j.client.AppBase}, so nothing in a route table, a
+ * {@code navigate} call or a {@code RouteParams} ever carries a context path.</p>
+ *
+ * <p>An {@code href} is the exception, because it has to be a real URL for middle-click and "open in
+ * new tab" to work — write those with {@code AppBase.location("/tasks/42")}. The router accepts
+ * either form on the way back in.</p>
  *
  * <h2>Loaders run in sequence, not in parallel</h2>
  * <p>Client code runs on a single cooperative scheduler and cannot create threads, so a layout's
@@ -98,9 +109,12 @@ public final class Router {
     public static void start(String containerElementId) {
         containerId = containerElementId;
         RouteRegistry.init();
-        RouterBrowser.onPopState(path -> renderInCoroutine(RouterBrowser.currentPath()));
+        // Route paths are what the route table is written in and what @Route declares; browser
+        // locations carry the deployment's context path in front of them. Every crossing between the
+        // two goes through AppBase, so a route table never has to know where it was deployed.
+        RouterBrowser.onPopState(path -> renderInCoroutine(AppBase.route(path)));
         RouterBrowser.interceptRouteLinks(Router::navigate);
-        renderInCoroutine(RouterBrowser.currentPath());
+        renderInCoroutine(AppBase.route(RouterBrowser.currentPath()));
     }
 
     /**
@@ -109,11 +123,18 @@ public final class Router {
      * @param path the path, e.g. {@code "/tasks/42"}
      */
     public static void navigate(String path) {
-        if (path == null || path.equals(currentPath)) {
+        // Either form is accepted: a route path as @Route declares it, or a full location as an
+        // anchor written with AppBase.location carries it. Anchors are the reason -- an href has to
+        // be a real URL for middle-click and "open in new tab" to land in the right application.
+        if (path == null) {
             return;
         }
-        RouterBrowser.pushState(path);
-        renderInCoroutine(path);
+        String route = AppBase.route(path);
+        if (route.equals(currentPath)) {
+            return;
+        }
+        RouterBrowser.pushState(AppBase.location(route));
+        renderInCoroutine(route);
     }
 
     /**
@@ -125,8 +146,9 @@ public final class Router {
      * @param path the path
      */
     public static void replace(String path) {
-        RouterBrowser.replaceState(path);
-        renderInCoroutine(path);
+        String route = AppBase.route(path);
+        RouterBrowser.replaceState(AppBase.location(route));
+        renderInCoroutine(route);
     }
 
     /**

@@ -315,6 +315,18 @@ WebAssembly today.
 - **`Zeroz4jShellServlet` is not auto-mapped.** Deliberately: mapping it at `/` from inside the
   framework would reintroduce the collision the module split exists to prevent. The deployment
   declares the mapping.
+- **Mapped at `/`, the shell servlet replaces the container's default servlet.** Nothing else serves
+  static files after that, so it serves them: the classpath under `/META-INF/resources/` first, then
+  the WAR's own web content through the `ServletContext`. `WEB-INF` and `META-INF` are never served
+  from the archive root. A file present in both places is served from the classpath.
+- **A context path is handled, but only for what the framework owns.** The shell is served with a
+  `<base href>` for the deployment's context path, and the router, `Pwa.install()` and
+  `Zeroz4jClient.defaultWebSocketUrl()` all read the application's root from it. Anything an
+  application writes with a leading slash — an `href`, a `fetch`, a redirect, a cookie `Path`, a
+  hand-built WebSocket URL — still escapes the context path, and does so silently until deployed.
+  Build those with `AppBase.location(...)` / `AppBase.url(...)`.
+- **The `<base href>` is skipped when the shell already declares one**, and when it has no `<head>`.
+  Both are deliberate, and both mean an application that does either owns the problem itself.
 
 ## Multi-tenancy
 

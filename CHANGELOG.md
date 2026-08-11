@@ -8,6 +8,59 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [Unreleased]
+
+### Fixed
+
+- **The RMI endpoint is now the CDI bean on every container, including Tomcat.**
+  `WasmRmiServerEngine` is `@ApplicationScoped` with three injected collaborators, and the container
+  asks the endpoint's configurator to create it. The Jakarta API delegates that to the container's
+  default configurator, and whether it knows about CDI is the container's business: WildFly's does,
+  and Tomcat's is literally `clazz.getConstructor().newInstance()`. Deployed to Tomcat the engine
+  therefore came up with three null fields and the first connection died in `onOpen` with
+  `NullPointerException: ... "this.syncEngine" is null`, followed by a client reconnecting for ever
+  against a server that failed it every time.
+
+  `RmiEndpointConfigurator.getEndpointInstance` now asks CDI first and falls back to the container
+  when the endpoint is not a bean or CDI is not running. Where the container already resolved the
+  bean this returns the same one, so nothing changes on WildFly or Helidon. Pinned by
+  `EndpointInstanceFromCdiTest`.
+
+- **An application deployed under a context path now works.** Nothing had ever been served from
+  anywhere but `/`, and four independent things assumed it: the router matched
+  `/coachapp/messages/42` against a route table written as `/messages/:id` and found nothing;
+  `navigate` pushed `/messages/42`, outside the deployment, so the next reload 404-ed;
+  `Pwa.install()` registered `/zeroz4j-sw.js`, a 404 under a context path, taking web push and the
+  offline page with it; and the shell's own relative asset references resolved against whichever
+  route the browser had asked for, so a hard refresh two segments deep returned a page with no
+  bundle.
+
+  The server now serves the shell with a `<base href>` for its context path — both HTTP bindings,
+  through one method in `StaticContent`, so they cannot drift — and the new
+  **`com.zeroz4j.client.AppBase`** reads the application's root from it. `Router` translates between
+  route paths and browser locations by itself; `Pwa.install()` registers the worker inside the
+  application; `Zeroz4jClient.defaultWebSocketUrl()` is the endpoint URL applications were writing by
+  hand, usually in one of the two ways that break.
+
+  Route tables, `@Route` paths and `navigate` calls are unchanged: a route path never carries a
+  context path. `AppBase.location(...)` is needed for anchors an application writes itself, because
+  an `href` has to be a real URL for middle-click to work.
+
+  The service worker was already scope-relative and needed no change. See
+  [ROUTING.md](docs/ROUTING.md#deployed-somewhere-other-than-the-site-root).
+
+- **`Zeroz4jShellServlet` now serves the WAR's own web content, not only the classpath.** A WAR keeps
+  `index.html` and the client bundle in `src/main/webapp`, which lands in the archive root — and a
+  WAR's classloader sees `WEB-INF/classes` and `WEB-INF/lib`, not the root. Mapped at `/` this
+  servlet *replaces* the container's default servlet, so nothing else was left to serve them: a WAR
+  packaged the obvious way answered **404 to every request, its own shell included**, and only a
+  deployment would have said so.
+
+  It now asks the classpath first — so a jar-packaged asset, the service worker above all, cannot be
+  shadowed by a file dropped into the archive root — and the `ServletContext` second. `WEB-INF` and
+  `META-INF` are never served from the archive root. `StaticContent` gained an `Assets` seam for
+  this; every existing single-argument method still means the classpath.
+
 ## [0.6.0] — 2026-08-07
 
 Three features that every non-trivial application had to build for itself, and one security fix.
@@ -151,6 +204,31 @@ their data declared alongside them.
   directly. Found while adding scoped signals; `SyncEngine`'s duplicate copy of the scope filter has
   been collapsed onto the shared one, which is what let the bug hide in one path and not the other.
 
+- **A WAR deployment answered 401 to every page.** `RmiSecurityFilter` in `zerozstack-server-core`
+  carried `@WebFilter("/*")`, so it installed itself into any application that depended on the
+  framework and refused every request that was not a `.js`/`.css`/`.png`/`.svg`/`.ico`/`.wasm`/`.jpg`
+  file unless the *container* had authenticated it. No application authenticated that way: the
+  framework's whole model — including its own OIDC module — decides identity at the WebSocket
+  handshake, which produces no `getUserPrincipal()`. So the shell, every client route, the PWA
+  manifest and the URL that redeems an emailed sign-in link were all 401, while the script bundle
+  loaded normally. There was no configuration in which the filter's happy path was reachable.
+
+  It went unnoticed for four releases because `jakarta.servlet` is absent from the Helidon runtime:
+  the class could not load, every example is a Helidon jar, and the module's `beans.xml` excluded it
+  from bean discovery for exactly that reason. In a servlet container it loads and self-registers.
+  Reported against the first WAR anyone deployed.
+
+  **`RmiSecurityFilter` and `DevLoginServlet` are deleted** rather than gated. Nothing referenced
+  either one, neither had a test or a line of documentation, and the model they implemented — a
+  container-managed login gate in front of HTTP — is not this framework's and was never finished:
+  the servlet's `/dev-login` page stored a principal in the HTTP session while the socket still
+  authenticated from query parameters, so the two never met. An application that genuinely wants HTTP
+  gated has a container `<security-constraint>`, which is enforced ahead of any filter anyway.
+
+  `zerozstack-server-core` now references no servlet type at all — the thing three documents already
+  claimed — and `NoServletTypesTest` reads the compiled classes each build to keep it that way.
+  `DevAuth`, which is what the handshake and the examples actually use, is untouched.
+
 ### Breaking
 
 - **`RmiSecurityContext.populate(String, Set)` is now `populate(String, Set, boolean)`.** Framework-
@@ -166,6 +244,11 @@ their data declared alongside them.
   standalone server is unaffected; a WAR simply does not take it. `zerozstack-server-core` now
   contains no JAX-RS type at all. The shell-fallback and content-type rules moved to
   `StaticContent` in core, shared by the JAX-RS resource and the new servlet so the two cannot drift.
+
+- **`RmiSecurityFilter` and `DevLoginServlet` are gone**, with the `/dev-login` page and the HTTP
+  gate they formed. Neither could run outside a servlet container, and inside one the gate made the
+  application unreachable (see Fixed). An application that mapped `/dev-login` deliberately must
+  provide its own; nothing else can be affected, because nothing else could reach them.
 
 - **`@DataModel` on a record, interface or enum is now a compile error.** It was silently skipped —
   no serializer, no warning — and the failure arrived at runtime on the first call that tried to send

@@ -139,6 +139,34 @@ In markup, add `data-route` to an anchor and the router takes it over:
 Only anchors carrying that attribute are intercepted — hijacking every link would swallow links to
 other sites and to downloads. Modified clicks (new tab, new window) are always left to the browser.
 
+## Deployed somewhere other than the site root
+
+A WAR is usually deployed under a context path — `/coachapp`, `/clientportal` — and then the browser
+shows `/coachapp/tasks/42` for the route `/tasks/42`. **Route paths never change.** `@Route` declares
+`/tasks/:id`, `Router.navigate("/tasks/42")` takes that, and `RouteParams.getPath()` reports it; the
+router translates to and from browser locations through `AppBase`, which reads the application's root
+from `document.baseURI`.
+
+That works because the server serves the shell with a `<base href>` for its own context path —
+`StaticContent` does this for both bindings, so no application configures it and nothing has to be
+rebuilt to move a deployment. It is also what makes a deep link's relative asset references resolve:
+`js/classes.js` in a shell served for `/coachapp/tasks/42` means `/coachapp/js/classes.js`, not
+`/coachapp/tasks/js/classes.js`.
+
+Two things an application still writes for itself, and both have a helper:
+
+```java
+Zeroz4jClient.connect(Zeroz4jClient.defaultWebSocketUrl(), () -> Router.start("app-root"));
+anchor.setAttribute("href", AppBase.location("/tasks/42"));   // /coachapp/tasks/42
+```
+
+An `href` has to carry the context path, because middle-click and "open in new tab" go to the server
+rather than through the router. The router accepts either form on the way back in, so a click on such
+an anchor still resolves to the route `/tasks/42`.
+
+Write relative references in `index.html` (`js/classes.js`, `manifest.webmanifest`), not absolute
+ones. An absolute `/js/classes.js` ignores the base element and escapes the context path.
+
 ## Guarding routes
 
 ```java
