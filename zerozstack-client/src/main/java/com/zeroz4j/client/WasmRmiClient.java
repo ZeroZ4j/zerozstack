@@ -115,6 +115,10 @@ public class WasmRmiClient {
         ClientSignalTransport.install();
         LiveMutations.install();
         ClientLazyAdapter.install();
+        // An idle socket is closed by whichever proxy has the shortest timeout - nginx at 60
+        // seconds, Cloudflare at 100 - and a browser cannot send a WebSocket ping frame itself.
+        // Only pings a connection that has gone quiet; see Keepalive.
+        Keepalive.start();
         if (channel instanceof WasmRmiClientChannel) {
             ((WasmRmiClientChannel) channel).addStateListener(WasmRmiClient::onStateChange);
         }
@@ -292,6 +296,9 @@ public class WasmRmiClient {
             }
 
             networkChannel.sendRawBytes(buffer.toByteArray());
+            // Outbound traffic postpones the next keepalive too - an application making calls
+            // needs no heartbeat.
+            Keepalive.noteActivity();
         } catch (Exception e) {
             pendingRequests.remove(msgId);
             callback.error(e);
@@ -299,6 +306,9 @@ public class WasmRmiClient {
     }
 
     static void routeIncomingMessage(byte[] rawPayload) {
+        // Anything arriving postpones the next keepalive: a connection carrying real traffic needs
+        // no heartbeat, which is what keeps this from being a poll.
+        Keepalive.noteActivity();
         sweepStaleRequests();
         // Inbound deserialization populates live instances through their setters;
         // suppress mutation tracking so applied state is never echoed back as a write.
@@ -373,6 +383,11 @@ public class WasmRmiClient {
                 // Sync notification from server (formerly SNAPSHOT)
                 // We just deserialize it, which will update the mapper instance inline!
                 BinarySerializer.readValue(buffer, MAPPER);
+            } else if (frameType == SyncFrameTypes.PONG) {
+                // The keepalive's answer. Nothing to do: arriving at all was the point, and
+                // noteActivity() above has already recorded it. Handled explicitly rather than
+                // falling through, so it is never reported as an unknown frame.
+                return;
             } else {
                 System.err.println("[zeroz4j] Unknown frame type: 0x" + Integer.toHexString(frameType & 0xFF));
             }

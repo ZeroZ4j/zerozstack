@@ -30,7 +30,7 @@ mvn clean install -DskipTests
     Use `:` as the classpath separator on Linux and macOS.
 
 The seven original examples share the main class `com.zeroz4j.example.server.ExampleServer` and bind
-port 8080. The four added in 0.6.0 have their own, and three of them use a different port so they can
+port 8080. The four added in 0.6.1 have their own, and three of them use a different port so they can
 run alongside another:
 
 | Example | Main class | Port |
@@ -40,7 +40,7 @@ run alongside another:
 | `scoped-signals` | `com.zeroz4j.example.scopedsignals.server.ScopedSignalsServer` | 8082 |
 | `pwa-install` | `com.zeroz4j.example.pwa.server.PwaInstallServer` | 8083 |
 
-Each of those also builds a runnable jar, so `java -jar <example>-server/target/<example>-server-0.6.0.jar`
+Each of those also builds a runnable jar, so `java -jar <example>-server/target/<example>-server-0.6.1.jar`
 works without a classpath.
 
 Most examples set `zeroz.security.mode=dev` and sign in as `demo` / `demo`, or `admin` / `admin` for

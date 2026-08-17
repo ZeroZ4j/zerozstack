@@ -105,6 +105,37 @@ public final class SyncFrameTypes {
     /** Server -> Client: One-shot push message (0x18). Payload: topic string + serialized payload. */
     public static final byte PUSH        = 0x18;
 
+    // --- Keepalive ---
+
+    /**
+     * Server -&gt; Client: the answer to a keepalive ping (0x19). No payload.
+     *
+     * <p>It exists so that traffic flows in BOTH directions. A proxy times a tunnel out on the
+     * direction it is reading, and nginx uses separate timers for each
+     * ({@code proxy_read_timeout} upstream-to-client, {@code proxy_send_timeout} the other way), so
+     * a ping the server merely swallowed would leave one of the two timers running.
+     */
+    public static final byte PONG        = 0x19;
+
+    /**
+     * Reserved service name for the keepalive ({@code zeroz4j.keepalive}).
+     *
+     * <p>The client sends {@code ping} with no arguments and a correlation id of 0 - fire and
+     * forget, because nothing waits for the answer. The server replies with one {@link #PONG}
+     * frame and does nothing else: no service lookup, no security check beyond the connection
+     * already being open, no request context.
+     *
+     * <p><b>Why the framework does this at all.</b> A WebSocket that carries nothing is closed by
+     * whatever proxy in the path has the shortest idle timeout - nginx defaults to 60 seconds,
+     * Cloudflare cuts at 100 and is not the application's to configure. Measured in a real
+     * deployment on 2026-08-17: sockets opened, authenticated, and died at exactly 60 seconds, over
+     * and over, each reconnect re-sending a growing pile of objects. Browsers do not expose
+     * WebSocket ping frames to page script, so an application cannot fix this without inventing a
+     * meaningless service method whose only purpose is to make a byte travel - which is what the
+     * application in question did, and why this now lives here instead.
+     */
+    public static final String KEEPALIVE_SERVICE = "zeroz4j.keepalive";
+
     /**
      * Reserved service name for re-synchronization after a reconnect ({@code zeroz4j.resync}).
      *

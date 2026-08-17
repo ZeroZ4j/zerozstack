@@ -29,7 +29,7 @@ container's job through a `<security-constraint>`, not the framework's.
 
 Up to and including 0.5.0 a servlet filter in `zerozstack-server-core` contradicted this: deployed in
 a WAR it answered 401 to every page unless the *container* had authenticated the request, which the
-model above never does. It has been removed — see the 0.6.0 changelog.
+model above never does. It has been removed — see the 0.6.1 changelog.
 
 ## Replacing the development provider
 
@@ -138,8 +138,8 @@ positive signal a form needs, since silence cannot be distinguished from a slow 
     `onResolved(() -> new Thread(this::mountUi).start())`. Otherwise it fails with
     *"suspension point reached from non-threading context"*.
 
-!!! warning "Fixed in 0.6.0"
-    Before 0.6.0 the frame did not carry the flag, and the client marked *any* AUTH frame as
+!!! warning "Fixed in 0.6.1"
+    Before 0.6.1 the frame did not carry the flag, and the client marked *any* AUTH frame as
     authenticated. A connection the provider had declined arrived named `"anonymous"` with no roles
     and `isAuthenticated()` returned `true`, so a gate built on `onAuthenticated` let every credential
     through. If you worked around this by checking for a role your provider only grants on success,

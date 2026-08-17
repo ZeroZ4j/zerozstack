@@ -903,6 +903,33 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param value   current value
      * @param mapper  object mapper for serialization
      */
+    /**
+     * Answers a keepalive ping with one empty {@link SyncFrameTypes#PONG} frame.
+     *
+     * <p>Five bytes and no payload. It is sent so that the tunnel carries traffic in the
+     * server-to-client direction as well: a proxy times each direction separately - nginx has
+     * {@code proxy_read_timeout} and {@code proxy_send_timeout} - so a ping the server merely
+     * swallowed would keep only one of the two timers alive.
+     *
+     * <p>Not logged. At one every twenty-odd seconds per open tab this would become the most
+     * frequent line in any server log and bury everything worth reading.
+     */
+    static void sendPong(Session session) {
+        if (!session.isOpen()) {
+            activeSessions.remove(session);
+            return;
+        }
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0);
+            buffer.put(SyncFrameTypes.PONG);
+            WsWrites.send(session, buffer.toByteArray());
+        } catch (Exception e) {
+            LOG.warning("[zeroz4j] Keepalive answer failed for session " + session.getId()
+                    + ": " + e.getMessage());
+        }
+    }
+
     static void sendSignalUpdate(Session session, String name, Object value, ObjectMapper mapper) {
         if (!session.isOpen()) {
             activeSessions.remove(session);
@@ -1096,6 +1123,14 @@ public class WasmRmiServerEngine implements EventPublisher {
                                 handleResync((java.util.List<?>) handles, session);
                             }
                         }
+                        return;
+                    }
+
+                    // The keepalive. Answered before the service registry is consulted and with no
+                    // work of any kind: it exists to make a byte travel in each direction, and a
+                    // heartbeat that did real work would be a way to load the server from outside.
+                    if (SyncFrameTypes.KEEPALIVE_SERVICE.equals(interfaceName)) {
+                        sendPong(session);
                         return;
                     }
 

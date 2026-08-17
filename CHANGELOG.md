@@ -8,6 +8,35 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.6.1] — 2026-08-17
+
+### Added
+
+- **A keepalive, so an idle connection is not closed by the proxy in front of it.** A WebSocket that
+  carries nothing is cut by whichever proxy in the path has the shortest idle timeout: nginx defaults
+  to **60 seconds** (`proxy_read_timeout`), and Cloudflare cuts at **100** and is not the
+  application's to configure. Measured in a real deployment — sockets opened, authenticated, and died
+  at exactly 60 seconds, over and over, each reconnect re-sending a growing pile of live objects.
+
+  **An application could not fix this itself.** Browsers do not expose WebSocket ping frames to page
+  script, so the only remedy available was to invent a service method whose sole purpose was to make
+  a byte travel, and then declare it on every service interface the application owned — where it sat
+  among the real operations looking like one of them. An application did exactly that, which is why
+  this now belongs to the transport.
+
+  The client sends a five-byte fire-and-forget frame to `zeroz4j.keepalive` after **25 seconds of
+  silence**; the server answers with one empty `PONG` (`0x19`). The answer matters as much as the
+  ping: a proxy times each **direction** separately, so a ping the server merely swallowed would keep
+  only one of the two timers alive. Any real traffic — a call, a signal update, a sync frame —
+  postpones the next ping, so a connection in use sends none at all.
+
+  On by default; `Keepalive.configure(seconds)` changes the interval and zero turns it off. Answering
+  costs the server nothing: no service lookup, no security check beyond the connection already being
+  open, no request context. Pinned by `KeepaliveFrameTest`.
+
+  Raising the proxy's own timeout is still worth doing where you control it. This exists because
+  usually you do not.
+
 ## [0.6.0] — 2026-08-17
 
 The biggest release so far. Four things every non-trivial application had to build for itself now

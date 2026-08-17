@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.6.0, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.6.1, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 

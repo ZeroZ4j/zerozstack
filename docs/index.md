@@ -5,7 +5,7 @@ your network layer is a binary RPC protocol over a persistent WebSocket, and you
 object graph on disk. You write no JavaScript, no JSON, no REST routes and no SQL.
 
 !!! warning "Experimental"
-    ZeroZ Stack is an experimental proof-of-concept at version **0.6.0**. It is a working demonstration,
+    ZeroZ Stack is an experimental proof-of-concept at version **0.6.1**. It is a working demonstration,
     not an industrialised production framework. Known gaps are listed in
     [Limitations](reference/limitations.md), and every page states its own limits where the feature is
     taught.
@@ -86,7 +86,7 @@ ChatService chat = new ChatService_Stub();
 sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text)));
 ```
 
-## New in 0.6.0
+## New in 0.6.1
 
 <div class="grid cards" markdown>
 
