@@ -53,6 +53,38 @@ public class ChatServiceImpl implements ChatService {
 }
 ```
 
+### Publishing to somebody in particular
+
+`publish(topic, payload)` reaches **every connected session, with no principal check**. That is right
+for genuinely public news and a data leak for anything else. When the payload belongs to somebody,
+name who:
+
+```java
+events.publishToUser(AccountEvents.BALANCE_CHANGED, balance, RmiRequestContext.getUsername());
+events.publishToClient(CartEvents.ITEM_ADDED, item, RmiRequestContext.getClientId());
+events.publishToSession(DraftEvents.SAVED, draft, RmiRequestContext.getSessionId());
+events.publish(BillingEvents.PLAN_CHANGED, plan, Scope.TENANT, RmiRequestContext.getTenantId());
+```
+
+| Form | Reaches | Needs a login? |
+|---|---|---|
+| `publish(topic, payload)` | every connected session | no |
+| `publishToSession(..., sessionId)` | one WebSocket connection | no |
+| `publishToClient(..., clientId)` | one browser, across reconnects and reloads | no |
+| `publishToUser(..., principalName)` | every tab and device of one person | **yes** |
+| `publish(..., Scope.TENANT, tenantId)` | everyone signed in to one tenant | **yes** |
+
+Take the target from `RmiRequestContext` — the connection's own identity — never from a method
+argument the client supplied. A client that can name the recipient can name somebody else's.
+
+`Scope.CLIENT` is the one for an application with no login. The client id is minted and signed by the
+server and kept in an `HttpOnly` cookie, so it survives reconnects and reloads and page script cannot
+read or forge it. It identifies a **browser, not a person**: someone else at the same machine and
+profile is the same client. Use `Scope.USER` or `Scope.TENANT` when you mean a person.
+
+A target that cannot be resolved — asking for `Scope.USER` on an anonymous connection — delivers to
+nobody rather than to everybody. Silence is the safe failure here.
+
 ## Subscribing (client)
 
 `ServerEvents.on` registers a typed handler — an ordinary callback. Update your components directly in it:
@@ -104,7 +136,12 @@ See [SIGNALS.md](SIGNALS.md) and the `todo-signals` example for the reactive mod
 
 Stated plainly so there are no surprises:
 
-* **Broadcast** to all currently connected sessions (no per-topic subscription filtering yet).
+* **Broadcast** to all currently connected sessions, unless the publish names a scope — then the
+  server sends the frame only to sessions matching that target, so an unscoped payload never reaches
+  a browser it was not meant for.
+* **No per-topic subscription filtering.** Within the sessions a publish reaches, every client gets
+  the frame and its handlers decide; a client that registered no handler for the topic ignores it.
+  Scope is the security boundary, not topic registration.
 * **At most once** — a disconnected client misses events; there is no queueing, acknowledgement, or redelivery.
 * **No replay** — late subscribers do not receive past events.
 * Payloads must be wire-serializable: `@DataModel` classes or types supported by `BinarySerializer`.

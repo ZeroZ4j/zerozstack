@@ -91,14 +91,19 @@ tenants.
 public static final ValueSignal<Money> BALANCE = Signals.shared(Money.zero());
 ```
 
-**Fix:** scope it. Events and LiveSync both take a scope:
+**Fix:** scope it. All three mechanisms take a scope:
 
 ```java
 events.publishToUser(AccountEvents.BALANCE_CHANGED, balance, principalName);
 syncEngine.notifyChanged(balance, Scope.USER, principalName);
+
+// and a signal, declared once in the shared module
+public static final ScopedSignal<Money> BALANCE =
+        Signals.scoped("account.balance", Money.zero(), Scope.USER);
 ```
 
-A shared signal cannot be scoped, so per-user state is never a shared signal.
+Note that `Signals.shared` is the unscoped one — it is a single value the whole server agrees on, and
+per-user state must never be declared with it. `Signals.scoped` is the fix, not a workaround for it.
 
 This is a security bug, not an efficiency one. Treat it as such in review.
 

@@ -12,9 +12,9 @@ Keeping these apart keeps the mental model clean.
 `EventPublisher`, `ServerEvents`. An event has no current value and no replay. "Events are news."
 
 **Signal**
-: Reactive *state* — `ValueSignal`, `Computed`, `Effect`. Local to one tier, or shared across both
-via `Signals.shared`. Independent of events: events do not require signals and signals do not require
-events. "Signals are facts."
+: Reactive *state* — `ValueSignal`, `Computed`, `Effect`. Local to one tier, or crossing the wire via
+`Signals.shared` (one value for everybody) or `Signals.scoped` (one value each). Independent of
+events: events do not require signals and signals do not require events. "Signals are facts."
 
 **Push**
 : A transport direction, not a feature: any server-to-client frame. Events, shared-signal updates and
@@ -135,3 +135,36 @@ blocking, which is why client code must never create a `java.lang.Thread`.
 : A JDK 21 lightweight thread. The server hands each session's inbound frames to one, so thousands of
 open WebSockets do not exhaust the platform thread pool. Server-side only — the client's suspension
 mechanism is unrelated, despite the similar feel.
+
+**Scope**
+: *Who* a push reaches — `GLOBAL`, `SESSION`, `CLIENT`, `USER`, `TENANT`. It applies to events,
+LiveSync updates and scoped signals alike, and the server always resolves the target from the
+connection's own identity rather than from anything the client sent. Choosing one is a security
+decision, not a performance one.
+
+**Scoped signal**
+: A signal declared once but holding *one value per target* — `Signals.scoped(name, initial, scope)`.
+The server writes a particular target's value with `forTarget(...)`; the client reads its own with
+`mine()` and is never told which target that is. Contrast a **shared signal**, `Signals.shared`,
+which is a single value the whole server agrees on.
+
+**Client id**
+: A browser's identity when there is no login: 256 random bits minted and HMAC-signed by the server,
+kept in an `HttpOnly` cookie that page script cannot read. Unlike a session id it survives reconnects
+and reloads. It identifies a **browser profile, not a person** — everyone using that machine is the
+same client — so `USER` and `TENANT` are what you want when you mean somebody.
+
+**Route**
+: A URL pattern bound to a view — `@Route("/tasks/:id")` on a `RouteView`. The route *declares the
+data it needs*: `load` completes before `render` is called. The route table is generated at compile
+time, so a route that does not compile is not a route.
+
+**Shell**
+: The `index.html` the server returns for any path the client router owns, so a bookmarked
+`/tasks/42` loads the application instead of 404-ing. Served with a `<base href>` for the deployment's
+context path.
+
+**Service worker**
+: The browser-resident script that makes an application installable and caches the client bundle for
+a fast second start. It does **not** make a ZeroZ Stack application work offline — there is no
+client-side store — and is not intended to. See [PWA](../PWA.md).

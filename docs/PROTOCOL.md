@@ -15,6 +15,30 @@ Every WebSocket frame in ZeroZ Stack is binary and begins with a 4-byte ID:
 * **Correlation ID**: Used in Request/Response pairs to match server replies with suspended client coroutines.
 * **Handle ID**: Used in LiveSync frames to identify the synced object graph.
 
+## The handshake
+
+Everything above happens on a connection that has already been accepted. Two checks run first, before
+any frame is exchanged.
+
+**Origin.** The `Origin` header must match the host the request was sent to, or one of the origins in
+`zeroz.origins`. This is not optional politeness: a browser attaches cookies to any connection to your
+origin, including one opened by a page the user is merely visiting, so an unchecked `Origin` would
+hand that page the visitor's identity. A refused handshake is closed with WebSocket close code 1008.
+A handshake carrying no `Origin` at all is allowed — browsers always send one, so its absence means a
+non-browser client with no ambient cookies to abuse.
+
+**Client identity.** Every connection carries a browser id the *server* minted: 256 random bits,
+HMAC-signed, delivered in an `HttpOnly`, `SameSite=Strict` cookie that page script cannot read. It is
+not a session id — it survives reconnects and reloads — and it is not a user: it identifies a browser
+profile, and anyone at that machine is the same client. It backs `Scope.CLIENT` and
+`RmiRequestContext.getClientId()`, which is what lets an application with no login keep one browser's
+state to itself.
+
+**Credentials**, if any, are presented here too — as handshake parameters or headers, read by the
+application's `AuthenticationProvider`. A provider that declines does not fail the upgrade: the
+connection proceeds anonymously and is refused at every `@Secured` call, because a rejected upgrade
+gives the client no way to report why.
+
 ## RPC Protocol (RMI)
 
 Remote Method Invocations allow the client to call server-side CDI beans directly.
@@ -39,9 +63,22 @@ Server responses include an explicit opcode byte at index 4.
   * Payload: `[String]` (Error message)
 * **0x02 — PUSH (Server-initiated)**
   * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
-* **0x03 — AUTH (Authentication Handshake)**
-  * Sent automatically on connection open.
-  * Payload: `[String]` (Username) + `[4 bytes]` (Role Count) + `[N Strings]` (Roles)
+* **0x03 — AUTH (Authentication Result)**
+  * Sent by the **server** on every connection open, including anonymous and rejected ones. The
+    client never sends this frame; credentials are presented on the WebSocket handshake instead.
+  * Payload: `[1 byte]` (Protocol Version, currently `2`) + `[1 byte]` (Authenticated: `1` or `0`) +
+    `[String]` (Username) + `[4 bytes]` (Role Count) + `[N Strings]` (Roles)
+  * **The authenticated flag is the server's decision and nothing else stands in for it.** A refused
+    connection still carries a name (`"anonymous"`), and a genuinely signed-in user may hold no roles
+    at all — so neither field can be used to infer the outcome. Before version 2 the flag did not
+    exist and clients assumed success, which meant a rejected credential reported as authenticated.
+  * The frame is sent even when authentication fails, because silence cannot be told apart from a
+    slow network. A client reading a frame with no version byte treats the connection as
+    unauthenticated rather than guessing.
+* **0x18 — PUSH (One-shot server message)**
+  * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
+  * Scoped publishes are filtered **server-side**: a frame is written only to sessions matching the
+    target. Topic filtering is the client's job, session filtering is not.
 
 ## LiveSync Protocol (0x10 – 0x1F)
 
@@ -67,9 +104,14 @@ LiveSync handles real-time object graph synchronization and reactive signals.
     service `zeroz4j.signals` (method `subscribe`, one String argument: the signal name);
     the server intercepts it before service dispatch and answers with the retained value.
 * **0x17 — SIGNAL_UPD** (Server -> Client)
-  * Shared signal value. Broadcast to all sessions on every server-side change, and sent
+  * A signal's value. Broadcast to all sessions on every server-side change, and sent
     directly to a session in response to a subscribe.
   * Payload: `[String]` Signal Name + `[Type Tag + Value]` Serialized Value
+  * **A scoped signal uses the same frame and carries the family's base name only** — never the
+    target. The server resolves the target from the subscribing session's own identity and sends
+    that target's value; the frame is written only to sessions matching it. A client therefore
+    cannot tell a scoped signal from a shared one, cannot name a target, and never learns that other
+    targets exist.
 
 ## Binary Type Tags (Serialization)
 

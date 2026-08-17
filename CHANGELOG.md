@@ -8,65 +8,20 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.6.0] — 2026-08-17
 
-### Fixed
+The biggest release so far. Four things every non-trivial application had to build for itself now
+ship with the framework: state that belongs to one tenant, user or browser is a first-class kind of
+signal; logging in against an OpenID Connect provider is a dependency rather than a project; URLs map
+to views with their data declared alongside them; and an application can be installed on a phone.
 
-- **The RMI endpoint is now the CDI bean on every container, including Tomcat.**
-  `WasmRmiServerEngine` is `@ApplicationScoped` with three injected collaborators, and the container
-  asks the endpoint's configurator to create it. The Jakarta API delegates that to the container's
-  default configurator, and whether it knows about CDI is the container's business: WildFly's does,
-  and Tomcat's is literally `clazz.getConstructor().newInstance()`. Deployed to Tomcat the engine
-  therefore came up with three null fields and the first connection died in `onOpen` with
-  `NullPointerException: ... "this.syncEngine" is null`, followed by a client reconnecting for ever
-  against a server that failed it every time.
+It also deploys as a WAR on a Jakarta EE server for the first time. That is listed as an addition
+because the module is new, but most of the work was in Fixed: the first real WildFly deployment found
+four separate faults that no Helidon example could ever have shown, including a servlet filter that
+answered 401 to every page.
 
-  `RmiEndpointConfigurator.getEndpointInstance` now asks CDI first and falls back to the container
-  when the endpoint is not a bean or CDI is not running. Where the container already resolved the
-  bean this returns the same one, so nothing changes on WildFly or Helidon. Pinned by
-  `EndpointInstanceFromCdiTest`.
-
-- **An application deployed under a context path now works.** Nothing had ever been served from
-  anywhere but `/`, and four independent things assumed it: the router matched
-  `/coachapp/messages/42` against a route table written as `/messages/:id` and found nothing;
-  `navigate` pushed `/messages/42`, outside the deployment, so the next reload 404-ed;
-  `Pwa.install()` registered `/zeroz4j-sw.js`, a 404 under a context path, taking web push and the
-  offline page with it; and the shell's own relative asset references resolved against whichever
-  route the browser had asked for, so a hard refresh two segments deep returned a page with no
-  bundle.
-
-  The server now serves the shell with a `<base href>` for its context path — both HTTP bindings,
-  through one method in `StaticContent`, so they cannot drift — and the new
-  **`com.zeroz4j.client.AppBase`** reads the application's root from it. `Router` translates between
-  route paths and browser locations by itself; `Pwa.install()` registers the worker inside the
-  application; `Zeroz4jClient.defaultWebSocketUrl()` is the endpoint URL applications were writing by
-  hand, usually in one of the two ways that break.
-
-  Route tables, `@Route` paths and `navigate` calls are unchanged: a route path never carries a
-  context path. `AppBase.location(...)` is needed for anchors an application writes itself, because
-  an `href` has to be a real URL for middle-click to work.
-
-  The service worker was already scope-relative and needed no change. See
-  [ROUTING.md](docs/ROUTING.md#deployed-somewhere-other-than-the-site-root).
-
-- **`Zeroz4jShellServlet` now serves the WAR's own web content, not only the classpath.** A WAR keeps
-  `index.html` and the client bundle in `src/main/webapp`, which lands in the archive root — and a
-  WAR's classloader sees `WEB-INF/classes` and `WEB-INF/lib`, not the root. Mapped at `/` this
-  servlet *replaces* the container's default servlet, so nothing else was left to serve them: a WAR
-  packaged the obvious way answered **404 to every request, its own shell included**, and only a
-  deployment would have said so.
-
-  It now asks the classpath first — so a jar-packaged asset, the service worker above all, cannot be
-  shadowed by a file dropped into the archive root — and the `ServletContext` second. `WEB-INF` and
-  `META-INF` are never served from the archive root. `StaticContent` gained an `Assets` seam for
-  this; every existing single-argument method still means the classpath.
-
-## [0.6.0] — 2026-08-07
-
-Three features that every non-trivial application had to build for itself, and one security fix.
-State that belongs to one tenant, user or browser is now a first-class kind of signal; logging in
-against an OpenID Connect provider is a dependency rather than a project; and URLs map to views with
-their data declared alongside them.
+Read **Breaking** before upgrading. The authentication callbacks changed shape, and the AUTH frame
+gained two bytes.
 
 ### Added
 
@@ -152,6 +107,56 @@ their data declared alongside them.
   and the two now have separate hooks.
 
 ### Fixed
+
+- **The RMI endpoint is now the CDI bean on every container, including Tomcat.**
+  `WasmRmiServerEngine` is `@ApplicationScoped` with three injected collaborators, and the container
+  asks the endpoint's configurator to create it. The Jakarta API delegates that to the container's
+  default configurator, and whether it knows about CDI is the container's business: WildFly's does,
+  and Tomcat's is literally `clazz.getConstructor().newInstance()`. Deployed to Tomcat the engine
+  therefore came up with three null fields and the first connection died in `onOpen` with
+  `NullPointerException: ... "this.syncEngine" is null`, followed by a client reconnecting for ever
+  against a server that failed it every time.
+
+  `RmiEndpointConfigurator.getEndpointInstance` now asks CDI first and falls back to the container
+  when the endpoint is not a bean or CDI is not running. Where the container already resolved the
+  bean this returns the same one, so nothing changes on WildFly or Helidon. Pinned by
+  `EndpointInstanceFromCdiTest`.
+
+- **An application deployed under a context path now works.** Nothing had ever been served from
+  anywhere but `/`, and four independent things assumed it: the router matched
+  `/coachapp/messages/42` against a route table written as `/messages/:id` and found nothing;
+  `navigate` pushed `/messages/42`, outside the deployment, so the next reload 404-ed;
+  `Pwa.install()` registered `/zeroz4j-sw.js`, a 404 under a context path, taking web push and the
+  offline page with it; and the shell's own relative asset references resolved against whichever
+  route the browser had asked for, so a hard refresh two segments deep returned a page with no
+  bundle.
+
+  The server now serves the shell with a `<base href>` for its context path — both HTTP bindings,
+  through one method in `StaticContent`, so they cannot drift — and the new
+  **`com.zeroz4j.client.AppBase`** reads the application's root from it. `Router` translates between
+  route paths and browser locations by itself; `Pwa.install()` registers the worker inside the
+  application; `Zeroz4jClient.defaultWebSocketUrl()` is the endpoint URL applications were writing by
+  hand, usually in one of the two ways that break.
+
+  Route tables, `@Route` paths and `navigate` calls are unchanged: a route path never carries a
+  context path. `AppBase.location(...)` is needed for anchors an application writes itself, because
+  an `href` has to be a real URL for middle-click to work.
+
+  The service worker was already scope-relative and needed no change. See
+  [ROUTING.md](docs/ROUTING.md#deployed-somewhere-other-than-the-site-root).
+
+- **`Zeroz4jShellServlet` now serves the WAR's own web content, not only the classpath.** A WAR keeps
+  `index.html` and the client bundle in `src/main/webapp`, which lands in the archive root — and a
+  WAR's classloader sees `WEB-INF/classes` and `WEB-INF/lib`, not the root. Mapped at `/` this
+  servlet *replaces* the container's default servlet, so nothing else was left to serve them: a WAR
+  packaged the obvious way answered **404 to every request, its own shell included**, and only a
+  deployment would have said so.
+
+  It now asks the classpath first — so a jar-packaged asset, the service worker above all, cannot be
+  shadowed by a file dropped into the archive root — and the `ServletContext` second. `WEB-INF` and
+  `META-INF` are never served from the archive root. `StaticContent` gained an `Assets` seam for
+  this; every existing single-argument method still means the classpath.
+
 
 - **`RmiSecurityContext.isAuthenticated()` returned `true` for a connection the application's
   `AuthenticationProvider` had rejected.** The server sent an AUTH frame on every connection, naming a
@@ -663,6 +668,9 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[0.4.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.2.0...main
+[0.6.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.2.0...v0.4.0
 [0.2.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ZeroZ4j/zerozstack/releases/tag/v0.1.0

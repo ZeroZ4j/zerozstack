@@ -76,11 +76,15 @@ Framework rules (violating these produces silent runtime failures):
   <Model>_Rules; attach rules to UI fields with field.withRule(...) for live
   feedback, and rely on the server enforcing the same annotations on every
   RMI argument automatically — never re-implement per-field checks by hand.
-- Broadcast scope: events.publish(...) and a shared signal set() reach EVERY
+- Broadcast scope: events.publish(...) and a Signals.shared set() reach EVERY
   connected session with no principal check. Scope anything belonging to somebody:
-  events.publishToUser(topic, payload, principalName) or publishToSession(...),
-  and syncEngine.notifyChanged(obj, Scope.SESSION or Scope.USER, target).
-  Shared signals cannot be scoped — they are one value the whole server agrees on.
+  events.publishToUser(topic, payload, principalName), publishToSession(...) or
+  publishToClient(...); syncEngine.notifyChanged(obj, Scope.SESSION or
+  Scope.USER, target); and for a signal, declare it with
+  Signals.scoped(name, initial, scope) rather than Signals.shared — the server
+  writes a target with forTarget(...), the client reads its own with mine().
+  Take the target from RmiRequestContext, never from a method argument.
+  Scope.CLIENT works with no login at all: it identifies a browser, not a person.
 - LiveSync: annotate the state class @LiveSync, mutate it on the server, then call
   syncEngine.notifyChanged(state) — the client's instance updates in place.
   notifyChanged silently does NOTHING unless the object was already serialized to
@@ -288,9 +292,12 @@ A support-ticket queue with two roles:
   never trust a client-supplied username.
 - Reuse the authentication mechanism exactly as the reference example's server
   is configured — study how the reference example authenticates and how the
-  client learns its identity/roles (RmiSecurityContext.onAuthenticated,
-  getUsername, hasAnyRole). Do not build a custom login screen unless the
-  existing mechanism requires one.
+  client learns its identity/roles (RmiSecurityContext.onResolved to mount the
+  UI once the server has answered either way, onAuthenticated to reveal a
+  protected view, onAuthenticationFailed to show a sign-in error, plus
+  getUsername and hasAnyRole). Never mount the UI from onAuthenticated: it does
+  not fire for an anonymous connection, and the page renders blank. Do not build
+  a custom login screen unless the existing mechanism requires one.
 - Client: after authentication, render:
   * for every user: a submit form and "my tickets" list;
   * ONLY when RmiSecurityContext.hasAnyRole("admin"): an admin panel listing all

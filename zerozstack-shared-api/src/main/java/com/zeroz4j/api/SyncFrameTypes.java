@@ -41,7 +41,14 @@ public final class SyncFrameTypes {
     /** Server-initiated RPC push notification byte tag (0x02). Payload: topic string + serialized payload. */
     public static final byte RPC_PUSH     = 0x02;
 
-    /** Authentication frame byte tag (0x03) sent on connect. Payload: username string + role set. */
+    /**
+     * Authentication-result frame byte tag (0x03), sent by the server on every connect — including
+     * anonymous and refused ones, since silence cannot be told apart from a slow network.
+     *
+     * <p>Payload: protocol version byte (currently 2), authenticated flag byte, username string,
+     * role count int, role strings. The flag is the server's decision and nothing else stands in for
+     * it: a refused connection still carries a name, and an authenticated user may hold no roles.</p>
+     */
     public static final byte AUTH         = 0x03;
 
     /** Reserved interface name for framework-internal RMI-shaped frames. The client requests a
