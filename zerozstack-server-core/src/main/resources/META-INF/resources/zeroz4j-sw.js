@@ -112,6 +112,19 @@ self.addEventListener('fetch', function (event) {
                     caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
                 }
                 return response;
+            }).catch(function (reason) {
+                // A rejected fetch here used to escape: the browser logged "Uncaught (in promise)
+                // TypeError: Failed to fetch" from this line and turned the request into a network
+                // error, which is a worse answer than the one the network gave. It happens for any
+                // request this branch sees that the server refuses or that never leaves the device -
+                // an offline load, a URL the container rejects - and the application could neither
+                // catch it nor explain it.
+                //
+                // 504 rather than a rethrow: the caller asked for something and this says it could
+                // not be fetched, which is the truth and is inspectable in the network panel.
+                return new Response('Offline or unreachable: ' + request.url,
+                    { status: 504, statusText: 'Gateway Timeout',
+                      headers: { 'Content-Type': 'text/plain' } });
             });
         })
     );
