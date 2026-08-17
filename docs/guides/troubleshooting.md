@@ -164,6 +164,19 @@ The compiled client did not load or threw during startup. Open the browser conso
 shows up there. Check that `classes.js` is being served (the client build writes it to the client
 module's `target/js`) and that the page's script tag points at it.
 
+### The connection drops every 60 seconds when idle, and works again the moment you click
+
+A proxy in front of the application is closing a tunnel that carried nothing. nginx defaults to 60
+seconds (`proxy_read_timeout`), Cloudflare cuts at 100 and is not yours to configure. The giveaway is
+the regularity: sockets open, authenticate, and die at exactly the same age, each reconnect re-sending
+everything.
+
+Since 0.6.1 the client prevents this by itself — after 25 seconds of silence it sends a keepalive and
+the server answers. If you still see it, check that both ends are on 0.6.1 or later, and that nothing
+called `Keepalive.configure(0)`. Set a shorter interval than the proxy's timeout with
+`Keepalive.configure(seconds)`; raising the proxy's own timeout is still worth doing where you
+control it.
+
 ### An RMI call never returns
 
 The default request timeout is 30 seconds. If a call hangs, check the server log for an exception

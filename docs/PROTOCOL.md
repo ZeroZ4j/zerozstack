@@ -79,6 +79,27 @@ Server responses include an explicit opcode byte at index 4.
   * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
   * Scoped publishes are filtered **server-side**: a frame is written only to sessions matching the
     target. Topic filtering is the client's job, session filtering is not.
+* **0x19 — PONG (Keepalive answer)**
+  * No payload. The server's answer to a keepalive ping.
+  * It answers rather than swallowing because a proxy times each **direction** separately — nginx
+    uses `proxy_read_timeout` one way and `proxy_send_timeout` the other — so a ping the server
+    absorbed would keep only one of the two timers alive.
+
+## Keepalive
+
+An idle WebSocket is closed by whichever proxy in the path has the shortest timeout: nginx defaults
+to 60 seconds, Cloudflare cuts at 100. Browsers do not expose WebSocket ping frames to page script,
+so this cannot be solved above the transport — which is why it lives here rather than in an
+application's service interface.
+
+After **25 seconds of silence** the client sends a five-byte RMI-shaped frame naming the reserved
+service `zeroz4j.keepalive`, method `ping`, with correlation id `0` — fire and forget, because
+nothing waits for the answer. The server recognises the name before service dispatch and replies with
+one `0x19 PONG`: no service lookup, no security check beyond the connection already being open, no
+request context.
+
+Any real traffic postpones the next ping, so a connection in use sends none at all. `Keepalive.configure(seconds)`
+changes the interval; zero turns it off.
 
 ## LiveSync Protocol (0x10 – 0x1F)
 

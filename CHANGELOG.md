@@ -37,6 +37,16 @@ upgrading.
   Raising the proxy's own timeout is still worth doing where you control it. This exists because
   usually you do not.
 
+### Fixed
+
+- **A failed asset fetch in the service worker escaped as an uncaught rejection.** The cache-first
+  branch rethrew nothing and caught nothing, so any request the worker could not fetch — an offline
+  load, a URL the container refuses — surfaced as `Uncaught (in promise) TypeError: Failed to fetch`
+  in the console and turned the response into a generic network error. That is a worse answer than
+  the one the network actually gave, and the application could neither catch it nor explain it. The
+  branch now answers `504` with the URL in the body, which says what happened and is visible in the
+  network panel.
+
 ## [0.6.0] — 2026-08-17
 
 The biggest release so far. Four things every non-trivial application had to build for itself now
@@ -697,6 +707,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[0.6.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.4.0...v0.4.1

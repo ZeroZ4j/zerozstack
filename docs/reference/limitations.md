@@ -22,7 +22,10 @@ These exist in the source as annotations or constants and do nothing. Do not bui
 Since 0.5.0 a dropped WebSocket recovers by itself: the channel reconnects with backoff, a built-in
 banner shows the outage, shared signals re-subscribe, live objects are re-synced from the server,
 edits and writes made while offline are sent on reconnect, and RMI calls fail immediately with
-`DisconnectedException` instead of hanging. What automatic recovery deliberately does **not** cover:
+`DisconnectedException` instead of hanging. Since 0.6.1 an idle connection also sends a keepalive
+every 25 seconds, so a proxy in front of the application does not close it for silence.
+
+What automatic recovery deliberately does **not** cover:
 
 - **RMI calls are never replayed.** A call that failed to a drop is the application's to retry — the
   framework cannot know whether repeating it is safe. Catch `DisconnectedException`, or disable
