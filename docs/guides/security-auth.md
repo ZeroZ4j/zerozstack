@@ -237,9 +237,9 @@ Read it in a service with `RmiRequestContext.getClientId()`.
 ## Origin checks
 
 A browser attaches cookies to **any** connection to your origin, including one opened by a page the
-user happens to be visiting. Since the handshake now carries an identity cookie, an unchecked
-`Origin` would hand that page the victim's client id — so the handshake is refused unless the page
-that opened it is trusted.
+user happens to be visiting.
+Since the handshake now carries an identity cookie, an unchecked `Origin` would hand that page the
+victim's client id — so the handshake is refused unless the page that opened it is trusted.
 
 | `zeroz.origins` | Behaviour |
 |---|---|
@@ -252,18 +252,87 @@ non-browser client, which has no ambient cookies to abuse.
 
 A refused handshake is closed immediately with WebSocket close code 1008.
 
+## Naming the hosts you answer for
+
+The origin check on its own compares two headers that the same attacker controls together.
+Set `zeroz.hosts` to close that gap.
+
+| `zeroz.hosts` | Behaviour |
+|---|---|
+| unset (default) | No host check, exactly as before this setting existed. |
+| a comma-separated list | The `Host` header must be one of them, e.g. `app.example.com,app.example.com:8443`. An entry with no port accepts that name on any port. Case does not matter. |
+| `*` | No host check, said out loud. |
+
+```bash
+java -Dzeroz.hosts=app.example.com -jar myapp-server.jar
+```
+
+**What goes wrong without it.** An attacker puts up a page at `evil.com`.
+They also make the name `evil.com` point at your server's address, which anyone who owns a domain
+name can do.
+A visitor's browser then opens a socket to your server and sends `Origin: http://evil.com` and
+`Host: evil.com`.
+Those two match, so the same-origin rule lets the connection through, and the attacker's page is
+talking to your application as the visitor's browser.
+This is called **DNS rebinding**.
+
+Listing `app.example.com` stops it, because `evil.com` is not a name your deployment answers for.
+The check runs on every handshake, including one that sends no `Origin` header at all — the question
+it asks is which name the request was addressed to, not which page sent it.
+
+Two things to know:
+
+* `zeroz.origins=*` turns the origin check off and leaves the host check running. They are separate.
+* List every name the application is reached by, including the port when you pin one. A name you
+  forget stops working, and the log line for the refusal says exactly what would have been accepted.
+
+**Serve the application over HTTPS.** A rebound name has to present a certificate for itself, and it
+cannot get one for yours — so TLS is what stops the browser accepting the rebinding in the first
+place. The host allowlist is the second line, for the plain-HTTP case and for anything TLS misses.
+
 ## Development authentication
 
-With no provider registered and `zeroz.security.mode=dev` set, `DevAuth` accepts two hardcoded users:
+`DevAuth` gives you two accounts without an identity provider, for work on your own machine.
+It is off unless the system property `zeroz.security.mode` is `dev`, and nothing sets that for you.
+
+```bash
+java -Dzeroz.security.mode=dev -jar myapp-server.jar
+```
+
+The examples take `--dev-login` on the command line instead, which sets the same property.
 
 | Username | Password | Roles |
 |---|---|---|
 | `demo` | `demo` | `user` |
 | `admin` | `admin` | `user`, `admin` |
 
-Credentials arrive as `user` and `password` query parameters on the handshake. Four of the seven
-examples enable this. **It has no place in a deployment** — register a provider and the fallback is
-gone.
+Credentials arrive as `user` and `password` query parameters on the handshake.
+A server that has this on prints a warning at startup and again on the first sign-in, naming the two
+accounts, so nobody has to guess whether it is on.
+
+**It has no place in a deployment.** The passwords are in the source code, and a password in a URL
+ends up in browser history, in proxy access logs and in `Referer` headers.
+The framework itself writes no log line containing a handshake password, but everything between the
+browser and the server sees the URL.
+Register an `AuthenticationProvider` and the fallback is gone.
+
+## Static files
+
+The server serves whatever sits under `META-INF/resources/`, plus the application shell for any path
+the client router owns.
+
+A request path is refused outright — the same 404 a missing file gets — when it contains:
+
+* a `..` step, in any spelling, including one that was percent-encoded twice;
+* a backslash;
+* a null byte or any other control character;
+* a first segment of `WEB-INF` or `META-INF`.
+
+Both the JAX-RS binding and the servlet binding apply this before anything is looked up, so the two
+cannot disagree.
+Paths reach the framework already percent-decoded, because both the JAX-RS runtime and the servlet
+container decode them first; the framework never decodes again, which is what keeps a file name with
+a literal `%` in it from turning into something else.
 
 ## Limits
 
@@ -274,6 +343,8 @@ gone.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.
 - **Nothing gates HTTP.** Every page and asset is public; only RMI calls are checked. An application
   that needs the documents themselves protected uses a container `<security-constraint>`.
+- **The host allowlist is off until you set it.** With `zeroz.hosts` unset, a name somebody has
+  pointed at your server is accepted, as long as the page's `Origin` says the same name.
 
 ## See also
 

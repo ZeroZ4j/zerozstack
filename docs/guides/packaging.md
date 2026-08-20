@@ -110,6 +110,36 @@ shared. No shading anywhere — the container launches the same plain classpath 
 | To deploy to a server, Kubernetes, or any cloud | Shape 3 (`docker build`) |
 | One merged jar | Nothing — see the rule at the top |
 
+## Settings a real deployment needs
+
+Whichever shape you ship, set these before anyone outside your machine can reach the application.
+They all default to the behaviour that is convenient during development, which is not the behaviour
+you want in front of the internet.
+
+| Property | Set it to | Why |
+|---|---|---|
+| `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | Refuses a handshake addressed to a name you do not serve. Without it, an attacker who points their own domain at your server has a page that can talk to your application from a visitor's browser. |
+| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Generated at startup when unset, so a restart logs everyone's browser out and other nodes reject each other's ids. |
+| `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means same-origin only, which is what you want. |
+| `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two accounts whose passwords are printed in this documentation. |
+| `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | See below. |
+
+```bash
+java -Dzeroz.hosts=app.example.com \
+     -Dzeroz.clientId.secret=$MY_SECRET \
+     -Dzeroz.ws.maxBinaryMessageBytes=8388608 \
+     -jar myapp-server.jar
+```
+
+**Serve it over HTTPS.** The identity cookie is marked `Secure`, and TLS is what stops a browser
+accepting a name that has been repointed at your server. Behind a proxy that terminates TLS, set
+`zeroz.clientId.secureCookie=true` so the cookie keeps that mark.
+
+The development accounts are described in
+[Authentication and authorization](security-auth.md#development-authentication). The examples take a
+`--dev-login` flag to switch them on; nothing switches them on by itself, and a server that has them
+on says so at startup.
+
 ## Shape 4: a WAR on a Jakarta EE server
 
 Everything above assumes ZeroZ Stack brings its own server. It does not have to. To deploy into an

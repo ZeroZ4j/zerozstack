@@ -356,10 +356,14 @@ not**: they build runnable jars and have their own main classes and ports, so tw
 | `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.6.0.jar` | 8082 |
 
 **Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
-`components-showcase` set `zeroz.security.mode=dev` in their `ExampleServer.main` and show a client-side
-`Login` component. `todo-signals`, `form-signup` and `inventory-crud` connect anonymously.
-`routing-tour` and `scoped-signals` take credentials from the URL — `?user=admin&password=admin` —
-which is how you open two windows as different users.
+`components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup` and
+`inventory-crud` connect anonymously. `routing-tour` and `scoped-signals` take credentials from the
+URL — `?user=admin&password=admin` — which is how you open two windows as different users.
+
+**No example enables the development logins by itself.** Pass `--dev-login` to the server main class
+(the `run.bat` scripts do), or set `-Dzeroz.security.mode=dev` yourself; a server with it on prints
+`DevAuth.WARNING_BANNER` at startup and again on the first sign-in. Do not reintroduce a default:
+these classes are what applications get copied from.
 
 Dev credentials are `demo` / `demo` (role `user`) and `admin` / `admin` (roles `user`, `admin`). The
 client passes them as WebSocket handshake parameters and `DevAuth` validates them. There is no HTTP
@@ -398,15 +402,20 @@ it is deliberately unmapped so it cannot claim `/` in a WAR that has its own ser
 `zerozstack-server-jaxrs` to a WAR**: it is a catch-all at `/`. `zerozstack-server-core` contains no
 JAX-RS type, which is what makes it safe inside somebody else's WAR.
 
-**Set `zeroz.ws.maxBinaryMessageBytes`** in any real deployment. `@OnMessage` takes a whole message,
-so a response bigger than the container's binary buffer closes the socket rather than raising an
-error. `zeroz.ws.idleTimeoutMinutes` stops an abandoned tab holding a session forever. Both unset by
-default, leaving the container's own values.
+**`zeroz.ws.maxBinaryMessageBytes` defaults to 4 MB** (0.6.3+), matching gRPC. Set it only to move
+away from that. `@OnMessage` takes a whole message, so anything larger closes the socket rather than
+raising an error the application can catch. Do not leave it to the container: on Helidon the Jakarta
+WebSocket layer is Tyrus, whose message-assembly limit defaults to `Integer.MAX_VALUE`, so a chunked
+message could make the server assemble ~2 GB. This socket is not the route for file uploads.
+`zeroz.ws.idleTimeoutMinutes` stops an abandoned tab holding a session forever; it stays unset by
+default, leaving the container's own value.
 
 **Client identity without a login:** every connection carries a server-issued, HMAC-signed browser id
 in an `HttpOnly` cookie, readable as `RmiRequestContext.getClientId()` and used by `Scope.CLIENT`. It
 identifies a browser, not a person. Handshakes are also origin-checked; set `zeroz.origins` when the
-page is served from a different host than the socket.
+page is served from a different host than the socket, and set `zeroz.hosts` to the host names the
+deployment answers for — without it the same-origin rule compares two headers a DNS-rebinding page
+controls together. `zeroz.hosts` is unset by default and changes nothing until it is set.
 
 **Making an app installable:** `Pwa.install()` in `main` before `connect`, plus a manifest and
 `<link rel="manifest">`. **Never tell a user this makes the application work offline** — every view
