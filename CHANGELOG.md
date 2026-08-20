@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.7.0] — 2026-08-20
 
 A security review of the connection layer, the binary wire format and the HTTP surface, plus the
 file upload feature that review made it clear was missing.
@@ -796,6 +796,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.5.0...v0.6.0

@@ -73,7 +73,7 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
         <dependency>
             <groupId>com.zeroz4j</groupId>
             <artifactId>zerozstack-bom</artifactId>
-            <version>0.6.2</version>
+            <version>0.7.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -95,7 +95,7 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
 Or start from the archetype, which generates the three-module shape for you:
 
 ```bash
-mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.6.2
+mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.7.0
 ```
 
 Publication to Maven Central is planned; see
@@ -111,7 +111,7 @@ This repository contains the core framework and reference implementations.
 * **[Quickstart](docs/start/quickstart.md)** — build the framework and run a working example in about five minutes. Every command verified.
 * **[Choosing how state moves](docs/decide/index.md)** — ZeroZ Stack gives you five ways to propagate state (local signals, RMI, server events, shared signals, LiveSync). Picking the wrong one is the most common source of trouble in ZeroZ Stack applications; this is the decision procedure.
 * **[Troubleshooting](docs/guides/troubleshooting.md)** — symptom-first, and specifically covering the cases where nothing happens and there is no exception to search for.
-* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.6.2, stated plainly.
+* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.7.0, stated plainly.
 * **[Changelog](CHANGELOG.md)** — what changed and what breaks. Read the Breaking section before upgrading; 0.4.0 renames an artifact and changes several silent behaviours into thrown exceptions.
 * **[Glossary](docs/reference/glossary.md)** — event, signal, push, sync and mutation are not interchangeable terms here.
 

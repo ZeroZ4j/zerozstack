@@ -134,7 +134,7 @@ Helidon already wired up.
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=0.6.2 \
+  -DarchetypeVersion=0.7.0 \
   -DgroupId=com.example \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT

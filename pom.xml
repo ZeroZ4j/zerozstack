@@ -84,7 +84,7 @@
     </modules>
 
     <properties>
-        <revision>0.6.2</revision>
+        <revision>0.7.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <teavm.version>0.15.0</teavm.version>
         <!-- EclipseStore's serializer base, which carries the Lazy interface. MUST match the

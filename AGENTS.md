@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.6.2**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.7.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
