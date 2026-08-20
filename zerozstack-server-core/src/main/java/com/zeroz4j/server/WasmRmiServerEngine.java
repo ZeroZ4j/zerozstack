@@ -89,6 +89,40 @@ public class WasmRmiServerEngine implements EventPublisher {
     static final String ANONYMOUS_USER = "anonymous";
 
     /**
+     * User-property key naming <em>which</em> handshake check refused a connection.
+     *
+     * <p>Set by the handshake configurator alongside
+     * {@link RmiEndpointConfigurator#REJECTED_KEY}, to one of {@link #REFUSED_BY_ORIGIN} or
+     * {@link #REFUSED_BY_HOST}. Absent means the configurator did not say, and the connection is
+     * closed with a reason naming both checks.</p>
+     */
+    static final String REFUSED_BY_KEY = "zeroz.rejectedCheck";
+
+    /** The page that opened the connection is not an allowed origin. */
+    static final String REFUSED_BY_ORIGIN = "origin";
+
+    /** This deployment does not answer for the host name the connection asked for. */
+    static final String REFUSED_BY_HOST = "host";
+
+    /**
+     * What a browser is told when the origin check refused it.
+     *
+     * <p>Under the 123-byte limit a close reason has, and free of anything about the deployment: it
+     * names the check and the setting to look at, and nothing else. A developer meets this message
+     * with no stack trace to help them, so it has to point somewhere.</p>
+     */
+    static final String ORIGIN_REFUSED_REASON =
+            "Refused: this page's origin is not allowed. Check zeroz.origins on the server.";
+
+    /** What a browser is told when the host-name check refused it. */
+    static final String HOST_REFUSED_REASON =
+            "Refused: this server does not answer for that host name. See the server log.";
+
+    /** What a browser is told when the configurator did not say which check refused it. */
+    static final String HANDSHAKE_REFUSED_REASON =
+            "Refused: the origin or host name of this connection is not allowed. See the server log.";
+
+    /**
      * Largest binary message this endpoint will accept; unset applies
      * {@link #DEFAULT_MAX_BINARY_BYTES}.
      */
@@ -139,6 +173,42 @@ public class WasmRmiServerEngine implements EventPublisher {
 
     /** Structured Concurrency: Map each WebSocket session to its own Virtual Thread Executor */
     private final Map<String, ExecutorService> sessionExecutors = new ConcurrentHashMap<>();
+
+    /** Session id -> when that session was last answered a keepalive ping. */
+    private static final Map<String, Long> pingLastAnswered = new ConcurrentHashMap<>();
+
+    /** Session id -> permits for frames of that session being decoded and executed right now. */
+    private final Map<String, java.util.concurrent.Semaphore> sessionPermits = new ConcurrentHashMap<>();
+
+    /**
+     * How many frames from one connection may be decoding and executing at the same time.
+     *
+     * <p>The container delivers one message at a time per connection, but handing each one straight
+     * to a thread-per-task executor undoes that: the read loop is free to deliver the next message
+     * immediately, so a single connection could have as many frames in flight as it could write
+     * bytes. Decoding is where a small message becomes a large object graph, so unbounded
+     * concurrency multiplies the worst case a message-size limit is meant to cap.</p>
+     *
+     * <p>Thirty-two, and a caller that finds no permit waits rather than being refused. Nothing is
+     * dropped and no call fails, so the number does not have to exceed any burst an application can
+     * produce - a screen firing a dozen calls on load, or a reconnect flushing queued edits, is
+     * simply served a few at a time. It only has to be high enough that ordinary traffic never
+     * queues noticeably, and low enough to be a real ceiling. Waiting happens on that one
+     * connection's read loop, which is the backpressure wanted; other connections are untouched.</p>
+     */
+    static final String MAX_CONCURRENT_FRAMES_PROPERTY = "zeroz.ws.maxConcurrentFramesPerSession";
+    static final int DEFAULT_MAX_CONCURRENT_FRAMES = 32;
+
+    /**
+     * Shortest gap between two answered keepalive pings on one connection.
+     *
+     * <p>The client pings after 25 seconds of silence, so a working connection is nowhere near this.
+     * A connection that pings faster is not keeping itself alive, it is asking the server to do work
+     * in a loop, and the extra pings are dropped without an answer. One second, not zero, because
+     * answering has to stay the cheapest thing the server does.</p>
+     */
+    static final String PING_MIN_INTERVAL_PROPERTY = "zeroz.ws.keepaliveMinIntervalMillis";
+    static final long DEFAULT_PING_MIN_INTERVAL_MILLIS = 1000L;
 
     /**
      * Scans CDI container for beans implementing {@code @RmiService}-annotated interfaces
@@ -202,6 +272,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             LOG.warning("[zeroz4j] Warning: CDI service scan deferred: " + e.getMessage());
         }
         ServerSignalTransport.install(mapper);
+        Disclosures.install();
     }
 
     /**
@@ -236,7 +307,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             try {
                 session.close(new jakarta.websocket.CloseReason(
                         jakarta.websocket.CloseReason.CloseCodes.VIOLATED_POLICY,
-                        "Origin not allowed"));
+                        truncate(refusalReason(config))));
             } catch (Exception e) {
                 LOG.warning("[zeroz4j] Failed to close a refused handshake: " + e.getMessage());
             }
@@ -251,6 +322,8 @@ public class WasmRmiServerEngine implements EventPublisher {
         // a virtual-thread factory, identical to newVirtualThreadPerTaskExecutor().
         sessionExecutors.put(session.getId(),
                 Executors.newThreadPerTaskExecutor(SessionThreads.factory()));
+        sessionPermits.put(session.getId(),
+                new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
 
         // Propagate principal and roles from handshake
         Principal principal = (Principal) config.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
@@ -273,6 +346,11 @@ public class WasmRmiServerEngine implements EventPublisher {
         if (clientId != null) {
             session.getUserProperties().put(RmiEndpointConfigurator.CLIENT_KEY, clientId);
         }
+
+        // Before the first byte is written to this connection: everything the server sends it is
+        // recorded against its browser, and that record is what later decides whether it may ask for
+        // an object again. Keyed by browser rather than by connection, so a reconnect can re-sync.
+        Disclosures.sessionOpened(session);
 
         // Send AUTH frame (0x03) to client. A connection whose credentials the application's
         // AuthenticationProvider declined has no principal, and the frame must say so: reporting it
@@ -322,6 +400,14 @@ public class WasmRmiServerEngine implements EventPublisher {
         // Lazy references: release the handles disclosed to this session
         LazyHandles.sessionClosed(session.getId());
 
+        // Keepalive budget and in-flight permits for a session that no longer exists.
+        pingLastAnswered.remove(session.getId());
+        sessionPermits.remove(session.getId());
+
+        // The record of what this browser was sent survives on purpose: the next connection is the
+        // same browser and must still be able to re-sync. Only the connection mapping goes.
+        Disclosures.sessionClosed(session.getId());
+
         // Tell the application, after framework cleanup: apps keep registries keyed by session id
         // (scoped pushes, rooms) and previously had no way to learn a session was gone.
         try {
@@ -350,7 +436,34 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param authenticated whether an identity was actually accepted
      */
     /**
-     * Applies the message-size and idle limits to a new connection.
+     * The one sentence a refused handshake is closed with.
+     *
+     * <p>Two different checks refuse a handshake, and they are fixed in two different places, so the
+     * message has to say which one it was. Telling someone whose <em>host name</em> is not answered
+     * for that their origin was rejected sends them to read origin configuration that was never the
+     * problem.</p>
+     *
+     * <p>What it must not do is describe the deployment. This text goes to a browser, including a
+     * hostile one — that is the whole reason the connection is being refused — so it names the check
+     * and the setting to look at, never the configured values. The full explanation, with the
+     * configured list, is in the server log, which only the operator can read.</p>
+     *
+     * @param config the handshake configuration, carrying what the configurator decided
+     * @return the close reason, within the 123 bytes the protocol allows
+     */
+    private static String refusalReason(EndpointConfig config) {
+        Object refusedBy = config.getUserProperties().get(REFUSED_BY_KEY);
+        if (REFUSED_BY_ORIGIN.equals(refusedBy)) {
+            return ORIGIN_REFUSED_REASON;
+        }
+        if (REFUSED_BY_HOST.equals(refusedBy)) {
+            return HOST_REFUSED_REASON;
+        }
+        return HANDSHAKE_REFUSED_REASON;
+    }
+
+    /**
+     * Applies the configured message-size and idle limits to a new connection.
      *
      * <p><b>Message size.</b> {@link #MAX_BINARY_BYTES_PROPERTY} wins when it is set, so a
      * deployment that has already tuned this keeps its number. Unset, the framework applies
@@ -712,6 +825,20 @@ public class WasmRmiServerEngine implements EventPublisher {
      * instance in place; listeners are notified and the change is re-broadcast to all
      * sessions. On rejection the writer receives a session-targeted corrective sync of the
      * canonical state, reverting its optimistic local change.</p>
+     *
+     * <p><b>Trust model.</b> The second pass writes into whatever canonical instance each handle in
+     * the payload names, so authorization has to cover <em>every</em> object the payload reaches,
+     * not just the outermost one. It once covered only the outermost one, and a payload could
+     * therefore carry, nested inside a model the client may write, the handle of a model it may not
+     * — which was then overwritten and broadcast to every session. A {@link LiveMutationGuard} is
+     * installed for the whole decode and refuses the entire mutation the moment the payload reaches
+     * a canonical object that is not itself {@code @ClientWritable}, or whose declared write role
+     * the connection does not hold. Because the guard is installed for the <em>first</em> pass, the
+     * refusal happens before any canonical object has been touched.</p>
+     *
+     * <p>Authorization is decided on the class of the object the server holds, never on the class
+     * name in the frame: the frame's class name is the client's claim, and a payload naming a
+     * writable class over a restricted object's handle would otherwise pass.</p>
      */
     @SuppressWarnings("unchecked")
     /**
@@ -755,17 +882,9 @@ public class WasmRmiServerEngine implements EventPublisher {
             WsWrites.send(session, responseBuffer.toByteArray());
 
         } catch (Exception ex) {
-            LOG.log(Level.WARNING, "[zeroz4j] Lazy resolve failed: " + ex.getMessage(), ex);
-            try {
-                GrowableBuffer errorBuffer = new GrowableBuffer(256);
-                errorBuffer.putInt(messageId);
-                errorBuffer.put(SyncFrameTypes.RPC_ERROR);
-                BinarySerializer.writeString(errorBuffer,
-                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
-                WsWrites.send(session, errorBuffer.toByteArray());
-            } catch (Exception ioEx) {
-                LOG.warning("[zeroz4j] Failed to send lazy error: " + ioEx.getMessage());
-            }
+            // Same rule as an ordinary call: the refusal reaches the caller, a failure inside the
+            // loading of the subgraph does not - it would describe the store, not the request.
+            sendError(session, messageId, ex);
         }
     }
 
@@ -776,15 +895,21 @@ public class WasmRmiServerEngine implements EventPublisher {
      * fields, re-registering their handles for this (new) session — which is what brings lazy
      * resolution back to life after a reconnect.
      *
-     * <p><b>Trust model:</b> presenting a handle is treated as proof of prior disclosure, exactly
-     * as elsewhere in LiveSync — handles are unguessable random UUIDs that a client can only have
-     * learned by being sent the object. No role re-check happens here, because objects carry no
-     * roles; a service that discloses an object under a role check has disclosed it.
+     * <p><b>Trust model:</b> being sent an object is what earns the right to re-read it. The server
+     * keeps a record of every handle it has written toward each browser ({@link Disclosures}) and
+     * answers only for handles in the caller's own record. Presenting a handle used to be proof
+     * enough on the theory that a handle can only be learned by being sent the object — which is not
+     * so, because an object nested inside a broadcast event or signal travels with its own handle
+     * attached, teaching every recipient the names of things they were never given.
      *
-     * <p>Handles this server does not know mean the server restarted since the client fetched
-     * them (the registry is in-memory). Those objects cannot be restored — the client's copies
-     * stay as they are, and the application re-fetches them the way it first obtained them. One
-     * warning names the count, so a stale-after-restart report is diagnosable from the log.
+     * <p>The record is kept per browser, not per connection, because a reconnect is a new connection
+     * and a per-connection record would be empty exactly when re-sync needs it.
+     *
+     * <p>A handle the caller was never sent, and a handle this server no longer knows at all, are
+     * treated identically: no frame, no error, and a counted log line. The second case means the
+     * server restarted since the client fetched the object (the registry is in memory). Either way
+     * the client's copy stays as it is and the application re-fetches it the way it first obtained
+     * it.
      *
      * @param handles the handle list from the client
      * @param session the reconnected session
@@ -792,8 +917,13 @@ public class WasmRmiServerEngine implements EventPublisher {
     void handleResync(java.util.List<?> handles, Session session) {
         int sent = 0;
         int unknown = 0;
+        int undisclosed = 0;
         for (Object handleObj : handles) {
             if (!(handleObj instanceof String)) {
+                continue;
+            }
+            if (!Disclosures.wasDisclosedTo(session, (String) handleObj)) {
+                undisclosed++;
                 continue;
             }
             Object obj = mapper.getObject((String) handleObj);
@@ -817,12 +947,19 @@ public class WasmRmiServerEngine implements EventPublisher {
                 LOG.warning("[zeroz4j] Re-sync failed for handle " + handleObj + ": " + e.getMessage());
             }
         }
+        if (undisclosed > 0) {
+            LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent
+                + " object(s) re-sent, " + undisclosed + " handle(s) not answered because this "
+                + "client was never sent those objects, or was sent them long enough ago that the "
+                + "record has expired. Nothing is restored for them; the application re-fetches "
+                + "them the way it first obtained them.");
+        }
         if (unknown > 0) {
             LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent
                 + " object(s) re-sent, " + unknown + " handle(s) unknown -- the server restarted "
                 + "since the client fetched them; those objects stay stale until the application "
                 + "re-fetches them.");
-        } else if (sent > 0) {
+        } else if (undisclosed == 0 && sent > 0) {
             LOG.info("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent + " object(s) re-sent.");
         }
     }
@@ -830,13 +967,30 @@ public class WasmRmiServerEngine implements EventPublisher {
     void handleLiveMutation(ByteBuffer buffer, Session session) {
         int payloadStart = buffer.position();
 
+        Set<String> userRoles = (Set<String>) session.getUserProperties().get(RmiEndpointConfigurator.ROLES_KEY);
+        LiveMutationGuard guard = new LiveMutationGuard(mapper, userRoles);
+
         Object proposed;
+        String refusal = null;
         ObjectMapper tempMapper = new ObjectMapper();
+        ObjectMapper.setResolutionGuard(guard);
         try {
             proposed = BinarySerializer.readValue(buffer, tempMapper);
+        } catch (LiveMutationGuard.Denied denied) {
+            // The payload reached a canonical object this connection may not write. Nothing has been
+            // applied: this pass decodes into a throwaway mapper, so no canonical object was touched.
+            proposed = null;
+            refusal = denied.reason();
         } catch (Exception e) {
             LOG.warning("[zeroz4j] Rejected undecodable live mutation from session "
                 + session.getId() + ": " + e.getMessage());
+            return;
+        } finally {
+            // Cleared before anything else runs: answering the refusal reads the registry itself.
+            ObjectMapper.setResolutionGuard(null);
+        }
+        if (refusal != null) {
+            rejectNestedWrite(session, guard.rootHandleId(), refusal);
             return;
         }
         if (proposed == null) {
@@ -846,10 +1000,24 @@ public class WasmRmiServerEngine implements EventPublisher {
         String canonicalId = tempMapper.getId(proposed);
         Object canonical = canonicalId != null ? mapper.getObject(canonicalId) : null;
 
-        ClientWritable writable = proposed.getClass().getAnnotation(ClientWritable.class);
+        // The class the server holds decides, not the class name the client sent. A payload naming a
+        // writable class over a restricted object's handle would otherwise walk straight through.
+        if (canonical != null && !canonical.getClass().isAssignableFrom(proposed.getClass())) {
+            String reason = "The change claims to be a " + proposed.getClass().getSimpleName()
+                + " but names an object the server holds as a " + canonical.getClass().getSimpleName()
+                + ". Nothing was changed.";
+            LOG.warning("[zeroz4j] Rejected live mutation from session " + session.getId()
+                + ": frame class " + proposed.getClass().getName() + " does not match canonical "
+                + canonical.getClass().getName() + " for handle " + canonicalId);
+            syncEngine.notifyChanged(canonical, Scope.SESSION, session.getId());
+            sendMutationRejected(session, canonical.getClass().getName(), reason);
+            return;
+        }
+
+        Class<?> authorizedType = canonical != null ? canonical.getClass() : proposed.getClass();
+        ClientWritable writable = authorizedType.getAnnotation(ClientWritable.class);
         boolean allowed = writable != null && canonical != null;
         if (allowed && writable.value().length > 0) {
-            Set<String> userRoles = (Set<String>) session.getUserProperties().get(RmiEndpointConfigurator.ROLES_KEY);
             boolean hasRole = false;
             if (userRoles != null) {
                 for (String required : writable.value()) {
@@ -867,7 +1035,22 @@ public class WasmRmiServerEngine implements EventPublisher {
 
         if (allowed && violations.isEmpty()) {
             buffer.position(payloadStart);
-            Object applied = BinarySerializer.readValue(buffer, mapper); // in-place apply
+            Object applied;
+            // The guard stays on for the applying pass too. It cannot refuse anything the first pass
+            // already accepted; it is here so no future path can apply an unchecked decode.
+            ObjectMapper.setResolutionGuard(guard);
+            try {
+                applied = BinarySerializer.readValue(buffer, mapper); // in-place apply
+            } catch (LiveMutationGuard.Denied denied) {
+                applied = null;
+                refusal = denied.reason();
+            } finally {
+                ObjectMapper.setResolutionGuard(null);
+            }
+            if (refusal != null) {
+                rejectNestedWrite(session, guard.rootHandleId(), refusal);
+                return;
+            }
             Principal principal = (Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
             try {
                 for (LiveMutationListener listener : CDI.current().select(LiveMutationListener.class)) {
@@ -883,24 +1066,46 @@ public class WasmRmiServerEngine implements EventPublisher {
             // accepted mutation, and the client was never told why its change reverted.
             String reason;
             if (writable == null) {
-                reason = proposed.getClass().getName() + " is not @ClientWritable";
+                reason = authorizedType.getName() + " is not @ClientWritable";
                 LOG.warning("[zeroz4j] Rejected live mutation of non-@ClientWritable "
-                    + proposed.getClass().getName() + " from session " + session.getId());
+                    + authorizedType.getName() + " from session " + session.getId());
             } else if (!violations.isEmpty()) {
                 reason = "Validation failed: " + String.join("; ", violations);
                 LOG.info("[zeroz4j] Rejected invalid live mutation of "
-                    + proposed.getClass().getSimpleName() + ": " + String.join("; ", violations));
+                    + authorizedType.getSimpleName() + ": " + String.join("; ", violations));
             } else {
                 reason = "Requires one of the roles " + Arrays.toString(writable.value());
                 LOG.warning("[zeroz4j] Rejected live mutation of "
-                    + proposed.getClass().getSimpleName() + " from session " + session.getId()
+                    + authorizedType.getSimpleName() + " from session " + session.getId()
                     + ": " + reason);
             }
 
             // Corrective: revert the writer's optimistic local change to server truth.
             syncEngine.notifyChanged(canonical, Scope.SESSION, session.getId());
-            sendMutationRejected(session, proposed.getClass().getName(), reason);
+            sendMutationRejected(session, authorizedType.getName(), reason);
         }
+    }
+
+    /**
+     * Refuses a change that reached a canonical object the writer may not write.
+     *
+     * <p>Handled like every other refusal: the writer is snapped back to server truth and told why,
+     * so its optimistic local edit does not spring back with no explanation. The outermost object is
+     * the one snapped back, because that is the one the client believes it edited.</p>
+     *
+     * @param session      the writer
+     * @param rootHandleId the outermost handle in the refused payload, or null if none was reached
+     * @param reason       what to tell the writer
+     */
+    private void rejectNestedWrite(Session session, String rootHandleId, String reason) {
+        Object root = rootHandleId != null ? mapper.getObject(rootHandleId) : null;
+        String className = root != null ? root.getClass().getName() : "";
+        LOG.warning("[zeroz4j] Rejected live mutation from session " + session.getId()
+            + ": " + reason + " (outermost object " + className + ")");
+        if (root != null) {
+            syncEngine.notifyChanged(root, Scope.SESSION, session.getId());
+        }
+        sendMutationRejected(session, className, reason);
     }
 
     /**
@@ -938,7 +1143,9 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
         java.util.List<String> violations = ValidationRegistry.validate(arg);
         if (!violations.isEmpty()) {
-            throw new IllegalArgumentException("Validation failed for "
+            // A ClientVisibleException, so the violations survive the error sanitizer: telling the
+            // caller which field it got wrong is the entire point of server-side validation.
+            throw new ClientVisibleException("Validation failed for "
                 + arg.getClass().getSimpleName() + ": " + String.join("; ", violations));
         }
     }
@@ -1089,11 +1296,39 @@ public class WasmRmiServerEngine implements EventPublisher {
         byte[] data = new byte[payload.remaining()];
         payload.get(data);
 
+        // The keepalive is answered here, on the container's own read thread, and never becomes a
+        // task. It has to be answered even while the connection is at its in-flight limit - a
+        // connection that stops answering pings is killed by the first proxy in the path - and it is
+        // five bytes with no work behind it, so making it wait for a permit would cost the very
+        // thing that makes it safe to answer before any check.
+        if (isKeepaliveFrame(data)) {
+            if (keepaliveAllowed(session.getId())) {
+                sendPong(session);
+            }
+            return;
+        }
+
         ExecutorService sessionExecutor = sessionExecutors.get(session.getId());
         if (sessionExecutor == null) {
             return; // Session is already closing or closed
         }
 
+        // One connection may have only so many frames decoding at once. Acquired here, on the
+        // container's read thread, so a connection that outruns the limit is slowed down rather than
+        // refused. Nothing in the framework submits to a session's executor from inside a task on
+        // that same executor - this method is the only submitter, and only @OnMessage calls it - so
+        // waiting here cannot deadlock the connection against itself.
+        java.util.concurrent.Semaphore permits = sessionPermits.computeIfAbsent(session.getId(),
+                k -> new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
+        try {
+            permits.acquire();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            LOG.warning("[zeroz4j] Dropped incoming message: the read thread was interrupted.");
+            return;
+        }
+
+        boolean submitted = false;
         try {
             sessionExecutor.submit(() -> {
 
@@ -1101,20 +1336,54 @@ public class WasmRmiServerEngine implements EventPublisher {
                 // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
                 // producer) must resolve inside service calls. A servlet container did this
                 // implicitly; here it is the engine's job.
-                jakarta.enterprise.context.control.RequestContextController requestContext =
-                    CDI.current().select(jakarta.enterprise.context.control.RequestContextController.class).get();
-                boolean contextActivated = requestContext.activate();
                 try {
-                    dispatchFrame(data, session);
-                } finally {
-                    if (contextActivated) {
-                        requestContext.deactivate();
+                    jakarta.enterprise.context.control.RequestContextController requestContext =
+                        CDI.current().select(jakarta.enterprise.context.control.RequestContextController.class).get();
+                    boolean contextActivated = requestContext.activate();
+                    try {
+                        dispatchFrame(data, session);
+                    } finally {
+                        if (contextActivated) {
+                            requestContext.deactivate();
+                        }
                     }
+                } finally {
+                    permits.release();
                 }
             });
+            submitted = true;
         } catch (RejectedExecutionException e) {
             LOG.warning("[zeroz4j] Dropped incoming message because server is shutting down.");
+        } finally {
+            if (!submitted) {
+                permits.release();
+            }
         }
+    }
+
+    /**
+     * Whether a frame is the keepalive ping, decided without decoding anything else.
+     *
+     * <p>Reads only the correlation id and the service name. A frame that is too short or malformed
+     * is not the keepalive, and is left to the ordinary path to report.</p>
+     *
+     * @param data the raw frame
+     * @return true when this is a ping for the reserved keepalive service
+     */
+    static boolean isKeepaliveFrame(byte[] data) {
+        try {
+            ByteBuffer buffer = ByteBuffer.wrap(data);
+            buffer.getInt();
+            return SyncFrameTypes.KEEPALIVE_SERVICE.equals(BinarySerializer.readString(buffer));
+        } catch (RuntimeException notAFrameWeUnderstand) {
+            return false;
+        }
+    }
+
+    /** @return the configured in-flight limit for one connection */
+    private static int maxConcurrentFrames() {
+        Integer configured = positiveIntProperty(MAX_CONCURRENT_FRAMES_PROPERTY);
+        return configured != null ? configured : DEFAULT_MAX_CONCURRENT_FRAMES;
     }
 
     @SuppressWarnings("unchecked")
@@ -1124,6 +1393,19 @@ public class WasmRmiServerEngine implements EventPublisher {
 
                 ByteBuffer buffer = ByteBuffer.wrap(data);
                 int messageId = buffer.getInt();
+
+                // The caller's identity is bound to this thread BEFORE anything in the frame is
+                // decoded. Decoding runs application code - a lazy adapter, a custom validator - and
+                // that code asking who is calling used to get whatever the previous frame left
+                // behind, or nothing at all. Cleared in the finally at the end of the dispatch.
+                Principal principal = (Principal) session.getUserProperties()
+                        .get(RmiEndpointConfigurator.PRINCIPAL_KEY);
+                Set<String> userRoles = (Set<String>) session.getUserProperties()
+                        .get(RmiEndpointConfigurator.ROLES_KEY);
+                if (userRoles == null) userRoles = Collections.emptySet();
+                RmiRequestContext.setContext(principal, userRoles, session.getId(),
+                        (String) session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY),
+                        (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY));
 
                 try {
                     String interfaceName = BinarySerializer.readString(buffer);
@@ -1178,7 +1460,9 @@ public class WasmRmiServerEngine implements EventPublisher {
                     // work of any kind: it exists to make a byte travel in each direction, and a
                     // heartbeat that did real work would be a way to load the server from outside.
                     if (SyncFrameTypes.KEEPALIVE_SERVICE.equals(interfaceName)) {
-                        sendPong(session);
+                        if (keepaliveAllowed(session.getId())) {
+                            sendPong(session);
+                        }
                         return;
                     }
 
@@ -1196,9 +1480,6 @@ public class WasmRmiServerEngine implements EventPublisher {
 
                     // --- Security enforcement ---
                     String methodKey = interfaceName + "#" + methodName;
-                    Principal principal = (Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
-                    Set<String> userRoles = (Set<String>) session.getUserProperties().get(RmiEndpointConfigurator.ROLES_KEY);
-                    if (userRoles == null) userRoles = Collections.emptySet();
 
                     // Check @Secured (interface or method level)
                     boolean requiresAuth = Boolean.TRUE.equals(securedInterfaces.get(interfaceName))
@@ -1238,17 +1519,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                         validateArgument(arg);
                     }
 
-                    Object executionResult;
-                    try {
-                        RmiRequestContext.setContext(principal, userRoles, session.getId(),
-                                (String) session.getUserProperties()
-                                        .get(RmiEndpointConfigurator.TENANT_KEY),
-                                (String) session.getUserProperties()
-                                        .get(RmiEndpointConfigurator.CLIENT_KEY));
-                        executionResult = targetMethod.invoke(beanInstance, extractedArguments);
-                    } finally {
-                        RmiRequestContext.clear();
-                    }
+                    Object executionResult = targetMethod.invoke(beanInstance, extractedArguments);
 
                     GrowableBuffer responseBuffer = new GrowableBuffer();
                     responseBuffer.putInt(messageId);
@@ -1266,20 +1537,107 @@ public class WasmRmiServerEngine implements EventPublisher {
                     if (ex instanceof InvocationTargetException) {
                         actual = ex.getCause();
                     }
-                    LOG.log(Level.SEVERE, "[zeroz4j] RMI error: " + actual.getMessage(), actual);
-
-                    try {
-                        GrowableBuffer errorBuffer = new GrowableBuffer(512);
-                        errorBuffer.putInt(messageId);
-                        errorBuffer.put(SyncFrameTypes.RPC_ERROR);
-                        BinarySerializer.writeString(errorBuffer,
-                            actual.getMessage() != null ? actual.getMessage() : actual.toString());
-                        WsWrites.send(session, errorBuffer.toByteArray());
-                    } catch (Exception ioEx) {
-                        LOG.warning("[zeroz4j] Failed to send error: " + ioEx.getMessage());
-                    }
+                    sendError(session, messageId, actual);
+                } finally {
+                    RmiRequestContext.clear();
                 }
             }
         }
+    }
+
+    /**
+     * Answers a failed call on {@code 0x0F RPC_ERROR}, with a message the caller is allowed to read.
+     *
+     * @param session   the caller
+     * @param messageId the correlation id to answer on
+     * @param failure   what went wrong
+     */
+    private static void sendError(Session session, int messageId, Throwable failure) {
+        String reference = newErrorReference();
+        LOG.log(Level.SEVERE, "[zeroz4j] RMI error [ref " + reference + "]: "
+                + failure.getMessage(), failure);
+        try {
+            GrowableBuffer errorBuffer = new GrowableBuffer(512);
+            errorBuffer.putInt(messageId);
+            errorBuffer.put(SyncFrameTypes.RPC_ERROR);
+            BinarySerializer.writeString(errorBuffer, clientSafeMessage(failure, reference));
+            WsWrites.send(session, errorBuffer.toByteArray());
+        } catch (Exception ioEx) {
+            LOG.warning("[zeroz4j] Failed to send error: " + ioEx.getMessage());
+        }
+    }
+
+    /**
+     * Decides what a caller is told about a failure.
+     *
+     * <p>Two kinds of message travel word for word. One is a {@link ClientVisibleException}, which is
+     * how an application says "this sentence is for the caller". The other is the framework's own
+     * refusals - authentication required, access denied, unknown service, unknown method, failed
+     * argument validation - which exist to be read and which clients already act on.</p>
+     *
+     * <p>Everything else is unplanned, and the message of an unplanned failure describes the
+     * machinery: class names, field names, query fragments, container internals. An anonymous caller
+     * can provoke those failures deliberately and read the system's shape out of the answers. So the
+     * caller gets one sentence and a short reference code, and the real message and stack trace go
+     * to the server log under the same code, which is what lets support match a user's screenshot to
+     * a log line.</p>
+     *
+     * @param failure   what went wrong
+     * @param reference the code that also appears in the log line
+     * @return the message to put on the wire
+     */
+    static String clientSafeMessage(Throwable failure, String reference) {
+        if (failure instanceof ClientVisibleException
+                || failure instanceof SecurityException
+                || failure instanceof NoSuchMethodException) {
+            String message = failure.getMessage();
+            if (message != null && !message.isEmpty()) {
+                return message;
+            }
+        }
+        return "The server could not complete this request. Reference: " + reference;
+    }
+
+    /** A short code, unique enough to find one log line among a day of them. */
+    private static String newErrorReference() {
+        long bits = java.util.concurrent.ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFL;
+        String hex = Long.toHexString(bits);
+        while (hex.length() < 8) {
+            hex = "0" + hex;
+        }
+        return hex;
+    }
+
+    /**
+     * Whether this connection may be answered another keepalive ping right now.
+     *
+     * <p>The keepalive answers before any other check, by design - that is what makes it cheap. It
+     * is therefore also the cheapest thing to send in a loop, and every ping costs a task on the
+     * connection's executor and a frame on the wire. A connection that pings faster than
+     * {@link #DEFAULT_PING_MIN_INTERVAL_MILLIS} is not keeping itself alive; the extra pings are
+     * dropped and nothing is written back.</p>
+     *
+     * @param sessionId the connection that pinged
+     * @return true when a pong should be sent
+     */
+    private static boolean keepaliveAllowed(String sessionId) {
+        long minimumGap = pingMinIntervalMillis();
+        long now = System.currentTimeMillis();
+        Long previous = pingLastAnswered.get(sessionId);
+        if (previous != null && now - previous < minimumGap) {
+            return false;
+        }
+        pingLastAnswered.put(sessionId, now);
+        return true;
+    }
+
+    private static long pingMinIntervalMillis() {
+        Integer configured = positiveIntProperty(PING_MIN_INTERVAL_PROPERTY);
+        return configured != null ? configured.longValue() : DEFAULT_PING_MIN_INTERVAL_MILLIS;
+    }
+
+    /** Forgets every connection's keepalive budget. Test support only. */
+    static void clearKeepaliveBudgetForTesting() {
+        pingLastAnswered.clear();
     }
 }

@@ -172,7 +172,72 @@ public interface InvoiceService {
 These are `com.zeroz4j.api.Secured` and `com.zeroz4j.api.RolesAllowed` — **not** the Jakarta
 annotations of the same name. Method-level roles override interface-level roles.
 
-For LiveSync writes, `@ClientWritable("editor")` gates the whole model the same way.
+For LiveSync writes, `@ClientWritable("editor")` gates the whole model the same way — and it gates
+every model a client's change reaches, not only the outermost one. A model nested inside a
+`@ClientWritable` model needs its own `@ClientWritable` before a client can edit it as part of the
+outer one, and one refusal refuses the whole change. See
+[LiveSync](../LIVESYNC.md#every-object-the-change-touches-is-checked-not-just-the-outer-one).
+
+## What a client is allowed to read back
+
+Every object the server sends a client travels with a name attached, called a **handle**, and the
+client asks for an object again by naming it — after a dropped connection, most of all.
+
+**A name is not a permission.** The server keeps a record of which objects it has actually sent to
+which browser, and answers a request to re-read an object only when that record says the object was
+sent there. Naming an object you were never given gets you nothing, and is not reported as an error:
+it is treated exactly like naming an object the server no longer has.
+
+This matters because names leak by design. An object nested inside a broadcast event or a shared
+signal goes out with its own name attached, so everybody who received the outer payload learned the
+name of everything inside it. Before the record existed, any of them could ask for those objects
+afterwards — including after their access had been withdrawn.
+
+Three consequences:
+
+* **Reconnecting still works.** The record is kept per browser, and the browser id outlives the
+  connection, so a client that drops and reconnects gets everything it holds back.
+* **A non-browser client with no cookie re-fetches instead of re-syncing.** It is remembered only for
+  the life of one connection. The server log says so once.
+* **The record is bounded and can expire.** At most 10,000 objects per browser
+  (`zeroz.disclosure.maxHandlesPerClient`), and a browser's record is dropped after 24 hours of
+  inactivity (`zeroz.disclosure.idleHours`). An expired record behaves like a server restart: the
+  client is told nothing was found and fetches the objects the way it first obtained them.
+
+Ask the same question yourself with `Disclosures.wasDisclosedTo(session, handleId)` before doing
+anything on a client's behalf with an object it named.
+
+## What an error tells the caller
+
+A failed call answers with a message, and most messages are not fit to send.
+
+**Two kinds travel word for word.** One is a refusal your application wrote for the caller to read.
+Throw `com.zeroz4j.server.ClientVisibleException` to say so:
+
+```java
+import com.zeroz4j.server.ClientVisibleException;
+
+@Override
+public void approve(String invoiceId) {
+    Invoice invoice = invoices.byId(invoiceId);
+    if (invoice.isApproved()) {
+        throw new ClientVisibleException("That invoice was already approved.");
+    }
+    ...
+}
+```
+
+The other is the framework's own refusals — authentication required, access denied, unknown service,
+unknown method, an argument that failed validation. Those exist to be read, and clients already act
+on them.
+
+**Everything else becomes one sentence and a code.** The caller sees
+`The server could not complete this request. Reference: 4f2a91cc`, and the real message and stack
+trace go to the server log under the same code. So a user quoting the code from their screen is
+enough to find the log line. The reason for hiding the rest is that an unplanned failure's message
+describes the machinery — class names, field names, query fragments, container internals — and
+anybody who can reach your server can provoke those failures on purpose and read the system's shape
+out of the answers.
 
 ## Reading the identity in a service
 
@@ -250,7 +315,9 @@ that opened it is trusted.
 A handshake carrying no `Origin` at all is allowed: browsers always send one, so its absence means a
 non-browser client, which has no ambient cookies to abuse.
 
-A refused handshake is closed immediately with WebSocket close code 1008.
+A refused handshake is closed immediately with WebSocket close code 1008. The close reason names
+which check refused it — the origin, or the host name the connection asked for — and nothing else
+about the deployment. The full explanation, with the configured values, is in the server log.
 
 ## Development authentication
 
@@ -270,6 +337,13 @@ gone.
 - **Identity is fixed for the life of the connection.** Roles are read once at handshake, so a user
   whose roles change must reconnect. Re-evaluating per frame would put a security check on the hot
   path.
+- **A record of what was sent is not a record of who may see it.** It is keyed by browser, so two
+  people sharing a machine share it, and it says only that the server sent the object once — not that
+  the reason for sending it still holds. Data that must follow a person needs `Scope.USER` or
+  `Scope.TENANT`.
+- **The record lives in memory.** A restart empties it, and clients re-fetch. In a cluster each node
+  remembers only what it sent, so a client that lands on a different node after a reconnect re-fetches
+  as well.
 - **No session expiry.** A connection stays authenticated until it closes.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.
 - **Nothing gates HTTP.** Every page and asset is public; only RMI calls are checked. An application
