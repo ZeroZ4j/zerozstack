@@ -7,3 +7,6 @@ target/
 
 # Archetype smoke-test screenshots
 /zerozstack-archetype/smoke/shots/
+
+# Private Maven repository head used by worker sessions (see AGENTS.md)
+.m2head/

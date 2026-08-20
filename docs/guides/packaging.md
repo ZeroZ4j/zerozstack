@@ -222,7 +222,8 @@ security context is that container's contract, and worth asserting in your own i
 
 ### WebSocket limits
 
-Four properties:
+Every limit the framework applies, in one place. All of them have a working default; a fresh
+application needs none of them set.
 
 | Property | Effect | Unset |
 |---|---|---|
@@ -230,6 +231,15 @@ Four properties:
 | `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
 | `zeroz.ws.maxPendingFramesPerSession` | Most messages that may be waiting to go out on one connection | **256** |
 | `zeroz.ws.maxPendingBytesPerSession` | Most bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
+| `zeroz.ws.maxConcurrentFramesPerSession` | Most messages from one connection being handled at the same time | **32** |
+| `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive replies to one connection | **1000** |
+| `zeroz.livemutex.waitSeconds` | How long a client waits for an item somebody else is editing | **30** |
+| `zeroz.livemutex.requireAuthentication` | Restricts editing locks to signed-in users | **off** |
+| `zeroz.disclosure.maxHandlesPerClient` | Objects remembered as sent to one browser | **10,000** |
+| `zeroz.disclosure.idleHours` | How long that memory survives with no activity | **24** |
+| `zeroz.upload.maxBytes` | Largest file an upload may carry | **25 MB (26,214,400 bytes)** |
+| `zeroz.upload.passSeconds` | How long an upload permission slip stays valid | **60** |
+| `zeroz.upload.tempDir` | Where a file is written while the application decides on it | the system temporary directory |
 
 The size limit has a framework default because the container's own is not a safe one to inherit.
 The framework uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus
