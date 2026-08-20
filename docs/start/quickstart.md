@@ -73,14 +73,22 @@ remaining count are `Computed` values, and the rendering is driven by `Effect`.
 
 ### Examples that do require signing in
 
-Four examples enable development authentication by setting `zeroz.security.mode=dev` in their
-`ExampleServer.main`, and show a `Login` component: **`chat-events`**, **`chat-livesync`**,
-**`job-monitor`** and **`components-showcase`**. `todo-signals`, `form-signup` and `inventory-crud`
-connect anonymously.
+Four examples show a `Login` component: **`chat-events`**, **`chat-livesync`**, **`job-monitor`**
+and **`components-showcase`**. `todo-signals`, `form-signup` and `inventory-crud` connect
+anonymously.
 
-**`routing-tour`** and **`scoped-signals`** also use development authentication, but take the
-credentials from the URL — `?user=admin&password=admin` — so two windows can be open as different
-users at once. **`oidc-login`** signs in against a real Keycloak instead; see its README.
+**`routing-tour`** and **`scoped-signals`** also need an identity, but take the credentials from the
+URL — `?user=admin&password=admin` — so two windows can be open as different users at once.
+**`oidc-login`** signs in against a real Keycloak instead; see its README.
+
+The accounts those six use are the framework's built-in development ones, and **starting a server
+does not switch them on.** Ask for them with `--dev-login`:
+
+```bash
+java -jar scoped-signals-server/target/scoped-signals-server-0.6.2.jar --dev-login
+```
+
+The `run.bat` scripts pass the flag already. A server running this way prints a warning saying so.
 
 When an example does ask you to sign in:
 

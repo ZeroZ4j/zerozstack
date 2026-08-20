@@ -7,8 +7,11 @@ identical in all three cases — an `Effect` over a signal. Only the declaration
 
 ```bash
 mvn -pl zerozstack-examples/scoped-signals/scoped-signals-server -am install
-java -jar zerozstack-examples/scoped-signals/scoped-signals-server/target/scoped-signals-server-0.6.0.jar
+java -jar zerozstack-examples/scoped-signals/scoped-signals-server/target/scoped-signals-server-0.6.2.jar --dev-login
 ```
+
+`--dev-login` switches on the framework's built-in development accounts, which the per-user signal
+needs an identity from. Without the flag nothing can sign in, and the server says so when it starts.
 
 Open <http://localhost:8082/?user=demo&password=demo>.
 

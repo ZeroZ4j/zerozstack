@@ -8,13 +8,14 @@ paths that do not match or are not permitted.
 
 ```bash
 mvn -pl zerozstack-examples/routing-tour/routing-tour-server -am install
-java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.6.0.jar
+java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.6.2.jar --dev-login
 ```
 
 Then open <http://localhost:8080/?user=admin&password=admin>.
 
-Development authentication is on so the guarded route has something to check: `demo`/`demo` holds
-`user`, `admin`/`admin` also holds `admin`. Sign in as `demo` and `/admin` bounces to `/forbidden`.
+`--dev-login` switches on the framework's built-in development accounts, so the guarded route has
+something to check: `demo`/`demo` holds `user`, `admin`/`admin` also holds `admin`. Without the flag
+nothing can sign in, and the server says so when it starts. Sign in as `demo` and `/admin` bounces to `/forbidden`.
 
 ## What each route demonstrates
 

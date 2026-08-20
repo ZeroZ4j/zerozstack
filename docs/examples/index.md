@@ -43,7 +43,9 @@ run alongside another:
 Each of those also builds a runnable jar, so `java -jar <example>-server/target/<example>-server-0.6.1.jar`
 works without a classpath.
 
-Most examples set `zeroz.security.mode=dev` and sign in as `demo` / `demo`, or `admin` / `admin` for
+Six examples need a sign-in, and the only accounts they have are the framework's development ones.
+**Starting a server does not switch those on** — pass `--dev-login` on the command line, which the
+`run.bat` scripts already do. Then sign in as `demo` / `demo`, or `admin` / `admin` for
 admin-restricted operations. `chat-events`, `chat-livesync`, `job-monitor` and `components-showcase`
 present a `Login` component; `routing-tour` and `scoped-signals` take credentials from the URL
 (`?user=admin&password=admin`), which is how you open two of them side by side as different users.
