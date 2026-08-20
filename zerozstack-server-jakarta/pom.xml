@@ -47,5 +47,14 @@
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
         </dependency>
+        <!-- test only: the upload servlet finds the application's FileUploadHandler through CDI, and
+             a test that faked that lookup would not be testing the thing that breaks. Same container
+             zerozstack-server-core uses for its own CDI tests. -->
+        <dependency>
+            <groupId>org.jboss.weld</groupId>
+            <artifactId>weld-junit5</artifactId>
+            <version>4.0.0.Final</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>
