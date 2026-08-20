@@ -20,7 +20,6 @@ package com.zeroz4j.api;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -47,7 +46,7 @@ public class ObjectMapper {
      * @return unique string reference handle ID
      *
      * <p><b>Under the hood:</b> Synchronizes on {@code objectToId}. Checks if {@code obj} exists in {@code objectToId}.
-     * If present, returns existing ID string. Otherwise, generates a random UUID string via {@link UUID#randomUUID()},
+     * If present, returns existing ID string. Otherwise, generates a random UUID string via {@link Ids#newId()},
      * stores bidirectional mapping in both {@code objectToId} and {@code idToObject}, and returns the new ID.</p>
      */
     public String register(Object obj) {
@@ -57,7 +56,7 @@ public class ObjectMapper {
             if (existing != null) {
                 return existing;
             }
-            String id = UUID.randomUUID().toString();
+            String id = Ids.newId();
             objectToId.put(obj, id);
             idToObject.put(id, obj);
             return id;

@@ -8,6 +8,47 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.6.2] — 2026-08-20
+
+### Fixed
+
+- **Every application broke the moment it was opened at a plain `http://` address on a network.**
+  Pressing anything that made the framework hand out an identifier died with
+  `TypeError: crypto.randomUUID is not a function`, and there was nothing the application could do
+  about it. Opened at `localhost` the identical steps worked perfectly, which is the worst shape a
+  defect can have: it is invisible to whoever built it and it is all anybody else ever sees.
+
+  The cause is a browser rule rather than a bug. `crypto.randomUUID()` exists only in a **secure
+  context** — an `https://` page, or `localhost`. A page served over plain `http://` from a machine's
+  address on the house network is not one, so the function is simply absent. TeaVM compiles
+  `UUID.randomUUID()` straight into a call to it, and `ObjectMapper` — which names every object that
+  crosses the wire — called that on the client for every object it had not seen before. Self-hosting
+  on a LAN is the ordinary way to run one of these applications, so this was every application, on
+  every press, for every user who was not sitting at the machine.
+
+  Identifiers now come from `Ids.newId()`, which builds a version-4 UUID out of `SecureRandom`
+  instead. That is the same generator `UUID.randomUUID()` draws on when it runs on the server, so
+  the server side is unchanged in strength; in a browser TeaVM implements it with
+  `crypto.getRandomValues()`, which is **not** restricted to a secure context and is therefore there
+  on a plain `http://` page — and is still a cryptographic generator. Only where no `crypto` object
+  exists at all does it fall back to an ordinary pseudo-random one, which no browser released this
+  decade does. The output is byte-for-byte the same shape as before — thirty-six characters, lower
+  case, four hyphens — so nothing already written down has to change.
+
+  `Ids` is public, because an application that needs an identifier of its own has exactly the same
+  problem. Treat what comes out of it as a name for something, not as a secret: a token that must be
+  unguessable should draw on `SecureRandom` directly and fail loudly rather than degrade quietly.
+
+  `IdsTest` pins the shape, the uniqueness, the pseudo-random last resort, and — the part that
+  matters — reads the compiled `Ids` and `ObjectMapper` classes back and fails if either one so much
+  as mentions `randomUUID` again.
+
+  **Still secure-context-only, and deliberately left that way:** logging in with OpenID Connect.
+  `OidcBrowser.codeChallenge` needs `crypto.subtle`, which browsers also withhold from a plain
+  `http://` page. Weakening the PKCE challenge to make it work there would defeat the point of PKCE,
+  so a login flow over plain `http://` fails, and should. Put the application behind HTTPS if it
+  needs to log people in.
+
 ## [0.6.1] — 2026-08-17
 
 ### Added
@@ -707,6 +748,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.4.1...v0.5.0
