@@ -192,21 +192,45 @@ security context is that container's contract, and worth asserting in your own i
 
 ### WebSocket limits
 
-Two properties, both unset by default so the container's own configuration wins:
+Two properties:
 
-| Property | Effect |
-|---|---|
-| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts |
-| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing |
+| Property | Effect | Unset |
+|---|---|---|
+| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts | **4 MB (4,194,304 bytes)** |
+| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
 
-**Set the first one.** The engine's `@OnMessage` takes a whole message — there is no partial-message
-handling — so a response larger than the container's binary buffer does not raise an error, it closes
-the socket. Container defaults are small, and one page of records can exceed them. The symptom is a
-connection that drops under load with nothing in the log to explain it.
+The size limit has a framework default because the container's own is not a safe one to inherit.
+The framework uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus
+2.1.5.
+Tyrus starts each connection's message limit at `Integer.MAX_VALUE` — about 2 GB — and Helidon never
+changes it.
+A client that splits one message into many small pieces can therefore make the server hold all of
+them in memory before a single line of your code runs.
+4 MB is the same default gRPC uses.
+
+An explicit setting always wins, up or down, so a deployment that already tuned this keeps its
+number:
 
 ```
 -Dzeroz.ws.maxBinaryMessageBytes=8388608 -Dzeroz.ws.idleTimeoutMinutes=30
 ```
+
+The server logs the limit in force once at startup, naming the property, so a message that is
+refused later can be explained without guessing.
+
+**What a client sees when a message is too big: the connection closes.** There is no error response
+and no exception you can catch. The engine's `@OnMessage` takes a whole message — there is no
+partial-message handling — so an over-sized message never reaches framework code at all. The client
+reconnects automatically, so the symptom is a socket that drops every time one particular call is
+made.
+
+If a response is genuinely over the limit, either raise the limit or return less: page the results,
+or return identifiers and fetch details on demand.
+
+!!! warning "This connection is not for file uploads"
+    Do not send file contents over the RMI socket. It is sized for the messages an application
+    exchanges, not for documents, images or video, and a big enough file simply closes the
+    connection. File upload is a separate feature.
 
 The idle timeout matters for a different reason: without one, an abandoned browser tab holds a
 session and its server-side resources indefinitely. The client's automatic reconnect means closing an

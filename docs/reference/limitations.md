@@ -297,13 +297,28 @@ WebAssembly today.
 ## Deployment and transport
 
 - **Messages are whole, never partial.** `@OnMessage` takes a complete `ByteBuffer`; there is no
-  partial-message handling and no chunking. A response larger than the container's binary buffer does
-  not raise an error — it closes the socket, with nothing in the log to say why. Raise the limit with
-  `zeroz.ws.maxBinaryMessageBytes`, and design against sending very large payloads over RMI at all.
-- **No limits are imposed by default.** `zeroz.ws.maxBinaryMessageBytes` and
-  `zeroz.ws.idleTimeoutMinutes` are unset, so the container's own values apply — which for the message
-  size is usually small. Without an idle timeout an abandoned browser tab holds a session and its
-  server-side resources indefinitely.
+  partial-message handling and no chunking. A message larger than the limit does not raise an error
+  and never reaches framework code — it closes the socket. There is nothing to catch and nothing sent
+  back. The client reconnects by itself, so the symptom is a connection that drops whenever one
+  particular call is made.
+- **Messages are capped at 4 MB by default.** `zeroz.ws.maxBinaryMessageBytes` sets the largest
+  binary message the endpoint accepts; unset, the framework applies 4,194,304 bytes, the same default
+  gRPC uses. An explicit setting wins in either direction. The limit in force is logged once at
+  startup, naming the property. Raise it if a real response needs more, or return less — page the
+  results, or return identifiers and fetch details on demand.
+- **The RMI connection is not an upload channel.** It carries the messages an application exchanges,
+  not documents, images or video. A file over the limit closes the connection. File upload is a
+  separate feature.
+- **The idle timeout is still the container's.** `zeroz.ws.idleTimeoutMinutes` is unset by default,
+  so without setting it an abandoned browser tab holds a session and its server-side resources for as
+  long as the container allows.
+- **Wire lengths are checked before anything is allocated.** Every length and element count in the
+  binary format is a number the sender chose. Each one is now compared against the bytes actually
+  present, at the width of the element it describes, before an array or a collection is created, and
+  a negative one is refused with a message rather than escaping as a `NegativeArraySizeException`.
+  Nesting is capped at 256 levels. A malformed or hostile message therefore fails fast instead of
+  reserving memory or overflowing the stack. Applications see this only as a clearer exception on a
+  corrupt stream.
 - **Container-managed threads are platform threads.** A Jakarta EE 10 `ManagedThreadFactory` cannot
   produce virtual threads, so a WAR deployment supplying one through
   `SessionThreadFactoryProvider` trades cheap threads for the container's naming, transaction and

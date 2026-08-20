@@ -88,8 +88,23 @@ public class WasmRmiServerEngine implements EventPublisher {
     /** The name reported for a connection with no accepted identity. */
     static final String ANONYMOUS_USER = "anonymous";
 
-    /** Largest binary message this endpoint will accept; unset leaves the container's own limit. */
+    /**
+     * Largest binary message this endpoint will accept; unset applies
+     * {@link #DEFAULT_MAX_BINARY_BYTES}.
+     */
     static final String MAX_BINARY_BYTES_PROPERTY = "zeroz.ws.maxBinaryMessageBytes";
+    /**
+     * Message size accepted when {@link #MAX_BINARY_BYTES_PROPERTY} is not set: 4 MB, the same
+     * default gRPC uses.
+     *
+     * <p>There is a default at all because the container's own is not a safe one. The framework
+     * uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus 2.1.5;
+     * Tyrus initialises a session's binary message limit from
+     * {@code TyrusServerContainer.getDefaultMaxBinaryMessageBufferSize()}, whose field default is
+     * {@code Integer.MAX_VALUE}, and Helidon never sets it. A client sending a fragmented message
+     * could therefore make the server assemble roughly 2 GB before any framework code ran.</p>
+     */
+    static final int DEFAULT_MAX_BINARY_BYTES = 4 * 1024 * 1024;
     /** How long a silent connection is held; unset leaves the container's own timeout. */
     static final String IDLE_TIMEOUT_MINUTES_PROPERTY = "zeroz.ws.idleTimeoutMinutes";
 
@@ -335,33 +350,66 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param authenticated whether an identity was actually accepted
      */
     /**
-     * Applies the configured message-size and idle limits to a new connection.
+     * Applies the message-size and idle limits to a new connection.
      *
-     * <p>Both are unset by default, leaving whatever the container chose. That matters: imposing a
-     * framework default would silently override a deployment's own tuning.</p>
+     * <p><b>Message size.</b> {@link #MAX_BINARY_BYTES_PROPERTY} wins when it is set, so a
+     * deployment that has already tuned this keeps its number. Unset, the framework applies
+     * {@link #DEFAULT_MAX_BINARY_BYTES} — 4 MB — rather than leaving the container's value, because
+     * on the runtime this framework recommends the container's value is roughly 2 GB and a client
+     * can reach it: Helidon 4.0.8 implements the Jakarta WebSocket API by embedding Tyrus 2.1.5,
+     * and Tyrus initialises the per-session binary limit from
+     * {@code TyrusServerContainer.getDefaultMaxBinaryMessageBufferSize()}, whose field default is
+     * {@code Integer.MAX_VALUE}. Helidon never overrides it, and Helidon's own native WebSocket
+     * path with its 1 MB {@code maxFrameLength} is not the path in use. Tyrus's network read
+     * buffer, {@code incomingBufferSize}, caps a single unfragmented chunk at 4,194,315 bytes, but
+     * a fragmented message is assembled past that up to the session limit.</p>
      *
-     * <p>The size limit is worth setting. {@code @OnMessage} here takes a whole {@link ByteBuffer} —
-     * there is no partial-message handling — so a response larger than the container's binary buffer
-     * does not raise an error, it closes the socket. Containers default this small, and a service
-     * returning one page of records can exceed it.</p>
+     * <p>{@code session.setMaxBinaryMessageBufferSize(...)} does reach Tyrus and is genuinely
+     * enforced — {@code TyrusEndpointWrapper} checks it in {@code BinaryBuffer.resetBuffer} and
+     * raises {@code MessageTooBigException} — so the property and the default both bite.</p>
+     *
+     * <p><b>What exceeding it looks like.</b> {@code @OnMessage} here takes a whole
+     * {@link ByteBuffer} — there is no partial-message handling — so an over-sized message never
+     * reaches framework code and there is no error response. The connection closes. The client
+     * reconnects automatically, which is why this is worth logging: otherwise the only symptom is a
+     * socket that drops whenever one particular call is made.</p>
+     *
+     * <p><b>Idle timeout.</b> Unset leaves the container's own, since an abandoned connection costs
+     * a session rather than memory, and containers differ widely in what a sensible value is.</p>
      */
     private static void applyWebSocketLimits(Session session) {
-        Integer maxBinaryBytes = positiveIntProperty(MAX_BINARY_BYTES_PROPERTY);
-        if (maxBinaryBytes != null) {
-            session.setMaxBinaryMessageBufferSize(maxBinaryBytes);
-        }
+        Integer configuredMaxBinary = positiveIntProperty(MAX_BINARY_BYTES_PROPERTY);
+        int maxBinaryBytes = configuredMaxBinary != null ? configuredMaxBinary : DEFAULT_MAX_BINARY_BYTES;
+        session.setMaxBinaryMessageBufferSize(maxBinaryBytes);
+
         Integer idleMinutes = positiveIntProperty(IDLE_TIMEOUT_MINUTES_PROPERTY);
         if (idleMinutes != null) {
             session.setMaxIdleTimeout(idleMinutes * 60_000L);
         }
+
+        if (LIMITS_REPORTED.compareAndSet(false, true)) {
+            LOG.info("[zeroz4j] Largest binary message accepted: " + maxBinaryBytes + " bytes ("
+                    + (configuredMaxBinary != null ? "set by " : "framework default; change with ")
+                    + MAX_BINARY_BYTES_PROPERTY + "). A message over that closes the connection"
+                    + " without an error response.");
+        }
     }
+
+    /**
+     * Guards the startup report above, so the limits are named once per server rather than once per
+     * connection. Declared beside the method that uses it rather than with the other fields, which
+     * are a different concern.
+     */
+    private static final java.util.concurrent.atomic.AtomicBoolean LIMITS_REPORTED =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     /**
      * Reads a positive integer system property.
      *
      * @return the value, or null when unset, unparseable or not positive — an unusable setting is
      *         logged and ignored rather than applied, because a zero or negative limit means
-     *         something different to each container
+     *         something different to each container. The caller then falls back to whatever it
+     *         would have used with the property unset.
      */
     private static Integer positiveIntProperty(String name) {
         String configured = System.getProperty(name);
