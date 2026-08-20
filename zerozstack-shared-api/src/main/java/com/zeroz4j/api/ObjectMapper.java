@@ -32,11 +32,87 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>Reference Identity:</b> Uses an {@link IdentityHashMap} for {@code objectToId} lookup, matching instances by reference address ({@code ==}) rather than {@code equals()}.</li>
  *   <li><b>State Mutations:</b> Modifies bidirectional maps {@code idToObject} and {@code objectToId}. Thread safety is maintained via synchronized blocks on {@code objectToId} and {@link ConcurrentHashMap}.</li>
  *   <li><b>LiveSync Role:</b> Generates session-scoped reference handles for objects sent over RMI. Inbound LiveSync frames use these handles to locate and update instances in-place.</li>
+ *   <li><b>Two server-side hooks:</b> {@link ResolutionGuard} can veto resolving a handle while a
+ *       client-proposed change is being decoded, and {@link DisclosureRecorder} is told about every
+ *       handle written toward a recipient. Both are optional and unused in the browser.</li>
  * </ul>
  */
 public class ObjectMapper {
     private final Map<String, Object> idToObject = new ConcurrentHashMap<>();
     private final Map<Object, String> objectToId = Collections.synchronizedMap(new IdentityHashMap<>());
+
+    /**
+     * Vetoes the resolution of a handle while it is installed.
+     *
+     * <p>Installed by the server around a client-proposed change, so that decoding cannot reach a
+     * canonical object the caller is not allowed to write. A guard refuses by throwing: returning
+     * nothing would make the decoder build a fresh instance and claim the handle for it, which
+     * replaces the canonical mapping and is worse than the read it was trying to prevent.</p>
+     *
+     * <p>Server-side only. The browser never installs one.</p>
+     */
+    public interface ResolutionGuard {
+        /**
+         * @param handleId the handle the decoder is about to resolve
+         * @throws RuntimeException to abort the whole decode
+         */
+        void checkResolve(String handleId);
+    }
+
+    /**
+     * Told about every handle written toward a recipient.
+     *
+     * <p>The server installs one so it can remember which objects it actually sent to whom, which is
+     * what later decides whether that recipient may ask for the object again. Called for a handle
+     * that already existed as well as a freshly minted one, because sending an object a second time
+     * is still sending it.</p>
+     *
+     * <p>Server-side only. The browser never installs one.</p>
+     */
+    public interface DisclosureRecorder {
+        /**
+         * @param handleId the handle that has just been put on the wire
+         */
+        void handleDisclosed(String handleId);
+    }
+
+    /** Thread-confined: a guard belongs to the one decode it was installed for. */
+    private static final ThreadLocal<ResolutionGuard> RESOLUTION_GUARD = new ThreadLocal<>();
+
+    /** Process-wide: installed once at startup, and read on every write. */
+    private static volatile DisclosureRecorder disclosureRecorder;
+
+    /**
+     * Installs or clears the guard consulted by {@link #getObject(String)} on this thread.
+     *
+     * <p>Always clear it in a {@code finally}: a guard left behind would veto unrelated decoding on
+     * the same thread.</p>
+     *
+     * @param guard the guard, or null to clear
+     */
+    public static void setResolutionGuard(ResolutionGuard guard) {
+        if (guard == null) {
+            RESOLUTION_GUARD.remove();
+        } else {
+            RESOLUTION_GUARD.set(guard);
+        }
+    }
+
+    /**
+     * @return the guard installed on this thread, or null when decoding is unguarded
+     */
+    public static ResolutionGuard resolutionGuard() {
+        return RESOLUTION_GUARD.get();
+    }
+
+    /**
+     * Installs the recorder told about every handle written.
+     *
+     * @param recorder the recorder, or null to stop recording
+     */
+    public static void setDisclosureRecorder(DisclosureRecorder recorder) {
+        disclosureRecorder = recorder;
+    }
 
     /**
      * Registers an object instance and returns its assigned string ID.
@@ -51,16 +127,25 @@ public class ObjectMapper {
      */
     public String register(Object obj) {
         if (obj == null) return null;
+        String id;
         synchronized (objectToId) {
             String existing = objectToId.get(obj);
             if (existing != null) {
-                return existing;
+                id = existing;
+            } else {
+                id = Ids.newId();
+                objectToId.put(obj, id);
+                idToObject.put(id, obj);
             }
-            String id = Ids.newId();
-            objectToId.put(obj, id);
-            idToObject.put(id, obj);
-            return id;
         }
+        // Outside the lock: the recorder keeps its own state and must not be able to deadlock a
+        // serialization. An already-known handle is reported too - re-sending an object is still
+        // disclosing it, and the recipient may be a different one this time.
+        DisclosureRecorder recorder = disclosureRecorder;
+        if (recorder != null) {
+            recorder.handleDisclosed(id);
+        }
+        return id;
     }
 
     /**
@@ -85,6 +170,10 @@ public class ObjectMapper {
      */
     public Object getObject(String id) {
         if (id == null) return null;
+        ResolutionGuard guard = RESOLUTION_GUARD.get();
+        if (guard != null) {
+            guard.checkResolve(id);
+        }
         return idToObject.get(id);
     }
 

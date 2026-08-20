@@ -50,6 +50,7 @@ public class ShowcaseRegistry {
         showcases.put("drawer", DrawerShowcase::new);
         showcases.put("dropdown", DropdownShowcase::new);
         showcases.put("file-input", FileInputShowcase::new);
+        showcases.put("file-upload", FileUploadShowcase::new);
         showcases.put("footer", FooterShowcase::new);
         showcases.put("hero", HeroShowcase::new);
         showcases.put("indicator", IndicatorShowcase::new);
@@ -146,6 +147,7 @@ public class ShowcaseRegistry {
         labels.put("drawer", "Drawer");
         labels.put("dropdown", "Dropdown");
         labels.put("file-input", "File Input");
+        labels.put("file-upload", "File Upload");
         labels.put("footer", "Footer");
         labels.put("hero", "Hero");
         labels.put("indicator", "Indicator");

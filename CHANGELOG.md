@@ -8,6 +8,54 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.7.0] — 2026-08-20
+
+A security review of the connection layer, the binary wire format and the HTTP surface, plus the
+file upload feature that review made it clear was missing.
+
+### Breaking
+
+- **A live change that reaches an object the client may not write is now refused outright.** Only
+  the outermost object used to be checked, so a nested object could be overwritten, or a restricted
+  one attached to a permitted one and then broadcast to everybody. Every object a change touches now
+  passes its own `@ClientWritable` and role check. An application whose writable model contains a
+  live model that is *not* `@ClientWritable` will start seeing refusals: mark the inner model, or
+  stop sending it up.
+- **Re-reading an object by handle now requires having been sent it.** Presenting a handle used to be
+  treated as proof of prior disclosure, which leaked through handles embedded in broadcast payloads.
+  The server now remembers what it sent to each browser and serves only that.
+- **`zeroz.ws.maxBinaryMessageBytes` defaults to 4 MB** instead of inheriting the container's limit,
+  which on Helidon was effectively 2 GB. An explicitly set value still wins.
+- **The example servers no longer switch on the built-in developer logins by starting.** They need
+  `--dev-login`.
+- **Locks are granted only on objects the server sent the caller.** No login is required.
+- **Unexpected server errors no longer send their internal message to the client.** They send a
+  reference that matches the server log. Application exceptions and the framework's own refusals are
+  unchanged.
+
+### Added
+
+- **File upload.** A drop-or-pick component with per-file progress and cancel, an HTTP address that
+  streams to disk, one-time passes issued over the live connection, and a CDI handler that receives
+  the finished file. Works on both bindings. See `docs/guides/file-uploads.md`.
+- `zeroz.hosts`, an allowlist of host names a handshake may be addressed to — the standard defence
+  against DNS rebinding. Unset, behaviour is unchanged.
+- Per-connection bounds on frames being handled and frames waiting to go out, both configurable.
+- `zeroz.livemutex.waitSeconds` and `zeroz.livemutex.requireAuthentication`.
+
+### Fixed
+
+- **A short message could ask the server to allocate gigabytes.** Every length read from the wire is
+  now checked against the bytes actually present, at the true width of each element; collections grow
+  rather than pre-sizing from a claimed count; nesting is capped.
+- **One unresponsive client could stop the whole server.** Writes held a lock on the connection while
+  blocking, and on JDK 21 that pinned a carrier thread per stalled write — measured, not assumed.
+  Each connection now has its own bounded outbox and one writer.
+- **Two owners could hold the same lock at once**, because an unlock and a disconnect could both
+  release it. Ownership removal is now atomic.
+- Encoded path traversal is refused before any resource lookup, on both bindings.
+- The identity context is established before arguments are decoded, not after.
+
 ## [0.6.2] — 2026-08-20
 
 ### Fixed
@@ -748,6 +796,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.5.0...v0.6.0

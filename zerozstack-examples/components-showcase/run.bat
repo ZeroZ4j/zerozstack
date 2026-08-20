@@ -8,7 +8,9 @@ if not exist "target\libs" goto :needbuild
 echo.
 echo Starting components-showcase on http://localhost:8080   (Ctrl+C to stop; run one example at a time)
 echo.
-java -cp "target\classes;target\libs\*" com.zeroz4j.example.server.ExampleServer
+rem --dev-login switches on the built-in demo accounts (demo/demo, admin/admin).
+rem This example needs a sign-in; drop the flag and nothing can log in.
+java -cp "target\classes;target\libs\*" com.zeroz4j.example.server.ExampleServer --dev-login
 exit /b %errorlevel%
 
 :needbuild

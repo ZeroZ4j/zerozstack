@@ -34,6 +34,10 @@ import java.util.Locale;
  *
  * <p>This class deliberately has no HTTP dependency of any kind, which is what lets it stay in
  * {@code zerozstack-server-core} while the bindings do not.</p>
+ *
+ * <p>It is also where a request path is refused. {@link #isSafePath(String)} runs before any lookup,
+ * under both bindings, so a path carrying a {@code ..} segment, a backslash or a control character
+ * never reaches a resource loader at all.</p>
  */
 public final class StaticContent {
 
@@ -105,6 +109,9 @@ public final class StaticContent {
      * path that does not look like a file therefore falls back to the shell, and the router resolves
      * it once the page has loaded.</p>
      *
+     * <p>A path that fails {@link #isSafePath(String)} resolves to null — the same answer an unknown
+     * asset gets — so no binding can look one up.</p>
+     *
      * @param path the requested path, with or without a leading slash
      * @return the resource path to serve, or null when nothing should be
      */
@@ -120,6 +127,9 @@ public final class StaticContent {
      * @return the resource path to serve, or null when nothing should be
      */
     public static String resolve(String path, Assets assets) {
+        if (!isSafePath(path)) {
+            return null;                              // 404, exactly like an asset that is not there
+        }
         String candidate = normalize(path);
         if (candidate.isEmpty()) {
             return assets.exists(SHELL) ? SHELL : null;
@@ -149,6 +159,88 @@ public final class StaticContent {
         int lastSlash = candidate.lastIndexOf('/');
         String lastSegment = lastSlash >= 0 ? candidate.substring(lastSlash + 1) : candidate;
         return lastSegment.indexOf('.') >= 0;
+    }
+
+    /**
+     * Whether a requested path may be looked up at all.
+     *
+     * <p><b>Paths arrive already percent-decoded, and this class never decodes again.</b> The JAX-RS
+     * runtime decodes a {@code @PathParam} before the resource method sees it, and a servlet
+     * container decodes {@code getPathInfo()} — so {@code ..%2f..%2f} is a plain {@code ../../} by
+     * the time it gets here. Decoding a second time would be a hole of its own: it would turn a
+     * harmless file name containing a literal {@code %} into something else, and it is how
+     * double-encoded traversal gets through servers that do it. A {@code %} that survives to this
+     * point is therefore treated as an ordinary character in a file name.</p>
+     *
+     * <p>The check still looks at a decoded copy, because a request may have been double-encoded
+     * ({@code %252e%252e}) and arrived here as {@code %2e%2e}. That copy is only ever inspected; it
+     * is never the path that gets served.</p>
+     *
+     * <p>Refused: a {@code ..} segment in any form, a backslash (a path separator on Windows and in
+     * some class loaders), a null byte or any other control character, and anything under
+     * {@code WEB-INF/} or {@code META-INF/}. A refused path gets the same 404 an unknown asset gets,
+     * because an error naming the rule would tell an attacker what to try next.</p>
+     *
+     * <p>The classpath loader happens to collapse {@code ..} lexically, so most of this could not
+     * escape a jar in practice. "Probably safe because of how somebody else's class loader behaves"
+     * is not a control, and the servlet binding serves real files where it would not hold at all.</p>
+     *
+     * @param path the requested path, exactly as the binding received it
+     * @return true when the path may be resolved
+     */
+    public static boolean isSafePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return true;                              // the root: the shell answers it
+        }
+        return isSafeForm(path) && isSafeForm(percentDecoded(path));
+    }
+
+    /** The rules themselves, applied to one spelling of the path. */
+    private static boolean isSafeForm(String path) {
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c == '\\' || c < 0x20 || c == 0x7F) {
+                return false;                         // backslash, null byte, any control character
+            }
+        }
+        String candidate = normalize(path);
+        for (String segment : candidate.split("/", -1)) {
+            if ("..".equals(segment)) {
+                return false;
+            }
+        }
+        String upper = candidate.toUpperCase(Locale.ROOT);
+        return !upper.startsWith("WEB-INF/") && !upper.startsWith("META-INF/")
+                && !upper.equals("WEB-INF") && !upper.equals("META-INF");
+    }
+
+    /**
+     * One round of percent-decoding, for inspection only.
+     *
+     * <p>Byte by byte rather than character by character: an overlong or invalid UTF-8 sequence
+     * decodes to bytes that are not {@code '.'} or {@code '/'}, and turning them into characters
+     * first is what makes such a sequence look like a separator. An incomplete or non-hexadecimal
+     * {@code %} is left as the literal character it is.</p>
+     */
+    private static String percentDecoded(String path) {
+        if (path.indexOf('%') < 0) {
+            return path;
+        }
+        StringBuilder out = new StringBuilder(path.length());
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c == '%' && i + 2 < path.length()) {
+                int hi = Character.digit(path.charAt(i + 1), 16);
+                int lo = Character.digit(path.charAt(i + 2), 16);
+                if (hi >= 0 && lo >= 0) {
+                    out.append((char) ((hi << 4) + lo));
+                    i += 2;
+                    continue;
+                }
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     /**

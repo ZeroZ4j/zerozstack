@@ -17,22 +17,53 @@
  */
 package com.zeroz4j.example.routing.server;
 
+import com.zeroz4j.server.DevAuth;
 import com.zeroz4j.server.Zeroz4jServer;
 
 /**
  * Runs the routing tour on http://localhost:8080.
  *
- * <p>Development authentication is enabled so the role-guarded route has something to check:
- * {@code demo}/{@code demo} holds {@code user}, {@code admin}/{@code admin} also holds
- * {@code admin}. Append {@code ?user=admin&password=admin} to the page URL to reach
+ * <p>The role-guarded route needs somebody signed in, and the only accounts here are the
+ * framework{@literal '}s built-in development ones. <b>Starting the server does not switch them
+ * on</b> — pass {@code --dev-login}:</p>
+ *
+ * <pre>{@code
+ * java -jar routing-tour-server/target/routing-tour-server-0.6.2.jar --dev-login
+ * }</pre>
+ *
+ * <p>Then {@code demo}/{@code demo} holds {@code user} and {@code admin}/{@code admin} also holds
+ * {@code admin}; append {@code ?user=admin&password=admin} to the page URL to reach
  * {@code /admin}.</p>
  */
 public final class RoutingTourServer {
 
+    private static final String DEV_LOGIN_FLAG = "--dev-login";
+
+    private RoutingTourServer() {}
+
+    /**
+     * @param args pass {@code --dev-login} to enable the built-in development accounts
+     */
     public static void main(String[] args) {
-        // The tour needs a signed-in identity for @RequiresRole to mean anything. Never in a
-        // deployment: the credentials are hardcoded and travel as query parameters.
-        System.setProperty("zeroz.security.mode", "dev");
+        if (devLoginRequested(args)) {
+            System.setProperty("zeroz.security.mode", "dev");
+            System.out.println(DevAuth.WARNING_BANNER);
+        } else {
+            System.out.println("[zeroz4j] Sign-in is off, and this example needs it. Restart with "
+                    + DEV_LOGIN_FLAG + " to enable the built-in development accounts.");
+        }
         Zeroz4jServer.start(8080, "zeroz4j Routing Tour").join();
+    }
+
+    /** True only when the flag was passed, or the property was already set by whoever started us. */
+    private static boolean devLoginRequested(String[] args) {
+        if (args != null) {
+            for (String arg : args) {
+                if (DEV_LOGIN_FLAG.equals(arg)) {
+                    return true;
+                }
+            }
+        }
+        return "dev".equals(System.getProperty("zeroz.security.mode"));
     }
 }

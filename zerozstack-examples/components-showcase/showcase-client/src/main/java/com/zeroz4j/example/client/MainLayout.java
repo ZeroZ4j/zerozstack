@@ -90,7 +90,7 @@ public class MainLayout extends HorizontalLayout {
         uiComponentsSubMenu.setAccordion(true);
 
         List<String> actions = Arrays.asList("btn", "link", "swap", "theme-controller");
-        List<String> dataInput = Arrays.asList("checkbox", "file-input", "radio", "range", "rating", "select", "textarea", "input", "toggle");
+        List<String> dataInput = Arrays.asList("checkbox", "file-input", "file-upload", "radio", "range", "rating", "select", "textarea", "input", "toggle");
         List<String> dataDisplay = Arrays.asList("accordion", "alert", "avatar", "badge", "card", "carousel", "chat-bubble", "collapse", "countdown", "diff", "kbd", "loading", "progress", "radial-progress", "skeleton", "stat", "table", "timeline", "tooltip");
         List<String> navigation = Arrays.asList("btm-nav", "breadcrumbs", "navbar", "pagination", "steps", "tab");
         List<String> layout = Arrays.asList("artboard", "divider", "drawer", "footer", "hero", "indicator", "join", "stack");

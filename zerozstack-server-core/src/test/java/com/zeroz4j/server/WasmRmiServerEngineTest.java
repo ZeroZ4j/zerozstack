@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -72,6 +73,8 @@ public class WasmRmiServerEngineTest {
         String adminMethod();
 
         void throwError();
+
+        void refuseWithReason();
 
         String scopedCall();
     }
@@ -113,6 +116,11 @@ public class WasmRmiServerEngineTest {
         public void throwError() {
             throw new RuntimeException("Intentional Error");
         }
+
+        @Override
+        public void refuseWithReason() {
+            throw new ClientVisibleException("That invoice was already approved.");
+        }
     }
 
     @WeldSetup
@@ -132,14 +140,30 @@ public class WasmRmiServerEngineTest {
     ObjectMapper mapper;
 
     static class FakeBasic implements RemoteEndpoint.Basic {
-        public List<ByteBuffer> sentBuffers = new ArrayList<>();
+        /** The session this remote belongs to, so reads can wait for its writer. */
+        Session owner;
+        /** Written by the session's writer thread, read by test assertions. */
+        private final List<ByteBuffer> recorded = new CopyOnWriteArrayList<>();
         public CountDownLatch latch;
+
+        /**
+         * Everything sent so far, once the connection's writer has caught up.
+         *
+         * <p>A method rather than a field because writes leave the calling thread: {@code WsWrites}
+         * queues a frame and a per-connection writer thread puts it on the wire, so reading the
+         * list straight after a call would race that thread.</p>
+         */
+        public List<ByteBuffer> sentBuffers() {
+            WsWrites.awaitQuiet(owner);
+            return recorded;
+        }
+
         @Override public void sendText(String text) {}
         @Override public void sendBinary(ByteBuffer data) {
             ByteBuffer copy = ByteBuffer.allocate(data.remaining());
             copy.put(data);
             copy.flip();
-            sentBuffers.add(copy);
+            recorded.add(copy);
             if (latch != null) latch.countDown();
         }
         @Override public void sendText(String partialMessage, boolean isLast) {}
@@ -158,7 +182,7 @@ public class WasmRmiServerEngineTest {
         private String id;
         public FakeBasic basic = new FakeBasic();
         private Map<String, Object> props = new HashMap<>();
-        public FakeSession(String id) { this.id = id; }
+        public FakeSession(String id) { this.id = id; this.basic.owner = this; }
         @Override public WebSocketContainer getContainer() { return null; }
         @Override public void addMessageHandler(MessageHandler handler) {}
         @Override public <T> void addMessageHandler(Class<T> clazz, MessageHandler.Whole<T> handler) {}
@@ -225,9 +249,9 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        assertEquals(1, fakeSession.basic.sentBuffers.size());
+        assertEquals(1, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
         assertEquals((byte) 2, buf.get(), "AUTH protocol version");
@@ -250,10 +274,10 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        assertEquals(1, fakeSession.basic.sentBuffers.size(),
+        assertEquals(1, fakeSession.basic.sentBuffers().size(),
                 "the frame is still sent: silence cannot tell a refusal from a slow network");
 
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
         assertEquals((byte) 2, buf.get(), "AUTH protocol version");
@@ -276,7 +300,7 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         buf.getInt();
         buf.get();
         buf.get();
@@ -298,7 +322,7 @@ public class WasmRmiServerEngineTest {
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(300, response.getInt());
         assertEquals((byte) 0x01, response.get(), "Must be a success frame, not ContextNotActiveException");
         assertEquals("request-scope-active", BinarySerializer.readValue(response, mapper));
@@ -321,9 +345,9 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(100, response.getInt());
         assertEquals((byte) 0x01, response.get()); 
         assertEquals("Hello World", BinarySerializer.readValue(response, mapper));
@@ -346,37 +370,134 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(101, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         String errorMsg = BinarySerializer.readString(response);
         assertTrue(errorMsg.contains("Authentication required"));
     }
 
+    /**
+     * An exception the application did not plan for describes the machinery - class names, field
+     * names, container internals - and an anonymous caller can provoke one on purpose to map the
+     * system. The caller gets one sentence and a code that also appears in the server log.
+     */
     @Test
-    public void testProcessIncomingCallExceptionHandling() throws Exception {
-        engine.onOpen(fakeSession, new FakeEndpointConfig()); 
-        
+    public void testAnUnexpectedFailureIsNotDescribedToTheCaller() throws Exception {
+        engine.onOpen(fakeSession, new FakeEndpointConfig());
+
         GrowableBuffer buffer = new GrowableBuffer();
         buffer.putInt(102);
         BinarySerializer.writeString(buffer, MyTestService.class.getName());
         BinarySerializer.writeString(buffer, "throwError");
-        buffer.putInt(0); 
+        buffer.putInt(0);
 
         fakeSession.basic.latch = new CountDownLatch(1);
 
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
-        
+
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
-        
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
+
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(102, response.getInt());
-        assertEquals((byte) 0x0F, response.get()); 
-        assertEquals("Intentional Error", BinarySerializer.readString(response));
+        assertEquals((byte) 0x0F, response.get());
+        String message = BinarySerializer.readString(response);
+        assertFalse(message.contains("Intentional Error"),
+                "the internal message must not travel: " + message);
+        assertTrue(message.startsWith("The server could not complete this request. Reference: "),
+                "the caller gets one generic sentence: " + message);
+        assertTrue(message.length() > "The server could not complete this request. Reference: ".length(),
+                "and a reference code to quote to support: " + message);
+    }
+
+    /**
+     * The opposite case: a refusal the application wrote for the caller to read travels word for
+     * word. This is the escape hatch that makes sanitizing everything else safe.
+     */
+    @Test
+    public void testAnApplicationRefusalReachesTheCallerUnchanged() throws Exception {
+        engine.onOpen(fakeSession, new FakeEndpointConfig());
+
+        GrowableBuffer buffer = new GrowableBuffer();
+        buffer.putInt(103);
+        BinarySerializer.writeString(buffer, MyTestService.class.getName());
+        BinarySerializer.writeString(buffer, "refuseWithReason");
+        buffer.putInt(0);
+
+        fakeSession.basic.latch = new CountDownLatch(1);
+        engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
+        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
+
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        assertEquals(103, response.getInt());
+        assertEquals((byte) 0x0F, response.get());
+        assertEquals("That invoice was already approved.", BinarySerializer.readString(response));
+    }
+
+    // ------------------------------------------------------- refused handshakes
+
+    /**
+     * Two different checks refuse a handshake and they are fixed in two different places, so the
+     * one sentence the browser is given has to say which. Telling somebody whose host name is not
+     * answered for that their origin was rejected sends them to read configuration that was never
+     * the problem.
+     */
+    @Test
+    public void testARefusedOriginSaysSo() {
+        FakeEndpointConfig config = new FakeEndpointConfig();
+        config.getUserProperties().put(RmiEndpointConfigurator.REJECTED_KEY, Boolean.TRUE);
+        config.getUserProperties().put(WasmRmiServerEngine.REFUSED_BY_KEY,
+                WasmRmiServerEngine.REFUSED_BY_ORIGIN);
+
+        engine.onOpen(fakeSession, config);
+
+        assertTrue(fakeSession.closed, "a refused handshake is closed at once");
+        assertEquals(WasmRmiServerEngine.ORIGIN_REFUSED_REASON,
+                fakeSession.closeReason.getReasonPhrase());
+        assertTrue(fakeSession.closeReason.getReasonPhrase().contains("zeroz.origins"),
+                "the developer meets this with no stack trace, so it must name what to look at");
+    }
+
+    @Test
+    public void testARefusedHostSaysSoInstead() {
+        FakeEndpointConfig config = new FakeEndpointConfig();
+        config.getUserProperties().put(RmiEndpointConfigurator.REJECTED_KEY, Boolean.TRUE);
+        config.getUserProperties().put(WasmRmiServerEngine.REFUSED_BY_KEY,
+                WasmRmiServerEngine.REFUSED_BY_HOST);
+
+        engine.onOpen(fakeSession, config);
+
+        String reason = fakeSession.closeReason.getReasonPhrase();
+        assertEquals(WasmRmiServerEngine.HOST_REFUSED_REASON, reason);
+        assertFalse(reason.toLowerCase().contains("origin"),
+                "sending a host-name refusal to the origin settings costs an hour: " + reason);
+    }
+
+    @Test
+    public void testAnUnexplainedRefusalNamesBothChecks() {
+        FakeEndpointConfig config = new FakeEndpointConfig();
+        config.getUserProperties().put(RmiEndpointConfigurator.REJECTED_KEY, Boolean.TRUE);
+
+        engine.onOpen(fakeSession, config);
+
+        assertEquals(WasmRmiServerEngine.HANDSHAKE_REFUSED_REASON,
+                fakeSession.closeReason.getReasonPhrase());
+    }
+
+    /** The protocol allows 123 bytes, and a container throws rather than truncating. */
+    @Test
+    public void testEveryRefusalReasonFitsTheProtocolLimit() {
+        for (String reason : new String[] {
+                WasmRmiServerEngine.ORIGIN_REFUSED_REASON,
+                WasmRmiServerEngine.HOST_REFUSED_REASON,
+                WasmRmiServerEngine.HANDSHAKE_REFUSED_REASON }) {
+            assertTrue(reason.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 123,
+                    "too long for a close frame: " + reason);
+        }
     }
 
     // ---------------------------------------------------------------- diagnose()
@@ -442,6 +563,10 @@ public class WasmRmiServerEngineTest {
     public void testResyncResendsKnownHandlesAndSkipsUnknown() throws Exception {
         engine.onOpen(fakeSession, new FakeEndpointConfig());
         mapper.registerWithId("known-1", "current-state");
+        // Re-sync answers only for objects this client was actually sent. Normally the record is
+        // written as a side effect of sending the object; here the object is planted directly in
+        // the registry, so the record is planted with it.
+        Disclosures.record(fakeSession.getId(), "known-1");
 
         GrowableBuffer buffer = new GrowableBuffer();
         buffer.putInt(0); // fire-and-forget
@@ -456,8 +581,8 @@ public class WasmRmiServerEngineTest {
 
         // Frame 0 is the auth frame from onOpen; the resync answer is the only other one:
         // one frame for the known handle, none for the unknown.
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
-        ByteBuffer frame = fakeSession.basic.sentBuffers.get(1);
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        ByteBuffer frame = fakeSession.basic.sentBuffers().get(1);
         assertEquals(0, frame.getInt());
         assertEquals(com.zeroz4j.api.SyncFrameTypes.SUBSCRIBE, frame.get());
         assertEquals("current-state", BinarySerializer.readValue(frame, mapper));

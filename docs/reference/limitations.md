@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.6.2, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.7.0, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 
@@ -39,7 +39,9 @@ What automatic recovery deliberately does **not** cover:
   application must re-register from a `StateListener` on `CONNECTED`; observe the server-side CDI
   event `SessionClosedEvent` to clean up the stale entry.
 - **A lost `LiveMutex` stays lost.** The server releases a session's locks when the socket closes.
-  Reconnecting does not re-acquire; the holder is told through `setLostListener`.
+  Reconnecting does not re-acquire; the holder is told through `setLostListener`. Taking the
+  lock again after a reconnect works, because the right to lock an object is remembered per browser,
+  not per connection.
 - **Events broadcast during an outage are gone.** Events are fire-and-forget news with no replay;
   this is unchanged and by design. State belongs in signals or LiveSync, which do recover.
 - **Offline writes are last-write-wins.** A shared-signal write queued offline flushes as one write
@@ -52,6 +54,19 @@ What automatic recovery deliberately does **not** cover:
   every effect that read any of its getters. Fine-grained per-field tracking is not implemented.
 - **Whole-object, last-write-wins.** No field-level merging. Two concurrent unlocked editors race and
   the later write wins; serialize them with `LiveMutex` where that matters.
+- **You can lock only an object the server sent you.** A `LiveMutex` request naming an object this
+  browser was never sent is refused straight away, with a message saying so. Being sent an object is
+  what earns the right to lock it; knowing its handle is not. No sign-in is required, because
+  applications with no login use locking too; a deployment that has logins can additionally require
+  one with `zeroz.livemutex.requireAuthentication=true`.
+- **A lock is waited for at most 30 seconds.** Then the call fails with a message naming the wait,
+  and nothing is changed. `zeroz.livemutex.waitSeconds` moves it. Callers are served in arrival
+  order.
+- **The lock table only holds locks in use.** An object has an entry while somebody holds its lock or
+  is waiting for it, and the entry goes the moment the last of them leaves. So the table is bounded
+  by how many locks are actually in use right now, not by how many object names have ever been
+  presented. There is no separate ceiling and no expiry: a lock held for ever by a live session stays
+  held, which is what a lock is for.
 - **No tracked collections.** Setters are the tracking boundary; in-place collection edits are
   invisible. Reassign through the setter or call `LiveMutationTracker.touch(obj)`.
 - **`notifyChanged` requires a prior send.** It throws `IllegalStateException` unless the object
@@ -297,13 +312,39 @@ WebAssembly today.
 ## Deployment and transport
 
 - **Messages are whole, never partial.** `@OnMessage` takes a complete `ByteBuffer`; there is no
-  partial-message handling and no chunking. A response larger than the container's binary buffer does
-  not raise an error — it closes the socket, with nothing in the log to say why. Raise the limit with
-  `zeroz.ws.maxBinaryMessageBytes`, and design against sending very large payloads over RMI at all.
-- **No limits are imposed by default.** `zeroz.ws.maxBinaryMessageBytes` and
-  `zeroz.ws.idleTimeoutMinutes` are unset, so the container's own values apply — which for the message
-  size is usually small. Without an idle timeout an abandoned browser tab holds a session and its
-  server-side resources indefinitely.
+  partial-message handling and no chunking. A message larger than the limit does not raise an error
+  and never reaches framework code — it closes the socket. There is nothing to catch and nothing sent
+  back. The client reconnects by itself, so the symptom is a connection that drops whenever one
+  particular call is made.
+- **Messages are capped at 4 MB by default.** `zeroz.ws.maxBinaryMessageBytes` sets the largest
+  binary message the endpoint accepts; unset, the framework applies 4,194,304 bytes, the same default
+  gRPC uses. An explicit setting wins in either direction. The limit in force is logged once at
+  startup, naming the property. Raise it if a real response needs more, or return less — page the
+  results, or return identifiers and fetch details on demand.
+- **The RMI connection is not an upload channel.** It carries the messages an application exchanges,
+  not documents, images or video. A file over the limit closes the connection. File upload is a
+  separate feature.
+- **The idle timeout is still the container's.** `zeroz.ws.idleTimeoutMinutes` is unset by default,
+  so without setting it an abandoned browser tab holds a session and its server-side resources for as
+  long as the container allows.
+- **A connection that stops reading is closed, not waited for.** The server can only send as fast as
+  the browser accepts, so messages for a browser that has stopped accepting are held in a queue for
+  that one connection. The queue holds 256 messages or 8 MB, whichever comes first
+  (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`); an empty queue
+  always accepts the next message however large it is, so a single big response is never refused.
+  Past that the
+  connection is closed with WebSocket code `1013`, and the log names the limit that was hit. Such a
+  browser has already missed messages it will never see, so it has to reconnect and fetch a fresh
+  copy either way; holding more would let one browser use up the server's memory. Nothing else waits
+  for it: each connection has its own queue and its own thread, so a stalled browser delays only its
+  own messages, never another browser's and never a broadcast.
+- **Wire lengths are checked before anything is allocated.** Every length and element count in the
+  binary format is a number the sender chose. Each one is now compared against the bytes actually
+  present, at the width of the element it describes, before an array or a collection is created, and
+  a negative one is refused with a message rather than escaping as a `NegativeArraySizeException`.
+  Nesting is capped at 256 levels. A malformed or hostile message therefore fails fast instead of
+  reserving memory or overflowing the stack. Applications see this only as a clearer exception on a
+  corrupt stream.
 - **Container-managed threads are platform threads.** A Jakarta EE 10 `ManagedThreadFactory` cannot
   produce virtual threads, so a WAR deployment supplying one through
   `SessionThreadFactoryProvider` trades cheap threads for the container's naming, transaction and

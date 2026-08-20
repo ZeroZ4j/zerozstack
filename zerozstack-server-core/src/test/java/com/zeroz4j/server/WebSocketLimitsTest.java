@@ -24,10 +24,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * {@code @OnMessage} takes a whole message — there is no partial-message handling — so a response
- * larger than the container's binary buffer does not raise an error, it closes the socket. These
- * tests pin that the limit can be raised, and that leaving it unset does not quietly override
- * whatever the container was configured with.
+ * {@code @OnMessage} takes a whole message — there is no partial-message handling — so a message
+ * larger than the session's binary buffer does not raise an error, it closes the socket.
+ *
+ * <p>These tests pin the two halves of that: a deployment's own setting is applied unchanged, and
+ * an unset property gets the framework's 4 MB default rather than the container's, which on Tyrus
+ * (what Helidon embeds) is {@code Integer.MAX_VALUE} and would let a client make the server
+ * assemble roughly 2 GB.</p>
  */
 class WebSocketLimitsTest {
 
@@ -66,19 +69,37 @@ class WebSocketLimitsTest {
     }
 
     @Test
-    void unsetPropertiesLeaveTheContainersOwnLimits() {
+    void anUnsetBinaryLimitGetsTheFrameworkDefaultOfFourMegabytes() {
         WasmRmiServerEngineTest.FakeSession session = open();
 
-        assertEquals(0, session.maxBinaryBufferSize,
-                "an unset property must not impose a framework default over the deployment's tuning");
-        assertEquals(0L, session.maxIdleTimeout);
+        assertEquals(4 * 1024 * 1024, session.maxBinaryBufferSize,
+                "Tyrus defaults this to Integer.MAX_VALUE, so leaving it alone lets a client make"
+                        + " the server assemble roughly 2 GB from a fragmented message");
+        assertEquals(4 * 1024 * 1024, WasmRmiServerEngine.DEFAULT_MAX_BINARY_BYTES);
+    }
+
+    @Test
+    void anUnsetIdleTimeoutStillLeavesTheContainersOwn() {
+        // An abandoned connection costs a session, not memory, and containers disagree on what a
+        // sensible value is — so this one is not defaulted.
+        assertEquals(0L, open().maxIdleTimeout);
     }
 
     @Test
     void aConfiguredBinaryLimitIsApplied() {
         System.setProperty(WasmRmiServerEngine.MAX_BINARY_BYTES_PROPERTY, "8388608");
 
-        assertEquals(8 * 1024 * 1024, open().maxBinaryBufferSize);
+        assertEquals(8 * 1024 * 1024, open().maxBinaryBufferSize,
+                "a deployment that has already tuned this keeps its number");
+    }
+
+    @Test
+    void aConfiguredBinaryLimitSmallerThanTheDefaultIsAlsoApplied() {
+        // "Explicit wins" has to mean downwards too, or a deployment on a constrained host cannot
+        // tighten the limit.
+        System.setProperty(WasmRmiServerEngine.MAX_BINARY_BYTES_PROPERTY, "65536");
+
+        assertEquals(65536, open().maxBinaryBufferSize);
     }
 
     @Test
@@ -90,15 +111,16 @@ class WebSocketLimitsTest {
     }
 
     @Test
-    void anUnusableValueIsIgnoredRatherThanApplied() {
+    void anUnusableValueFallsBackToWhatAnUnsetPropertyWouldDo() {
         // Zero and negative mean different things to different containers, and "banana" means
-        // nothing anywhere; either way, leaving the container's value alone is the safe answer.
+        // nothing anywhere. An unusable size setting is not a reason to leave the server exposed,
+        // so it lands on the framework default; an unusable idle setting leaves the container's.
         System.setProperty(WasmRmiServerEngine.MAX_BINARY_BYTES_PROPERTY, "0");
         System.setProperty(WasmRmiServerEngine.IDLE_TIMEOUT_MINUTES_PROPERTY, "banana");
 
         WasmRmiServerEngineTest.FakeSession session = open();
 
-        assertEquals(0, session.maxBinaryBufferSize);
+        assertEquals(4 * 1024 * 1024, session.maxBinaryBufferSize);
         assertEquals(0L, session.maxIdleTimeout);
     }
 }

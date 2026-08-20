@@ -23,7 +23,8 @@ any frame is exchanged.
 **Origin.** The `Origin` header must match the host the request was sent to, or one of the origins in
 `zeroz.origins`. This is not optional politeness: a browser attaches cookies to any connection to your
 origin, including one opened by a page the user is merely visiting, so an unchecked `Origin` would
-hand that page the visitor's identity. A refused handshake is closed with WebSocket close code 1008.
+hand that page the visitor's identity. A refused handshake is closed with WebSocket close code 1008, with a reason naming which check
+refused it and nothing else about the deployment.
 A handshake carrying no `Origin` at all is allowed — browsers always send one, so its absence means a
 non-browser client with no ambient cookies to abuse.
 
@@ -53,6 +54,14 @@ Interestingly, standard RMI requests do not include a dedicated opcode byte. Ins
 * `[4 bytes]` Argument Count
 * `[N Elements]` Arguments (Type Tag + Value)
 
+**In flight at once.** One connection may have 32 frames being decoded and executed at the same time
+(`zeroz.ws.maxConcurrentFramesPerSession`). A frame that arrives while the connection is at its limit
+waits — nothing is dropped and no call fails, so a burst is served a few at a time rather than
+refused. Waiting slows down that one connection's read loop, which is the point; other connections
+are unaffected. The limit exists because decoding is where a small message becomes a large object
+graph, so a message-size limit is only a real ceiling if the number of messages being decoded at once
+is bounded too.
+
 ### Server Responses (Server -> Client)
 
 Server responses include an explicit opcode byte at index 4.
@@ -61,6 +70,13 @@ Server responses include an explicit opcode byte at index 4.
   * Payload: `[Type Tag + Value]` (The return value of the method)
 * **0x0F — RMI_ERROR (Error)**
   * Payload: `[String]` (Error message)
+  * Two kinds of message travel word for word: one the application deliberately wrote for the caller
+    (`com.zeroz4j.server.ClientVisibleException`), and the framework's own refusals — authentication
+    required, access denied, unknown service, unknown method, failed argument validation.
+  * Every other failure is answered with `The server could not complete this request. Reference: <code>`.
+    The real message and stack trace are written to the server log under the same code. An
+    unplanned failure's message names classes, fields and container internals, and an anonymous
+    caller can trigger those failures on purpose to learn how the system is put together.
 * **0x02 — PUSH (Server-initiated)**
   * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
 * **0x03 — AUTH (Authentication Result)**
@@ -100,6 +116,12 @@ request context.
 
 Any real traffic postpones the next ping, so a connection in use sends none at all. `Keepalive.configure(seconds)`
 changes the interval; zero turns it off.
+
+Because a ping is answered before any check, it is also the cheapest frame to send in a loop. One
+connection is answered at most once per second (`zeroz.ws.keepaliveMinIntervalMillis`); pings that
+arrive faster are ignored and cost nothing. A working client is nowhere near that limit — it waits 25
+seconds. The answer is written on the connection's own read thread and never becomes a task, so a
+connection is still answered while it is busy.
 
 ## LiveSync Protocol (0x10 – 0x1F)
 
@@ -203,9 +225,20 @@ itself in this order, all as fire-and-forget frames:
    handles for the new session. Handles the server does not know — it restarted since they were
    fetched — produce no frame and one server-side log line naming the count.
 
-Presenting a handle to `zeroz4j.resync` is treated as proof of prior disclosure, the same trust
-model as LiveSync mutation: handles are unguessable random UUIDs a client can only have learned by
-being sent the object.
+A handle presented to `zeroz4j.resync` is answered only when the server's own record says that
+browser was sent the object. Presenting a handle used to be proof enough, on the theory that a handle
+can only be learned by being sent the object — which is not so, because an object nested inside a
+broadcast event or a shared signal goes out with its handle attached, teaching every recipient the
+handles of things it was never given.
+
+The record is kept per **browser id**, not per session, so a reconnect — which is always a new session
+— still restores what that browser holds. A connection carrying no browser id is remembered for the
+life of that one connection and re-fetches after a reconnect instead. A handle the caller was never
+sent and a handle the server no longer knows are treated identically: no frame, no error, one counted
+log line.
+
+The same record answers the question "may this client take a lock on that object", through
+`Disclosures.wasDisclosedTo(session, handleId)`.
 
 In-flight RMI requests are **not** replayed. Their suspended callers fail with
 `DisconnectedException` the moment the drop is detected, as do calls attempted while disconnected.

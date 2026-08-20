@@ -23,6 +23,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 
 /**
  * Development-mode credential store, active only when the system property
@@ -35,9 +37,18 @@ import java.util.Set;
  * query parameters on the WebSocket handshake.</p>
  *
  * <p><b>Never enable dev mode in production</b> — credentials travel as query parameters
- * and the user set is hardcoded.</p>
+ * and the user set is hardcoded. Nothing switches it on by itself: an application or an example has
+ * to set the property, and the first handshake that finds it set logs {@link #WARNING_BANNER} so a
+ * server running this way says so on its own.</p>
+ *
+ * <p>The framework writes no log line containing a handshake password. The exposure that remains is
+ * the URL itself, which is why this is a development-only mechanism.</p>
  */
 public final class DevAuth {
+
+    private static final Logger LOG = Logger.getLogger(DevAuth.class.getName());
+
+    private static final AtomicBoolean WARNED = new AtomicBoolean();
 
     private static final Map<String, DevUser> DEV_USERS = new LinkedHashMap<>();
 
@@ -52,11 +63,42 @@ public final class DevAuth {
      * Returns whether development authentication is enabled
      * ({@code -Dzeroz.security.mode=dev}).
      *
+     * <p>The first call that finds it on logs {@link #WARNING_BANNER} at {@code WARNING}. It is
+     * printed once per JVM, from the framework rather than from the application, so an application
+     * that switches this on cannot switch the notice off by not printing it.</p>
+     *
      * @return true in dev mode
      */
     public static boolean isDevMode() {
-        return "dev".equals(System.getProperty("zeroz.security.mode"));
+        boolean on = "dev".equals(System.getProperty("zeroz.security.mode"));
+        if (on && WARNED.compareAndSet(false, true)) {
+            LOG.warning(WARNING_BANNER);
+        }
+        return on;
     }
+
+    /**
+     * The notice logged when development authentication is on.
+     *
+     * <p>Public so that an application's own start-up message can print the same words, rather than
+     * inventing a milder version of them.</p>
+     */
+    public static final String WARNING_BANNER =
+            System.lineSeparator()
+            + "***************************************************************************" + System.lineSeparator()
+            + "  DEVELOPER LOGIN IS ON  (zeroz.security.mode=dev)" + System.lineSeparator()
+            + System.lineSeparator()
+            + "  Anyone who can reach this server can sign in as:" + System.lineSeparator()
+            + "      demo  / demo   (role: user)" + System.lineSeparator()
+            + "      admin / admin  (roles: user, admin)" + System.lineSeparator()
+            + System.lineSeparator()
+            + "  The password travels in the WebSocket URL, so it can end up in browser" + System.lineSeparator()
+            + "  history, proxy logs and Referer headers." + System.lineSeparator()
+            + System.lineSeparator()
+            + "  Use this on your own machine and nowhere else. For anything real,"  + System.lineSeparator()
+            + "  register an AuthenticationProvider - see docs/guides/security-auth.md." + System.lineSeparator()
+            + "***************************************************************************";
+
 
     /**
      * Validates dev credentials.

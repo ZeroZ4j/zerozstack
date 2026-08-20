@@ -66,7 +66,7 @@ class ScopedPublishTest {
     }
 
     private static int frames(WasmRmiServerEngineTest.FakeSession s) {
-        return s.basic.sentBuffers.size();
+        return s.basic.sentBuffers().size();
     }
 
     @Test

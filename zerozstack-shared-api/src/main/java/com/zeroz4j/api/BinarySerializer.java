@@ -150,6 +150,33 @@ public class BinarySerializer {
     private static final ThreadLocal<Set<Object>> seenObjects = ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
 
     /**
+     * How many levels of nesting {@link #readValue(ByteBuffer, ObjectMapper)} will descend before
+     * refusing the stream.
+     *
+     * <p>Lists, sets, maps, {@code Optional} and object fields each recurse, so the wire format lets
+     * a sender choose the recursion depth of the reader. A megabyte of nothing but list tags is
+     * about a million levels, which overflows any thread stack long before the message-size limit
+     * would notice.</p>
+     *
+     * <p>256 is chosen rather than a tighter number because one level of a domain model usually
+     * costs two levels here — the collection that holds it and the object itself — so a genuinely
+     * recursive structure such as a comment tree can be tens of levels deep and still be honest.
+     * A few hundred frames is far below what any thread stack, browser or server, has trouble
+     * with.</p>
+     */
+    public static final int MAX_NESTING_DEPTH = 256;
+
+    /**
+     * Current read recursion depth, per thread.
+     *
+     * <p>An {@code int[1]} rather than an {@code Integer} so the counter is updated in place; a
+     * {@link ThreadLocal} rather than a parameter so the limit also covers generated delegates,
+     * which call back into {@link #readValue(ByteBuffer, ObjectMapper)} through the public
+     * signature. {@code ThreadLocal} is already used above and is supported by TeaVM.</p>
+     */
+    private static final ThreadLocal<int[]> readDepth = ThreadLocal.withInitial(() -> new int[1]);
+
+    /**
      * Packs an object value and its type tag into the target {@link ByteBuffer}.
      *
      * @param buffer the target buffer to write binary data into
@@ -352,7 +379,9 @@ public class BinarySerializer {
      * @param buffer the source buffer positioned at a 1-byte type tag
      * @param mapper the object mapper to resolve or register object reference handles
      * @return the deserialized Object (primitive wrapper, String, List, Map, byte[], or domain object)
-     * @throws IllegalStateException if an unmapped or invalid type tag byte is encountered
+     * @throws IllegalStateException if an unmapped or invalid type tag byte is encountered, if a
+     *         declared length or element count cannot be satisfied by the bytes actually present, or
+     *         if the stream nests deeper than {@link #MAX_NESTING_DEPTH}
      *
      * <p><b>Under the hood:</b> Reads the tag byte via {@code buffer.get()}. Switches on tag value:
      * <ul>
@@ -362,8 +391,30 @@ public class BinarySerializer {
      *       {@link BinaryPackable#readFromBuffer}.</li>
      *   <li>Collections/Maps: Reads size int, loops and recursively calls {@code readValue}.</li>
      * </ul>
+     *
+     * <p><b>Untrusted input:</b> every length and element count on the wire is checked against the
+     * bytes actually remaining, at the element's own width, <i>before</i> anything is allocated.
+     * Nothing here sizes an array or a collection from a number a sender chose, so a short message
+     * cannot make the reader reserve a large amount of memory.</p>
      */
     public static Object readValue(ByteBuffer buffer, ObjectMapper mapper) {
+        int[] depth = readDepth.get();
+        if (depth[0] >= MAX_NESTING_DEPTH) {
+            throw new IllegalStateException("Binary stream nests deeper than " + MAX_NESTING_DEPTH
+                    + " levels; refusing to read further.");
+        }
+        depth[0]++;
+        try {
+            return readTaggedValue(buffer, mapper);
+        } finally {
+            // Decremented on the way out whether the read returned or threw, so a refused message
+            // leaves the counter where the next message on this thread expects it.
+            depth[0]--;
+        }
+    }
+
+    /** The body of {@link #readValue(ByteBuffer, ObjectMapper)}, called with the depth already counted. */
+    private static Object readTaggedValue(ByteBuffer buffer, ObjectMapper mapper) {
         byte tag = buffer.get();
         switch (tag) {
             case TAG_NULL:
@@ -428,15 +479,18 @@ public class BinarySerializer {
                 return name == null ? null : BinaryRegistry.resolveEnum(fqcn, name);
             }
             case TAG_LIST: {
-                int size = buffer.getInt();
-                List<Object> list = new ArrayList<>(size);
+                // Not pre-sized: an empty slot costs far more memory than the one tag byte that
+                // asked for it, so capacity from the wire amplifies a small message into a big
+                // allocation even when the count itself is within bounds.
+                int size = checkedCount(buffer, 1, "list");
+                List<Object> list = new ArrayList<>();
                 for (int i = 0; i < size; i++) {
                     list.add(readValue(buffer, mapper));
                 }
                 return list;
             }
             case TAG_SET: {
-                int size = buffer.getInt();
+                int size = checkedCount(buffer, 1, "set");
                 Set<Object> set = new LinkedHashSet<>();
                 for (int i = 0; i < size; i++) {
                     set.add(readValue(buffer, mapper));
@@ -444,8 +498,9 @@ public class BinarySerializer {
                 return set;
             }
             case TAG_MAP: {
-                int size = buffer.getInt();
-                Map<Object, Object> map = new LinkedHashMap<>(size);
+                // Two values per entry, so two tag bytes at least.
+                int size = checkedCount(buffer, 2, "map");
+                Map<Object, Object> map = new LinkedHashMap<>();
                 for (int i = 0; i < size; i++) {
                     Object key = readValue(buffer, mapper);
                     Object value = readValue(buffer, mapper);
@@ -478,7 +533,7 @@ public class BinarySerializer {
             case TAG_OPTIONAL:
                 return java.util.Optional.ofNullable(readValue(buffer, mapper));
             case TAG_INT_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 4, "int[]");
                 int[] ints = new int[len];
                 for (int i = 0; i < len; i++) {
                     ints[i] = buffer.getInt();
@@ -486,7 +541,7 @@ public class BinarySerializer {
                 return ints;
             }
             case TAG_LONG_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 8, "long[]");
                 long[] longs = new long[len];
                 for (int i = 0; i < len; i++) {
                     longs[i] = buffer.getLong();
@@ -494,7 +549,7 @@ public class BinarySerializer {
                 return longs;
             }
             case TAG_DOUBLE_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 8, "double[]");
                 double[] doubles = new double[len];
                 for (int i = 0; i < len; i++) {
                     doubles[i] = buffer.getDouble();
@@ -502,7 +557,7 @@ public class BinarySerializer {
                 return doubles;
             }
             case TAG_FLOAT_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 4, "float[]");
                 float[] floats = new float[len];
                 for (int i = 0; i < len; i++) {
                     floats[i] = buffer.getFloat();
@@ -510,7 +565,7 @@ public class BinarySerializer {
                 return floats;
             }
             case TAG_SHORT_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 2, "short[]");
                 short[] shorts = new short[len];
                 for (int i = 0; i < len; i++) {
                     shorts[i] = buffer.getShort();
@@ -518,7 +573,7 @@ public class BinarySerializer {
                 return shorts;
             }
             case TAG_CHAR_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 2, "char[]");
                 char[] chars = new char[len];
                 for (int i = 0; i < len; i++) {
                     chars[i] = buffer.getChar();
@@ -526,7 +581,7 @@ public class BinarySerializer {
                 return chars;
             }
             case TAG_BOOLEAN_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 1, "boolean[]");
                 boolean[] booleans = new boolean[len];
                 for (int i = 0; i < len; i++) {
                     booleans[i] = buffer.get() != 0;
@@ -545,7 +600,7 @@ public class BinarySerializer {
                 return handle == null ? null : adapter.fromHandle(handle);
             }
             case TAG_BYTE_ARRAY: {
-                int len = buffer.getInt();
+                int len = checkedCount(buffer, 1, "byte[]");
                 byte[] arr = new byte[len];
                 buffer.get(arr);
                 return arr;
@@ -579,18 +634,64 @@ public class BinarySerializer {
      *
      * @param buffer the source buffer
      * @return decoded String, or {@code null} if the length header is -1
+     * @throws IllegalStateException if the declared length is negative (other than the -1 that means
+     *         null) or longer than the bytes actually remaining in the buffer
      *
-     * <p><b>Under the hood:</b> Reads 4-byte length integer via {@code buffer.getInt()}. Allocates byte array of size,
-     * reads bytes via {@code buffer.get(bytes)}, and constructs new String using UTF-8 charset.</p>
+     * <p><b>Under the hood:</b> Reads a 4-byte length integer via {@code buffer.getInt()}, checks it
+     * against {@code buffer.remaining()}, allocates a byte array of that size, reads the bytes via
+     * {@code buffer.get(bytes)}, and constructs a new String using the UTF-8 charset.</p>
+     *
+     * <p>The check comes first on purpose. Allocating from the declared length and letting
+     * {@code buffer.get} fail afterwards means a ten-byte message claiming two billion characters
+     * reserves two gigabytes before anything notices.</p>
      */
     public static String readString(ByteBuffer buffer) {
         int len = buffer.getInt();
         if (len == -1) {
             return null;
         }
+        if (len < 0) {
+            throw new IllegalStateException("Binary stream declares a string of " + len
+                    + " bytes; only -1 (null) may be negative.");
+        }
+        if (len > buffer.remaining()) {
+            throw new IllegalStateException("Binary stream declares a string of " + len
+                    + " bytes but only " + buffer.remaining() + " bytes remain.");
+        }
         byte[] bytes = new byte[len];
         buffer.get(bytes);
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Reads a 4-byte element count and refuses it if the buffer could not possibly hold that many
+     * elements.
+     *
+     * <p>The width matters. A {@code long[]} element occupies eight bytes, so a count equal to the
+     * number of bytes left would still be eight times more memory than the whole message — a check
+     * of "count against remaining bytes" alone lets a one-megabyte message allocate eight. For a
+     * collection the width is the smallest an element can be: one tag byte, or two for a map entry
+     * because it carries a key and a value.</p>
+     *
+     * @param buffer       the source buffer, positioned at the count
+     * @param elementBytes the fewest bytes one element can occupy
+     * @param what         what is being read, named in the exception message
+     * @return the count, guaranteed to be zero or more and satisfiable by the bytes remaining
+     * @throws IllegalStateException if the count is negative or larger than the remaining bytes allow
+     */
+    private static int checkedCount(ByteBuffer buffer, int elementBytes, String what) {
+        int count = buffer.getInt();
+        if (count < 0) {
+            throw new IllegalStateException("Binary stream declares a negative " + what
+                    + " length (" + count + ").");
+        }
+        int affordable = buffer.remaining() / elementBytes;
+        if (count > affordable) {
+            throw new IllegalStateException("Binary stream declares a " + what + " of " + count
+                    + " elements, but the " + buffer.remaining() + " bytes remaining hold at most "
+                    + affordable + ".");
+        }
+        return count;
     }
 
     /**

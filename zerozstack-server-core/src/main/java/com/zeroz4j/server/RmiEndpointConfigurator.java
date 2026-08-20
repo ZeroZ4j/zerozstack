@@ -143,6 +143,13 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
             LOG.warning("[zeroz4j] Refused WebSocket handshake. "
                     + OriginPolicy.explainRefusal(origin, host));
             config.getUserProperties().put(REJECTED_KEY, Boolean.TRUE);
+            // Which check refused decides the sentence the browser is closed with, and the two are
+            // fixed in different settings: sending someone whose host name is not answered for to
+            // read origin configuration wastes their afternoon.
+            config.getUserProperties().put(WasmRmiServerEngine.REFUSED_BY_KEY,
+                    OriginPolicy.isHostAllowed(host)
+                            ? WasmRmiServerEngine.REFUSED_BY_ORIGIN
+                            : WasmRmiServerEngine.REFUSED_BY_HOST);
             return;
         }
 

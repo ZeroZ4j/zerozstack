@@ -110,6 +110,36 @@ shared. No shading anywhere — the container launches the same plain classpath 
 | To deploy to a server, Kubernetes, or any cloud | Shape 3 (`docker build`) |
 | One merged jar | Nothing — see the rule at the top |
 
+## Settings a real deployment needs
+
+Whichever shape you ship, set these before anyone outside your machine can reach the application.
+They all default to the behaviour that is convenient during development, which is not the behaviour
+you want in front of the internet.
+
+| Property | Set it to | Why |
+|---|---|---|
+| `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | Refuses a handshake addressed to a name you do not serve. Without it, an attacker who points their own domain at your server has a page that can talk to your application from a visitor's browser. |
+| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Generated at startup when unset, so a restart logs everyone's browser out and other nodes reject each other's ids. |
+| `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means same-origin only, which is what you want. |
+| `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two accounts whose passwords are printed in this documentation. |
+| `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | See below. |
+
+```bash
+java -Dzeroz.hosts=app.example.com \
+     -Dzeroz.clientId.secret=$MY_SECRET \
+     -Dzeroz.ws.maxBinaryMessageBytes=8388608 \
+     -jar myapp-server.jar
+```
+
+**Serve it over HTTPS.** The identity cookie is marked `Secure`, and TLS is what stops a browser
+accepting a name that has been repointed at your server. Behind a proxy that terminates TLS, set
+`zeroz.clientId.secureCookie=true` so the cookie keeps that mark.
+
+The development accounts are described in
+[Authentication and authorization](security-auth.md#development-authentication). The examples take a
+`--dev-login` flag to switch them on; nothing switches them on by itself, and a server that has them
+on says so at startup.
+
 ## Shape 4: a WAR on a Jakarta EE server
 
 Everything above assumes ZeroZ Stack brings its own server. It does not have to. To deploy into an
@@ -192,21 +222,94 @@ security context is that container's contract, and worth asserting in your own i
 
 ### WebSocket limits
 
-Two properties, both unset by default so the container's own configuration wins:
+Every limit the framework applies, in one place. All of them have a working default; a fresh
+application needs none of them set.
 
-| Property | Effect |
-|---|---|
-| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts |
-| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing |
+| Property | Effect | Unset |
+|---|---|---|
+| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts | **4 MB (4,194,304 bytes)** |
+| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
+| `zeroz.ws.maxPendingFramesPerSession` | Most messages that may be waiting to go out on one connection | **256** |
+| `zeroz.ws.maxPendingBytesPerSession` | Most bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
+| `zeroz.ws.maxConcurrentFramesPerSession` | Most messages from one connection being handled at the same time | **32** |
+| `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive replies to one connection | **1000** |
+| `zeroz.livemutex.waitSeconds` | How long a client waits for an item somebody else is editing | **30** |
+| `zeroz.livemutex.requireAuthentication` | Restricts editing locks to signed-in users | **off** |
+| `zeroz.disclosure.maxHandlesPerClient` | Objects remembered as sent to one browser | **10,000** |
+| `zeroz.disclosure.idleHours` | How long that memory survives with no activity | **24** |
+| `zeroz.upload.maxBytes` | Largest file an upload may carry | **25 MB (26,214,400 bytes)** |
+| `zeroz.upload.passSeconds` | How long an upload permission slip stays valid | **60** |
+| `zeroz.upload.tempDir` | Where a file is written while the application decides on it | the system temporary directory |
 
-**Set the first one.** The engine's `@OnMessage` takes a whole message — there is no partial-message
-handling — so a response larger than the container's binary buffer does not raise an error, it closes
-the socket. Container defaults are small, and one page of records can exceed them. The symptom is a
-connection that drops under load with nothing in the log to explain it.
+The size limit has a framework default because the container's own is not a safe one to inherit.
+The framework uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus
+2.1.5.
+Tyrus starts each connection's message limit at `Integer.MAX_VALUE` — about 2 GB — and Helidon never
+changes it.
+A client that splits one message into many small pieces can therefore make the server hold all of
+them in memory before a single line of your code runs.
+4 MB is the same default gRPC uses.
+
+An explicit setting always wins, up or down, so a deployment that already tuned this keeps its
+number:
 
 ```
 -Dzeroz.ws.maxBinaryMessageBytes=8388608 -Dzeroz.ws.idleTimeoutMinutes=30
 ```
+
+The server logs the limit in force once at startup, naming the property, so a message that is
+refused later can be explained without guessing.
+
+#### When a browser stops reading
+
+The last two properties are about the other direction: messages the server is trying to send.
+
+The server sends a message by handing it to the operating system, which puts it on the network as
+fast as the browser accepts it.
+A browser that has stopped accepting — a laptop that went to sleep, a phone that lost signal, a tab
+that is wedged, or a client written on purpose to connect and then read nothing — makes that hand-off
+stop part-way.
+The server keeps the messages for that one connection in a queue until it starts moving again.
+
+The queue has a size, and the two settings above are it.
+Reaching either one closes that connection with WebSocket code `1013`, "try again later", and writes
+a line to the log saying which limit was hit and what the setting is called.
+An empty queue always accepts the next message however large it is, so a single big response is
+never refused; the limits are on what piles up behind it.
+
+Closing is deliberate.
+A browser that is that far behind has already missed messages it will never see, so its copy of your
+data is wrong whichever choice is made, and the client reconnects and asks for a fresh copy on its
+own.
+The alternative would be holding the messages until the server ran out of memory, and one browser
+would be able to decide that.
+
+**Nothing else on the server waits for a connection in this state.**
+Each connection has its own queue and its own thread that empties it, so a browser that has stopped
+reading holds up its own messages and nothing else — not another browser's, and not a broadcast on
+its way to everyone.
+
+Raise the limits if you send large messages in bursts and you would rather a struggling connection
+recovered than dropped.
+Lower them if you have many connections and want a stalled one dealt with sooner.
+
+```
+-Dzeroz.ws.maxPendingFramesPerSession=512 -Dzeroz.ws.maxPendingBytesPerSession=16777216
+```
+
+**What a client sees when a message is too big: the connection closes.** There is no error response
+and no exception you can catch. The engine's `@OnMessage` takes a whole message — there is no
+partial-message handling — so an over-sized message never reaches framework code at all. The client
+reconnects automatically, so the symptom is a socket that drops every time one particular call is
+made.
+
+If a response is genuinely over the limit, either raise the limit or return less: page the results,
+or return identifiers and fetch details on demand.
+
+!!! warning "This connection is not for file uploads"
+    Do not send file contents over the RMI socket. It is sized for the messages an application
+    exchanges, not for documents, images or video, and a big enough file simply closes the
+    connection. File upload is a separate feature.
 
 The idle timeout matters for a different reason: without one, an abandoned browser tab holds a
 session and its server-side resources indefinitely. The client's automatic reconnect means closing an

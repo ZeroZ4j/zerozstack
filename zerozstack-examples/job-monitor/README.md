@@ -22,7 +22,8 @@ Then double-click `run.bat` in this directory or run from terminal:
 
 ```bash
 cd zerozstack-examples/job-monitor/job-monitor-server
-mvn exec:java -Dexec.mainClass="com.zeroz4j.example.server.ExampleServer"
+java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer --dev-login
 ```
 
-Open `http://localhost:8080` in two browser windows (log in as `demo/demo` or `admin/admin`). Click "Start job" in one window and watch both windows track progress in real time.
+`--dev-login` switches on the built-in development accounts; without it nothing can sign in. Open
+`http://localhost:8080` in two browser windows (log in as `demo/demo` or `admin/admin`). Click "Start job" in one window and watch both windows track progress in real time.
