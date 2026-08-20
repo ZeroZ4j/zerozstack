@@ -189,8 +189,33 @@ public final class Disclosures {
         if (session == null || handleId == null) {
             return false;
         }
+        return wasDisclosedTo(
+                (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY),
+                session.getId(), handleId);
+    }
+
+    /**
+     * The same question asked from a caller's identity rather than from the socket.
+     *
+     * <p>An RMI method is handed who is calling, not which connection they are on, so it cannot
+     * produce a {@link Session}. It has the two things this record is keyed by, which is all the
+     * question consults: the browser id when there is one, the connection id when there is not.</p>
+     *
+     * @param clientId  the signed browser id, or null when the client carries none
+     * @param sessionId the connection id, used as the key when there is no browser id
+     * @param handleId  the handle the client presented
+     * @return true when this browser was sent that object and the record still holds it
+     */
+    public static boolean wasDisclosedTo(String clientId, String sessionId, String handleId) {
+        if (handleId == null) {
+            return false;
+        }
+        String key = keyFor(clientId, sessionId);
+        if (key == null) {
+            return false;
+        }
         pruneExpired();
-        Record record = LEDGER.get(keyFor(session));
+        Record record = LEDGER.get(key);
         return record != null && record.contains(handleId);
     }
 
@@ -248,9 +273,14 @@ public final class Disclosures {
      * The browser id this session carries, or its session id when it carries none.
      */
     private static String keyFor(Session session) {
-        Object clientId = session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
-        if (clientId instanceof String && !((String) clientId).isEmpty()) {
-            return (String) clientId;
+        return keyFor((String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY),
+                session.getId());
+    }
+
+    /** The ledger key for an identity: the browser id when there is one, else the connection id. */
+    private static String keyFor(String clientId, String sessionId) {
+        if (clientId != null && !clientId.isEmpty()) {
+            return clientId;
         }
         if (FALLBACK_LOGGED.compareAndSet(false, true)) {
             LOG.info("[zeroz4j] A connection carries no browser id, so what was sent to it is "
@@ -258,7 +288,7 @@ public final class Disclosures {
                     + "a reconnect rather than re-syncing them. Browsers always carry one; this "
                     + "means a non-browser client with no cookie.");
         }
-        return session.getId();
+        return sessionId;
     }
 
     /**

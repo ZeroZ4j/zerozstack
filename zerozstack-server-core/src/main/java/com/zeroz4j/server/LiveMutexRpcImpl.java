@@ -20,11 +20,7 @@ package com.zeroz4j.server;
 import com.zeroz4j.api.LiveMutexRpc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.websocket.Session;
 
-import java.lang.reflect.Proxy;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Where a browser's lock request arrives, and where it is allowed in or turned away.
@@ -100,7 +96,7 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
                     "Refused: this server only lets signed-in users lock items for editing "
                     + "(" + REQUIRE_AUTHENTICATION_PROPERTY + " is on). Sign in and try again.");
         }
-        if (!Disclosures.wasDisclosedTo(callerConnection(sessionId), objectId)) {
+        if (!Disclosures.wasDisclosedTo(RmiRequestContext.getClientId(), sessionId, objectId)) {
             throw new SecurityException(
                     "Refused: this client was never sent the item " + quote(objectId)
                     + ", so it cannot lock it. You may lock only items the server has sent you. "
@@ -131,6 +127,11 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
 
     // ------------------------------------------------------------------ internals
 
+    /** @return whether this deployment restricts locking to signed-in users */
+    private static boolean requireAuthentication() {
+        return Boolean.parseBoolean(System.getProperty(REQUIRE_AUTHENTICATION_PROPERTY));
+    }
+
     /** @return the calling connection's session id */
     private static String requireSession() {
         String sessionId = RmiRequestContext.getSessionId();
@@ -140,58 +141,6 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
         return sessionId;
     }
 
-    /**
-     * The caller's connection, as far as {@link Disclosures} needs to know it.
-     *
-     * <p>{@link Disclosures#wasDisclosedTo} takes the connection because it keys its record by the
-     * browser id the connection carries, falling back to the session id when there is none. An RMI
-     * method does not get handed the connection object — it gets the caller's identity on the thread
-     * — so this supplies exactly the two answers that question consults, from that identity. Nothing
-     * else about the connection is available here, and asking for it fails loudly rather than
-     * quietly returning a wrong answer.</p>
-     *
-     * @param sessionId the calling connection's session id
-     * @return a view of the connection that answers {@code getId()} and {@code getUserProperties()}
-     */
-    private static Session callerConnection(String sessionId) {
-        Map<String, Object> properties = new HashMap<>();
-        String clientId = RmiRequestContext.getClientId();
-        if (clientId != null && !clientId.isEmpty()) {
-            properties.put(RmiEndpointConfigurator.CLIENT_KEY, clientId);
-        }
-        return (Session) Proxy.newProxyInstance(
-                LiveMutexRpcImpl.class.getClassLoader(),
-                new Class<?>[] { Session.class },
-                (proxy, method, args) -> {
-                    switch (method.getName()) {
-                        case "getId":
-                            return sessionId;
-                        case "getUserProperties":
-                            return properties;
-                        case "hashCode":
-                            return System.identityHashCode(proxy);
-                        case "equals":
-                            return proxy == args[0];
-                        case "toString":
-                            return "lock caller on session " + sessionId;
-                        default:
-                            throw new UnsupportedOperationException(
-                                    "An RMI thread knows who is calling, not which socket they are "
-                                    + "on: Session." + method.getName() + "() cannot be answered "
-                                    + "here.");
-                    }
-                });
-    }
-
-    /** @return whether locking is restricted to signed-in connections */
-    private static boolean requireAuthentication() {
-        return Boolean.parseBoolean(System.getProperty(REQUIRE_AUTHENTICATION_PROPERTY));
-    }
-
-    /**
-     * @param handle a handle the caller supplied
-     * @return it, shortened, safe to put in a message
-     */
     private static String quote(String handle) {
         return handle.length() <= MAX_QUOTED_HANDLE
                 ? handle
