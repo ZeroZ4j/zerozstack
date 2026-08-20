@@ -126,18 +126,18 @@ public class ServerLiveMutationTest {
     }
 
     private static int frameCount(WasmRmiServerEngineTest.FakeSession session) {
-        return session.basic.sentBuffers.size();
+        return session.basic.sentBuffers().size();
     }
 
     private static byte frameOpcode(WasmRmiServerEngineTest.FakeSession session, int index) {
-        return session.basic.sentBuffers.get(index).get(4);
+        return session.basic.sentBuffers().get(index).get(4);
     }
 
     /**
      * Reads the reason string out of a 0x15 REJECT frame: [int32 0][0x15][String className][String reason].
      */
     private static String rejectionReason(WasmRmiServerEngineTest.FakeSession session, int index) {
-        ByteBuffer frame = session.basic.sentBuffers.get(index).duplicate();
+        ByteBuffer frame = session.basic.sentBuffers().get(index).duplicate();
         frame.position(0);
         frame.getInt();                                   // correlation id
         assertEquals(SyncFrameTypes.REJECT, frame.get(), "expected a REJECT frame");

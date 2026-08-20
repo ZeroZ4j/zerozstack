@@ -78,7 +78,7 @@ class ScopedSignalTransportTest {
 
     /** Reads the last signal frame a session received: name plus value. */
     private String[] lastSignalFrame(WasmRmiServerEngineTest.FakeSession s) {
-        ByteBuffer frame = s.basic.sentBuffers.get(s.basic.sentBuffers.size() - 1).duplicate();
+        ByteBuffer frame = s.basic.sentBuffers().get(s.basic.sentBuffers().size() - 1).duplicate();
         frame.getInt();
         assertEquals(SyncFrameTypes.SIGNAL_UPD, frame.get(), "expected a signal update frame");
         String name = BinarySerializer.readString(frame);
@@ -87,7 +87,7 @@ class ScopedSignalTransportTest {
     }
 
     private static int frames(WasmRmiServerEngineTest.FakeSession s) {
-        return s.basic.sentBuffers.size();
+        return s.basic.sentBuffers().size();
     }
 
     @Test

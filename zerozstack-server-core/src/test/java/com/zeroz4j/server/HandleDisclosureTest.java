@@ -101,7 +101,7 @@ public class HandleDisclosureTest {
     }
 
     private static int frames(WasmRmiServerEngineTest.FakeSession session) {
-        return session.basic.sentBuffers.size();
+        return session.basic.sentBuffers().size();
     }
 
     @Test
@@ -138,11 +138,11 @@ public class HandleDisclosureTest {
         assertTrue(Disclosures.wasDisclosedTo(holder, handle));
 
         doc.setText("hello again");
-        holder.basic.sentBuffers.clear();
+        holder.basic.sentBuffers().clear();
         engine.handleResync(List.of(handle), holder);
 
         assertEquals(1, frames(holder), "the object it holds is re-sent");
-        ByteBuffer frame = holder.basic.sentBuffers.get(0);
+        ByteBuffer frame = holder.basic.sentBuffers().get(0);
         assertEquals(0, frame.getInt());
         assertEquals(SyncFrameTypes.SUBSCRIBE, frame.get());
         Doc received = (Doc) BinarySerializer.readValue(frame, new ObjectMapper());

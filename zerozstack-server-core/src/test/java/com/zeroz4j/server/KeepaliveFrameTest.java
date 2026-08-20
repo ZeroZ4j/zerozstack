@@ -59,9 +59,9 @@ class KeepaliveFrameTest {
 
         WasmRmiServerEngine.sendPong(session);
 
-        assertEquals(1, session.basic.sentBuffers.size(), "the server must answer, or the proxy's read timer "
+        assertEquals(1, session.basic.sentBuffers().size(), "the server must answer, or the proxy's read timer "
                 + "never resets and the socket dies in the server-to-client direction");
-        ByteBuffer answer = session.basic.sentBuffers.get(0);
+        ByteBuffer answer = session.basic.sentBuffers().get(0);
         assertEquals(0, answer.getInt(), "a pong correlates with nothing");
         assertEquals(SyncFrameTypes.PONG, answer.get());
         assertFalse(answer.hasRemaining(), "a pong carries no payload; it is five bytes");
@@ -75,7 +75,7 @@ class KeepaliveFrameTest {
 
         WasmRmiServerEngine.sendPong(session);
 
-        assertTrue(session.basic.sentBuffers.isEmpty(), "writing to a closed session throws and would be logged "
+        assertTrue(session.basic.sentBuffers().isEmpty(), "writing to a closed session throws and would be logged "
                 + "as a keepalive failure every twenty-five seconds");
     }
 
