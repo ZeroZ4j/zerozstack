@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -139,14 +140,30 @@ public class WasmRmiServerEngineTest {
     ObjectMapper mapper;
 
     static class FakeBasic implements RemoteEndpoint.Basic {
-        public List<ByteBuffer> sentBuffers = new ArrayList<>();
+        /** The session this remote belongs to, so reads can wait for its writer. */
+        Session owner;
+        /** Written by the session's writer thread, read by test assertions. */
+        private final List<ByteBuffer> recorded = new CopyOnWriteArrayList<>();
         public CountDownLatch latch;
+
+        /**
+         * Everything sent so far, once the connection's writer has caught up.
+         *
+         * <p>A method rather than a field because writes leave the calling thread: {@code WsWrites}
+         * queues a frame and a per-connection writer thread puts it on the wire, so reading the
+         * list straight after a call would race that thread.</p>
+         */
+        public List<ByteBuffer> sentBuffers() {
+            WsWrites.awaitQuiet(owner);
+            return recorded;
+        }
+
         @Override public void sendText(String text) {}
         @Override public void sendBinary(ByteBuffer data) {
             ByteBuffer copy = ByteBuffer.allocate(data.remaining());
             copy.put(data);
             copy.flip();
-            sentBuffers.add(copy);
+            recorded.add(copy);
             if (latch != null) latch.countDown();
         }
         @Override public void sendText(String partialMessage, boolean isLast) {}
@@ -165,7 +182,7 @@ public class WasmRmiServerEngineTest {
         private String id;
         public FakeBasic basic = new FakeBasic();
         private Map<String, Object> props = new HashMap<>();
-        public FakeSession(String id) { this.id = id; }
+        public FakeSession(String id) { this.id = id; this.basic.owner = this; }
         @Override public WebSocketContainer getContainer() { return null; }
         @Override public void addMessageHandler(MessageHandler handler) {}
         @Override public <T> void addMessageHandler(Class<T> clazz, MessageHandler.Whole<T> handler) {}
@@ -232,9 +249,9 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        assertEquals(1, fakeSession.basic.sentBuffers.size());
+        assertEquals(1, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
         assertEquals((byte) 2, buf.get(), "AUTH protocol version");
@@ -257,10 +274,10 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        assertEquals(1, fakeSession.basic.sentBuffers.size(),
+        assertEquals(1, fakeSession.basic.sentBuffers().size(),
                 "the frame is still sent: silence cannot tell a refusal from a slow network");
 
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
         assertEquals((byte) 2, buf.get(), "AUTH protocol version");
@@ -283,7 +300,7 @@ public class WasmRmiServerEngineTest {
 
         engine.onOpen(fakeSession, config);
 
-        ByteBuffer buf = fakeSession.basic.sentBuffers.get(0);
+        ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         buf.getInt();
         buf.get();
         buf.get();
@@ -305,7 +322,7 @@ public class WasmRmiServerEngineTest {
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(300, response.getInt());
         assertEquals((byte) 0x01, response.get(), "Must be a success frame, not ContextNotActiveException");
         assertEquals("request-scope-active", BinarySerializer.readValue(response, mapper));
@@ -328,9 +345,9 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(100, response.getInt());
         assertEquals((byte) 0x01, response.get()); 
         assertEquals("Hello World", BinarySerializer.readValue(response, mapper));
@@ -353,9 +370,9 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
         
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(101, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         String errorMsg = BinarySerializer.readString(response);
@@ -383,9 +400,9 @@ public class WasmRmiServerEngineTest {
 
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
 
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(102, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         String message = BinarySerializer.readString(response);
@@ -415,7 +432,7 @@ public class WasmRmiServerEngineTest {
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers.get(1);
+        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(103, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         assertEquals("That invoice was already approved.", BinarySerializer.readString(response));
@@ -564,8 +581,8 @@ public class WasmRmiServerEngineTest {
 
         // Frame 0 is the auth frame from onOpen; the resync answer is the only other one:
         // one frame for the known handle, none for the unknown.
-        assertEquals(2, fakeSession.basic.sentBuffers.size());
-        ByteBuffer frame = fakeSession.basic.sentBuffers.get(1);
+        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        ByteBuffer frame = fakeSession.basic.sentBuffers().get(1);
         assertEquals(0, frame.getInt());
         assertEquals(com.zeroz4j.api.SyncFrameTypes.SUBSCRIBE, frame.get());
         assertEquals("current-state", BinarySerializer.readValue(frame, mapper));

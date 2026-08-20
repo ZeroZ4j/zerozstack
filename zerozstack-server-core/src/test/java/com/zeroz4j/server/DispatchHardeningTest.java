@@ -216,13 +216,11 @@ public class DispatchHardeningTest {
     }
 
     /**
-     * Frames written so far. Copied under the lock {@code WsWrites} itself takes, because these
-     * assertions run while other threads are still writing.
+     * Frames written so far. {@code sentBuffers()} waits for the connection's writer thread to
+     * catch up first, because these assertions run while other threads are still producing frames.
      */
     private static List<ByteBuffer> framesOf(WasmRmiServerEngineTest.FakeSession session) {
-        synchronized (session) {
-            return new ArrayList<>(session.basic.sentBuffers);
-        }
+        return new ArrayList<>(session.basic.sentBuffers());
     }
 
     private static int pongCount(WasmRmiServerEngineTest.FakeSession session) {
@@ -265,7 +263,7 @@ public class DispatchHardeningTest {
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(call(701, "noSuchThing")), session);
         assertTrue(session.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = session.basic.sentBuffers.get(1);
+        ByteBuffer response = session.basic.sentBuffers().get(1);
         response.getInt();
         assertEquals(SyncFrameTypes.RPC_ERROR, response.get());
         String message = BinarySerializer.readString(response);

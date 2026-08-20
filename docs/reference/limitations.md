@@ -312,6 +312,15 @@ WebAssembly today.
 - **The idle timeout is still the container's.** `zeroz.ws.idleTimeoutMinutes` is unset by default,
   so without setting it an abandoned browser tab holds a session and its server-side resources for as
   long as the container allows.
+- **A connection that stops reading is closed, not waited for.** The server can only send as fast as
+  the browser accepts, so messages for a browser that has stopped accepting are held in a queue for
+  that one connection. The queue holds 256 messages or 8 MB, whichever comes first
+  (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`). Past that the
+  connection is closed with WebSocket code `1013`, and the log names the limit that was hit. Such a
+  browser has already missed messages it will never see, so it has to reconnect and fetch a fresh
+  copy either way; holding more would let one browser use up the server's memory. Nothing else waits
+  for it: each connection has its own queue and its own thread, so a stalled browser delays only its
+  own messages, never another browser's and never a broadcast.
 - **Wire lengths are checked before anything is allocated.** Every length and element count in the
   binary format is a number the sender chose. Each one is now compared against the bytes actually
   present, at the width of the element it describes, before an array or a collection is created, and

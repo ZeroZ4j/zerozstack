@@ -80,9 +80,25 @@ public class LiveSyncEngineTest {
     }
 
     static class FakeBasic implements RemoteEndpoint.Basic {
-        public ByteBuffer lastBuffer;
+        /** The session this remote belongs to, so reads can wait for its writer thread. */
+        Session owner;
+        private volatile ByteBuffer last;
+
+        /**
+         * The frame last sent, once the connection's writer has caught up. A method rather than a
+         * field because writes leave the calling thread: {@code WsWrites} queues a frame and a
+         * per-connection writer thread puts it on the wire.
+         */
+        public ByteBuffer lastBuffer() {
+            WsWrites.awaitQuiet(owner);
+            return last;
+        }
+
+        /** Forgets what was sent, so the next assertion starts from nothing. */
+        public void clear() { last = null; }
+
         @Override public void sendText(String text) {}
-        @Override public void sendBinary(ByteBuffer data) { lastBuffer = ByteBuffer.allocate(data.remaining()); lastBuffer.put(data); lastBuffer.flip(); }
+        @Override public void sendBinary(ByteBuffer data) { ByteBuffer copy = ByteBuffer.allocate(data.remaining()); copy.put(data); copy.flip(); last = copy; }
         @Override public void sendText(String partialMessage, boolean isLast) {}
         @Override public void sendBinary(ByteBuffer partialByte, boolean isLast) {}
         @Override public OutputStream getSendStream() { return null; }
@@ -98,7 +114,7 @@ public class LiveSyncEngineTest {
     static class FakeSession implements Session {
         private String id;
         public FakeBasic basic = new FakeBasic();
-        public FakeSession(String id) { this.id = id; }
+        public FakeSession(String id) { this.id = id; this.basic.owner = this; }
         @Override public WebSocketContainer getContainer() { return null; }
         @Override public void addMessageHandler(MessageHandler handler) {}
         @Override public <T> void addMessageHandler(Class<T> clazz, MessageHandler.Whole<T> handler) {}
@@ -149,8 +165,8 @@ public class LiveSyncEngineTest {
 
         syncEngine.notifyChanged(nodeA);
 
-        ByteBuffer sentData1 = session1.basic.lastBuffer;
-        ByteBuffer sentData2 = session2.basic.lastBuffer;
+        ByteBuffer sentData1 = session1.basic.lastBuffer();
+        ByteBuffer sentData2 = session2.basic.lastBuffer();
 
         assertNotNull(sentData1);
         assertNotNull(sentData2);
@@ -190,14 +206,14 @@ public class LiveSyncEngineTest {
         mapper.register(nodeA);
 
         syncEngine.notifyChanged(nodeA);
-        assertNotNull(session1.basic.lastBuffer);
+        assertNotNull(session1.basic.lastBuffer());
 
         // Remove session and try again
-        session1.basic.lastBuffer = null;
+        session1.basic.clear();
         syncEngine.removeSession("sess-1");
         
         syncEngine.notifyChanged(nodeA);
-        assertNull(session1.basic.lastBuffer, "Removed session should not receive updates");
+        assertNull(session1.basic.lastBuffer(), "Removed session should not receive updates");
     }
 
     @Test
@@ -209,6 +225,7 @@ public class LiveSyncEngineTest {
                 throw new RuntimeException("Simulated IO Exception");
             }
         };
+        session1.basic.owner = session1;
 
         syncEngine.addSession(session1);
         
@@ -217,6 +234,8 @@ public class LiveSyncEngineTest {
 
         // Should not throw an exception out of notifyChanged
         syncEngine.notifyChanged(nodeA);
-        // If we get here, the exception was caught and handled
+        // The write itself now happens on the connection's own writer thread, so wait for it and
+        // confirm the failure was swallowed there too rather than escaping anywhere.
+        WsWrites.awaitQuiet(session1);
     }
 }

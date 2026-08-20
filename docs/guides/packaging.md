@@ -222,12 +222,14 @@ security context is that container's contract, and worth asserting in your own i
 
 ### WebSocket limits
 
-Two properties:
+Four properties:
 
 | Property | Effect | Unset |
 |---|---|---|
 | `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts | **4 MB (4,194,304 bytes)** |
 | `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
+| `zeroz.ws.maxPendingFramesPerSession` | Most messages that may be waiting to go out on one connection | **256** |
+| `zeroz.ws.maxPendingBytesPerSession` | Most bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
 
 The size limit has a framework default because the container's own is not a safe one to inherit.
 The framework uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus
@@ -247,6 +249,41 @@ number:
 
 The server logs the limit in force once at startup, naming the property, so a message that is
 refused later can be explained without guessing.
+
+#### When a browser stops reading
+
+The last two properties are about the other direction: messages the server is trying to send.
+
+The server sends a message by handing it to the operating system, which puts it on the network as
+fast as the browser accepts it.
+A browser that has stopped accepting — a laptop that went to sleep, a phone that lost signal, a tab
+that is wedged, or a client written on purpose to connect and then read nothing — makes that hand-off
+stop part-way.
+The server keeps the messages for that one connection in a queue until it starts moving again.
+
+The queue has a size, and the two settings above are it.
+Reaching either one closes that connection with WebSocket code `1013`, "try again later", and writes
+a line to the log saying which limit was hit and what the setting is called.
+
+Closing is deliberate.
+A browser that is that far behind has already missed messages it will never see, so its copy of your
+data is wrong whichever choice is made, and the client reconnects and asks for a fresh copy on its
+own.
+The alternative would be holding the messages until the server ran out of memory, and one browser
+would be able to decide that.
+
+**Nothing else on the server waits for a connection in this state.**
+Each connection has its own queue and its own thread that empties it, so a browser that has stopped
+reading holds up its own messages and nothing else — not another browser's, and not a broadcast on
+its way to everyone.
+
+Raise the limits if you send large messages in bursts and you would rather a struggling connection
+recovered than dropped.
+Lower them if you have many connections and want a stalled one dealt with sooner.
+
+```
+-Dzeroz.ws.maxPendingFramesPerSession=512 -Dzeroz.ws.maxPendingBytesPerSession=16777216
+```
 
 **What a client sees when a message is too big: the connection closes.** There is no error response
 and no exception you can catch. The engine's `@OnMessage` takes a whole message — there is no

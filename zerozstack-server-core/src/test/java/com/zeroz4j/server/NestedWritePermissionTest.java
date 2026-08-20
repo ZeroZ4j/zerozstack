@@ -190,7 +190,7 @@ public class NestedWritePermissionTest {
     }
 
     private static String rejectionReason(WasmRmiServerEngineTest.FakeSession session, int index) {
-        ByteBuffer frame = session.basic.sentBuffers.get(index).duplicate();
+        ByteBuffer frame = session.basic.sentBuffers().get(index).duplicate();
         frame.position(0);
         frame.getInt();
         assertEquals(SyncFrameTypes.REJECT, frame.get(), "expected a REJECT frame");
@@ -220,10 +220,10 @@ public class NestedWritePermissionTest {
                 "the object the client may not write must be exactly as it was");
         assertEquals("Platform", canonicalTeam.getName(),
                 "and the whole change is refused, not partly applied");
-        assertEquals(0, bystander.basic.sentBuffers.size(),
+        assertEquals(0, bystander.basic.sentBuffers().size(),
                 "nothing may be broadcast: the point of the attack was to have the server "
                         + "re-publish the smuggled state to everybody");
-        assertEquals(2, writer.basic.sentBuffers.size(),
+        assertEquals(2, writer.basic.sentBuffers().size(),
                 "the writer is snapped back to server truth and told why");
         assertTrue(rejectionReason(writer, 1).contains("Secret"),
                 "the reason must name what was refused: " + rejectionReason(writer, 1));
@@ -250,8 +250,8 @@ public class NestedWritePermissionTest {
         engine.handleLiveMutation(craft(forged, teamId, forged.getNote(), noteId), writer);
 
         assertEquals("original", canonicalNote.getText(), "role-gated nested object untouched");
-        assertEquals(0, bystander.basic.sentBuffers.size(), "nothing broadcast");
-        assertEquals(2, writer.basic.sentBuffers.size(), "snapped back and told why");
+        assertEquals(0, bystander.basic.sentBuffers().size(), "nothing broadcast");
+        assertEquals(2, writer.basic.sentBuffers().size(), "snapped back and told why");
         assertTrue(rejectionReason(writer, 1).contains("admin"),
                 "the reason must name the role required: " + rejectionReason(writer, 1));
     }
@@ -275,7 +275,7 @@ public class NestedWritePermissionTest {
         engine.handleLiveMutation(craft(edit, teamId, edit.getNote(), noteId), writer);
 
         assertEquals("reviewed", canonicalNote.getText(), "an administrator may edit it");
-        assertEquals(1, bystander.basic.sentBuffers.size(), "and everyone is told");
+        assertEquals(1, bystander.basic.sentBuffers().size(), "and everyone is told");
     }
 
     @Test
@@ -299,7 +299,7 @@ public class NestedWritePermissionTest {
         assertEquals("Platform Team", canonicalTeam.getName(), "the outermost object is updated");
         assertEquals("new", canonicalMember.getNickname(),
                 "and so is the nested one, in place — this is the behaviour the guard must not break");
-        assertEquals(1, bystander.basic.sentBuffers.size(), "the change is broadcast once");
+        assertEquals(1, bystander.basic.sentBuffers().size(), "the change is broadcast once");
     }
 
     @Test
@@ -338,8 +338,8 @@ public class NestedWritePermissionTest {
         engine.handleLiveMutation(craft(forged, secretId, null, null), writer);
 
         assertEquals("original", canonicalSecret.getText(), "the restricted object is untouched");
-        assertEquals(0, bystander.basic.sentBuffers.size(), "nothing broadcast");
-        assertEquals(2, writer.basic.sentBuffers.size(), "snapped back and told why");
+        assertEquals(0, bystander.basic.sentBuffers().size(), "nothing broadcast");
+        assertEquals(2, writer.basic.sentBuffers().size(), "snapped back and told why");
     }
 
     @Test
@@ -369,6 +369,6 @@ public class NestedWritePermissionTest {
 
         assertNull(canonicalTeam.getSecret(),
                 "the restricted object must not be attached to a writable one");
-        assertEquals(0, bystander.basic.sentBuffers.size(), "and nothing is broadcast");
+        assertEquals(0, bystander.basic.sentBuffers().size(), "and nothing is broadcast");
     }
 }
