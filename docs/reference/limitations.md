@@ -39,7 +39,9 @@ What automatic recovery deliberately does **not** cover:
   application must re-register from a `StateListener` on `CONNECTED`; observe the server-side CDI
   event `SessionClosedEvent` to clean up the stale entry.
 - **A lost `LiveMutex` stays lost.** The server releases a session's locks when the socket closes.
-  Reconnecting does not re-acquire; the holder is told through `setLostListener`.
+  Reconnecting does not re-acquire; the holder is told through `setLostListener`. Taking the
+  lock again after a reconnect works, because the right to lock an object is remembered per browser,
+  not per connection.
 - **Events broadcast during an outage are gone.** Events are fire-and-forget news with no replay;
   this is unchanged and by design. State belongs in signals or LiveSync, which do recover.
 - **Offline writes are last-write-wins.** A shared-signal write queued offline flushes as one write
@@ -52,6 +54,19 @@ What automatic recovery deliberately does **not** cover:
   every effect that read any of its getters. Fine-grained per-field tracking is not implemented.
 - **Whole-object, last-write-wins.** No field-level merging. Two concurrent unlocked editors race and
   the later write wins; serialize them with `LiveMutex` where that matters.
+- **You can lock only an object the server sent you.** A `LiveMutex` request naming an object this
+  browser was never sent is refused straight away, with a message saying so. Being sent an object is
+  what earns the right to lock it; knowing its handle is not. No sign-in is required, because
+  applications with no login use locking too; a deployment that has logins can additionally require
+  one with `zeroz.livemutex.requireAuthentication=true`.
+- **A lock is waited for at most 30 seconds.** Then the call fails with a message naming the wait,
+  and nothing is changed. `zeroz.livemutex.waitSeconds` moves it. Callers are served in arrival
+  order.
+- **The lock table only holds locks in use.** An object has an entry while somebody holds its lock or
+  is waiting for it, and the entry goes the moment the last of them leaves. So the table is bounded
+  by how many locks are actually in use right now, not by how many object names have ever been
+  presented. There is no separate ceiling and no expiry: a lock held for ever by a live session stays
+  held, which is what a lock is for.
 - **No tracked collections.** Setters are the tracking boundary; in-place collection edits are
   invisible. Reassign through the setter or call `LiveMutationTracker.touch(obj)`.
 - **`notifyChanged` requires a prior send.** It throws `IllegalStateException` unless the object

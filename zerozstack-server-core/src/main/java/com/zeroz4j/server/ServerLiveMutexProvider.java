@@ -27,6 +27,19 @@ import com.zeroz4j.api.ObjectMapper;
  *
  * <p>Creates server-side {@link LiveMutex} instances that interact directly with the local CDI {@link LiveMutexManager} bean.</p>
  *
+ * <h2>Server-side locking is not entitlement-checked</h2>
+ *
+ * <p>A browser may lock only an object the server has sent it, and that check lives at the RMI
+ * boundary in {@code LiveMutexRpcImpl}. Code here is the server itself: it holds the object already,
+ * so there is no untrusted name to test. This class is reached from application code, never from the
+ * wire.</p>
+ *
+ * <h2>Lock and unlock on the same thread</h2>
+ *
+ * <p>The owner of a server-side lock is the thread that took it. Unlocking from a different thread
+ * silently does nothing and the lock stays held until the process ends, so keep both calls in one
+ * {@code try}/{@code finally} on one thread.</p>
+ *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
  *   <li><b>CDI Context Lookup:</b> Uses {@link CDI#current()} to dynamically locate {@link ObjectMapper} and {@link LiveMutexManager}.</li>
