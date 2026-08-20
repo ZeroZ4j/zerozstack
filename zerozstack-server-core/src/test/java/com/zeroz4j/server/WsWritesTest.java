@@ -271,6 +271,23 @@ public class WsWritesTest {
         assertFalse(neighbour.closed, "the neighbour must still be connected");
     }
 
+    /**
+     * The bound is on the backlog behind a connection, not on one message. An application that
+     * returns a large object graph must not have its connection closed under it.
+     */
+    @Test
+    public void oneFrameLargerThanTheBoundStillGoesOut() throws Exception {
+        System.setProperty(WsWrites.MAX_PENDING_BYTES_PROPERTY, "1024");
+        StallableSession session = session("chunky");
+
+        WsWrites.send(session, new byte[64 * 1024]);
+
+        assertTrue(session.remote.arrived.await(5, TimeUnit.SECONDS),
+                "a single message over the queue's byte bound must still be sent");
+        assertFalse(session.closed, "and must not close the connection");
+        assertEquals(1, session.remote.sent().size());
+    }
+
     // ------------------------------------------------------------------------------- cleaning up
 
     /** A connection that closes while a write is stuck must leave nothing behind. */

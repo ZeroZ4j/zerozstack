@@ -264,6 +264,8 @@ The server keeps the messages for that one connection in a queue until it starts
 The queue has a size, and the two settings above are it.
 Reaching either one closes that connection with WebSocket code `1013`, "try again later", and writes
 a line to the log saying which limit was hit and what the setting is called.
+An empty queue always accepts the next message however large it is, so a single big response is
+never refused; the limits are on what piles up behind it.
 
 Closing is deliberate.
 A browser that is that far behind has already missed messages it will never see, so its copy of your

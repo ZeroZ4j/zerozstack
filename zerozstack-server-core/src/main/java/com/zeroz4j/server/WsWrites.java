@@ -69,7 +69,8 @@ import java.util.logging.Logger;
  * <h2>What happens when a client cannot keep up</h2>
  *
  * <p>The queue is bounded, by frame count ({@value #MAX_PENDING_FRAMES_PROPERTY}) and by bytes
- * ({@value #MAX_PENDING_BYTES_PROPERTY}). Reaching either bound closes the connection with
+ * ({@value #MAX_PENDING_BYTES_PROPERTY}); an empty queue always accepts a frame, so the bounds
+ * limit a backlog and never refuse a single large message. Reaching either bound closes it with
  * {@link CloseReason.CloseCodes#TRY_AGAIN_LATER}. That is the honest outcome: the client has
  * already missed frames it will never see, so its copy of the world is wrong either way, and the
  * client reconnects and re-syncs on its own. The alternatives are worse — waiting would hand the
@@ -332,6 +333,11 @@ final class WsWrites {
         /**
          * Appends a frame if there is room.
          *
+         * <p>An empty queue always takes the frame, however large it is. The bound is on the
+         * backlog behind a connection, not on one message: an application that returns a large
+         * object graph would otherwise have the connection closed under it, which is a different
+         * fault wearing the same symptom.</p>
+         *
          * @return false when a bound is reached, which the caller turns into a close
          */
         boolean offer(byte[] frame) {
@@ -341,7 +347,8 @@ final class WsWrites {
                     // The connection is already on its way out; dropping is not a new fault.
                     return true;
                 }
-                if (pending.size() >= maxFrames || pendingBytes + frame.length > maxBytes) {
+                if (!pending.isEmpty()
+                        && (pending.size() >= maxFrames || pendingBytes + frame.length > maxBytes)) {
                     return false;
                 }
                 pending.add(frame);

@@ -315,7 +315,9 @@ WebAssembly today.
 - **A connection that stops reading is closed, not waited for.** The server can only send as fast as
   the browser accepts, so messages for a browser that has stopped accepting are held in a queue for
   that one connection. The queue holds 256 messages or 8 MB, whichever comes first
-  (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`). Past that the
+  (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`); an empty queue
+  always accepts the next message however large it is, so a single big response is never refused.
+  Past that the
   connection is closed with WebSocket code `1013`, and the log names the limit that was hit. Such a
   browser has already missed messages it will never see, so it has to reconnect and fetch a fresh
   copy either way; holding more would let one browser use up the server's memory. Nothing else waits
