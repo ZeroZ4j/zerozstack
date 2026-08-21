@@ -37,8 +37,11 @@ portal. `autoPublish` is false, so the deployment waits for your approval at
 [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments)
 rather than going straight out — a published version can never be changed or removed.
 
-**Nine modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
-`-server-helidon`, `-ui-components`, `-store-eclipsestore`, `-bom` and `-archetype`.
+**Thirteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
+`-server-jaxrs`, `-server-jakarta`, `-server-helidon`, `-auth-oidc`, `-ui-components`,
+`-store-eclipsestore`, `-bom` and `-archetype`. The count said nine until 0.7.0, when it was checked
+against `target/central-staging` rather than against this sentence; the three bindings and the OIDC
+provider had been publishing for some time. Read the staging directory before believing this list.
 
 **The examples do not.** They are demonstrations rather than libraries, and
 `zerozstack-examples/pom.xml` sets `maven.deploy.skip`, `skipPublishing`, `gpg.skip`,
