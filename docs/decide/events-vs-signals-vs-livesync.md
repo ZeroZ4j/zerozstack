@@ -51,7 +51,7 @@ for the whole JVM**, across every user and every tenant. For state that belongs 
 it with `Signals.scoped(...)` instead, which holds one retained value per target and sends each client
 only its own.
 
-So this is not a performance trade-off. It is a security boundary:
+So this is not a performance trade-off. It decides who receives the value:
 
 ```java
 // WRONG — every connected session receives this user's private balance.

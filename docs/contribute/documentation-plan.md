@@ -192,7 +192,7 @@ docs/
 
 Root files that stay at root (GitHub conventions, and Context7 default-excludes most of them):
 `README.md`, `CONTRIBUTING.md`, `LICENSE`, `NOTICE`, plus new `AGENTS.md`, `llms.txt`,
-`context7.json`, `CHANGELOG.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`.
+`context7.json`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`.
 
 ### The README's new job
 
@@ -340,17 +340,17 @@ Give each a name so it can be referenced in review comments:
 3. **In-place mutation** — `list.add(x); signal.set(list)`; `equals` swallows it, nothing re-renders.
    → `update()` with a new instance. (Also the LiveSync collection variant:
    `obj.getTags().add(...)` is invisible.)
-4. **Operation-as-edit** — modelling "approve" as a `@ClientWritable` field flip; no name, no
-   security point, no validation point, no audit. → RMI method.
-5. **Leaked effect** — `Effect.create` in a view that is removed without disposing; upstream signal
-   keeps the view alive. → own a `List<Disposable>`.
+4. **Operation-as-edit** — modelling "approve" as a `@ClientWritable` field flip; no name, nowhere
+   to put `@Secured`, no validation point, no audit. → RMI method.
+5. **Effect never disposed** — `Effect.create` in a view that is removed without disposing; upstream
+   signal keeps the view alive. → own a `List<Disposable>`.
 6. **Snapshot race** — fetch-then-subscribe; events during the fetch are lost.
    → subscribe first, then fetch, then merge.
 7. **Polling in a Loom world** — a client timer calling RMI on an interval. → shared signal or event.
 8. **Unbounded broadcast** — sending per-user or tenant-scoped data through events or shared
    signals. Both fan out to a **static, JVM-wide** session set with no principal or tenant filter
-   (`WasmRmiServerEngine.activeSessions:94`; `Signals.registry` is a static map). This is a
-   **security** finding, not a performance note, and it appears in no current doc. Only
+   (`WasmRmiServerEngine.activeSessions:94`; `Signals.registry` is a static map). This decides **who
+   receives the data**, not how fast it arrives, and it appears in no current doc. Only
    `SyncScope.SESSION`/`USER` can scope a push.
 9. **Assuming LiveSync re-renders** — it updates fields and notifies nobody. → poll into a signal.
 10. **Un-consumed push** — the repo itself contains this: `components-showcase` calls
@@ -377,7 +377,7 @@ with symptom-first entries:
 | A LiveSync'd object updates but the UI doesn't | There is no change callback. Nothing notifies the view. | Poll into a signal (as `chat-livesync` does), or bridge via an event. |
 | `Effect` doesn't re-run | The value was mutated in place; `equals` dedup swallowed it. | `update()` with a new instance. |
 | `bindValue` doesn't write back | Two-way binding only engages for a `ValueSignal`; a `Computed` silently degrades to read-only (`AbstractField.java:76-96`). | Bind a `ValueSignal`. |
-| A binding leaks | `bindText`, `bindValue` and `KeyedList` create effects and **discard the `Disposable`** — those bindings cannot be released and live as long as the upstream signal. | Known limitation; document it, and consider fixing the API. |
+| A binding cannot be released | `bindText`, `bindValue` and `KeyedList` create effects and **discard the `Disposable`** — those bindings live as long as the upstream signal. | Known limitation; document it, and consider fixing the API. |
 
 Note the last two are arguably API bugs surfaced by writing the docs. That is the rewrite doing its
 job — documentation that cannot be written honestly is a design review in disguise.
@@ -429,8 +429,8 @@ required for "beginner friendly":
 11. **A testing guide.** `CONTRIBUTING.md` says "add tests" with no example of testing a
     `@DataModel`, an RMI service, or a signal — and `Signals.resetForTesting()` exists but is
     undocumented.
-12. **`SECURITY.md` and a security-model page.** That client-side validation is cosmetic and the
-    server is the only real gate is stated only in passing, in two places. It deserves a page.
+12. **A page on what decides access.** That client-side validation is cosmetic and the server is the
+    only thing that actually decides is stated only in passing, in two places. It deserves a page.
 13. **`CHANGELOG.md` and a stated version policy** — that this is `0.3.0`, pre-1.0, and what that
     implies for API stability.
 
@@ -702,7 +702,7 @@ mechanical phase. Generate the component catalogue from source where possible.
 
 ### Phase 4 — How-to guides
 Convert the existing SIGNALS/SERVER_EVENTS/LIVESYNC/VALIDATION/UI_COMPONENTS bodies into task-shaped
-guides, add the missing ones (testing, deploying, persistence, security, troubleshooting).
+guides, add the missing ones (testing, deploying, persistence, signing in and roles, troubleshooting).
 
 ### Phase 5 — Explanation + agents
 Move the thesis out of the README; write `architecture`, `how-*-works`, `threading-model`,

@@ -29,7 +29,7 @@ import java.util.logging.Logger;
  * WebSocket opens.
  *
  * <p>The server decides; this is a mirror of that decision for the client's own use — showing a name,
- * hiding a menu item, gating a route. It is never a security boundary: every {@code @Secured} and
+ * hiding a menu item, gating a route. It decides nothing itself: every {@code @Secured} and
  * {@code @RolesAllowed} check is made again server-side, on every call.</p>
  *
  * <h2>Authenticated, anonymous, and not yet known</h2>

@@ -232,7 +232,7 @@ ordered but without its `Comparator`, so later insertions are not re-sorted.
 
 - Server-side RMI argument validation recurses into `List` elements but **not** into `Map` values or
   nested object fields.
-- Client-side validation is user feedback, never a security boundary. The server re-validates
+- Client-side validation is user feedback. It decides nothing; the server re-validates
   independently.
 
 ## Compile-time warnings that are not errors
@@ -309,6 +309,30 @@ WebAssembly today.
 - **Installation and push need a secure origin.** `http://localhost` counts; any other host needs
   HTTPS, and browsers offer neither without it.
 
+## File uploads
+
+- **One handler per application.** If more than one `FileUploadHandler` is deployed, the framework
+  uses one of them and logs a warning naming them all.
+- **No resume and no chunking.** A file arrives in one request. An upload that was cancelled, or
+  whose connection dropped, starts again from the beginning next time.
+- **No per-user, per-tenant or per-day quota, and no limit on how many files may be uploaded at
+  once.** `zeroz.upload.maxBytes` is 25 MB and applies to one file. Anything else — who may upload,
+  how often, how much in total — the application decides for itself from `getPrincipal()`,
+  `getRoles()` and `getTenantId()`.
+- **No virus scanning and no content checking.** The framework never looks inside the file.
+  `getContentType()` is the browser's guess from the file extension, and `getFileName()` is whatever
+  the browser reported; both are text, and neither is used for anything by the framework.
+- **The temporary file is deleted the moment the handler returns**, whether it returned a result or
+  threw. Move or copy it inside the method; keeping the `Path` and reading it later finds nothing.
+- **The handler runs on the upload request's thread**, so a slow handler holds that request open.
+  Hand long work to a background thread and return quickly.
+- **An upload needs a live connection.** The page asks its existing WebSocket for a one-time pass,
+  valid for 60 seconds (`zeroz.upload.passSeconds`), usable once, and only from the browser it was
+  issued to. There is no way to upload without a connection open — no API key, no signed URL.
+- **A file that did not arrive whole never reaches the handler.** A cancelled upload, or one whose
+  connection dropped, is answered "That file did not finish sending. Please try again." and the
+  part-received file is deleted.
+
 ## Deployment and transport
 
 - **Messages are whole, never partial.** `@OnMessage` takes a complete `ByteBuffer`; there is no
@@ -339,17 +363,19 @@ WebAssembly today.
   for it: each connection has its own queue and its own thread, so a stalled browser delays only its
   own messages, never another browser's and never a broadcast.
 - **Wire lengths are checked before anything is allocated.** Every length and element count in the
-  binary format is a number the sender chose. Each one is now compared against the bytes actually
+  binary format is a number the sender chose. Each one is compared against the bytes actually
   present, at the width of the element it describes, before an array or a collection is created, and
-  a negative one is refused with a message rather than escaping as a `NegativeArraySizeException`.
-  Nesting is capped at 256 levels. A malformed or hostile message therefore fails fast instead of
-  reserving memory or overflowing the stack. Applications see this only as a clearer exception on a
-  corrupt stream.
+  a negative one is refused with a readable message rather than escaping as a
+  `NegativeArraySizeException`. Collections grow as items arrive rather than being sized from a
+  claimed count, and nesting is capped at 256 levels. A damaged message therefore fails at once with
+  an explanation instead of reserving memory or running out of stack. Applications see this only as
+  a clearer exception on a corrupt stream.
 - **Container-managed threads are platform threads.** A Jakarta EE 10 `ManagedThreadFactory` cannot
   produce virtual threads, so a WAR deployment supplying one through
-  `SessionThreadFactoryProvider` trades cheap threads for the container's naming, transaction and
-  security context. Without such a provider, RMI calls run on framework-created virtual threads that
-  carry none of that, and a `java:comp/env/…` lookup inside a service fails.
+  `SessionThreadFactoryProvider` trades cheap threads for the container's context — naming,
+  transactions and the caller's identity. Without such a provider, RMI calls run on
+  framework-created virtual threads that carry none of that, and a `java:comp/env/…` lookup inside a
+  service fails.
 - **The framework does not verify what a container's factory carries.** Its contract is only that
   calls are dispatched on threads the supplied factory produced; whether those threads have the
   container's context is the container's contract, and worth an integration test in the application.
@@ -385,8 +411,8 @@ WebAssembly today.
 - **Not isolated:** the `ObjectMapper` handle namespace is shared across tenants, and scoped signals
   keep every target's value in memory for the process lifetime with no eviction.
 
-Nothing here is automatic: a tenant-scoped push is a scope you pass, and choosing `GLOBAL` — or
-leaving the scope off — is what leaks.
+Nothing here is automatic: a tenant-scoped push is a scope you pass. `GLOBAL` — which is also what
+you get by leaving the scope off — sends to every connected session, whichever tenant it belongs to.
 
 ## Examples
 

@@ -86,7 +86,52 @@ ChatService chat = new ChatService_Stub();
 sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text)));
 ```
 
-## New in 0.6.1
+## New in 0.7.0
+
+<div class="grid cards" markdown>
+
+- **Files from the person using the app**
+
+    A drop-or-pick box with a progress bar and a cancel button for each file, and one Java class on
+    the server that is handed each finished file. 25 MB per file by default.
+
+    [Accepting file uploads →](guides/file-uploads.md)
+
+- **Numbers instead of "whatever the container allows"**
+
+    The biggest message the server accepts is 4 MB. One connection may have 32 messages being
+    handled at once, and 256 messages or 8 MB waiting to go out. All six are settings, and the one
+    in force is written to the log at startup.
+
+    [Every setting, in one table →](guides/packaging.md)
+
+- **Editing one thing at a time**
+
+    `LiveMutex` makes the second person wait instead of overwriting the first. A caller waits 30
+    seconds, callers are served in the order they arrived, and a dropped connection tells the holder
+    its lock is gone.
+
+    [Locking an object while you edit it →](LIVESYNC.md#locking-an-object-while-you-edit-it)
+
+- **What a client may ask for**
+
+    The server keeps a record of the objects it sent to each browser, and answers a re-read or a
+    lock request only from that record. It survives a reconnect, holds 10,000 objects per browser,
+    and is dropped after 24 hours idle.
+
+    [What re-sync will and will not send back →](LIVESYNC.md#what-re-sync-will-and-will-not-send-back)
+
+- **Errors you can trace**
+
+    An unexpected failure reaches the caller as one sentence and a short code, with the real message
+    in the server log under the same code. Throw `ClientVisibleException` for text the caller should
+    read.
+
+    [What an error tells the caller →](guides/security-auth.md#what-an-error-tells-the-caller)
+
+</div>
+
+## New in 0.6.0
 
 <div class="grid cards" markdown>
 
@@ -129,8 +174,9 @@ sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text))
 </div>
 
 Alongside those: a server-issued, `HttpOnly` **client identity** so an application with no login can
-still keep one browser's state to itself, and an **origin check** on every handshake. Both are
-described in [Authentication and authorization](guides/security-auth.md).
+still keep one browser's state to itself, and a check on every handshake that the page opening it is
+one of yours. Both are described in
+[Authentication and authorization](guides/security-auth.md).
 
 ## If you read one page
 

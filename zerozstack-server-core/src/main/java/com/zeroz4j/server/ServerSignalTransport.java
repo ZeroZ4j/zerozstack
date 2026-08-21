@@ -98,7 +98,7 @@ public final class ServerSignalTransport implements SignalTransport {
             String target = targetFor(session, family.scope());
             if (target == null) {
                 // No tenant on an anonymous session, no user when not logged in. Sending the initial
-                // value would be a guess; sending someone else's would be a leak. Send nothing.
+                // value would be a guess, and there is no other value that belongs here. Send nothing.
                 LOG.fine("[zeroz4j] Session " + session.getId() + " subscribed to scoped signal '"
                         + signalName + "' but has no " + family.scope() + " target; nothing sent.");
                 return;

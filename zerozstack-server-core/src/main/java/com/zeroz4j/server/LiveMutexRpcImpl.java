@@ -65,7 +65,7 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
      */
     static final String REQUIRE_AUTHENTICATION_PROPERTY = "zeroz.livemutex.requireAuthentication";
 
-    /** How much of a rejected handle is quoted back, so a hostile name cannot flood a log line. */
+    /** How much of a rejected handle is quoted back, so one log line stays one log line. */
     private static final int MAX_QUOTED_HANDLE = 64;
 
     @Inject

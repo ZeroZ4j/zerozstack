@@ -50,7 +50,7 @@ Computed<Boolean> formValid = new Computed<>(() -> ...); // combine per-field is
 
 ## Server: automatic enforcement
 
-Nothing to write. The RMI engine validates every incoming argument (including elements of `List` arguments) against the registered rules and rejects the call with a validation error before your service method runs. Client-written shared signal values pass through the same check. Client-side validation is UX; **the server-side check is the security boundary**, and it comes from the same annotations.
+Nothing to write. The RMI engine validates every incoming argument (including elements of `List` arguments) against the registered rules and rejects the call with a validation error before your service method runs. Client-written shared signal values pass through the same check. Client-side validation is UX; **the server-side check is the one that decides**, and it comes from the same annotations.
 
 For rules that span fields or need server data ("username already taken"), validate inside your service method — annotations cover per-field constraints; business logic stays business logic.
 

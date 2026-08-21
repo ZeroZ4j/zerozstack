@@ -10,51 +10,124 @@ upgrading.
 
 ## [0.7.0] — 2026-08-20
 
-A security review of the connection layer, the binary wire format and the HTTP surface, plus the
-file upload feature that review made it clear was missing.
+File upload, plus a round of work on the live connection, the binary wire format, the HTTP addresses
+and the object-locking service.
 
 ### Breaking
 
-- **A live change that reaches an object the client may not write is now refused outright.** Only
-  the outermost object used to be checked, so a nested object could be overwritten, or a restricted
-  one attached to a permitted one and then broadcast to everybody. Every object a change touches now
-  passes its own `@ClientWritable` and role check. An application whose writable model contains a
-  live model that is *not* `@ClientWritable` will start seeing refusals: mark the inner model, or
-  stop sending it up.
-- **Re-reading an object by handle now requires having been sent it.** Presenting a handle used to be
-  treated as proof of prior disclosure, which leaked through handles embedded in broadcast payloads.
-  The server now remembers what it sent to each browser and serves only that.
-- **`zeroz.ws.maxBinaryMessageBytes` defaults to 4 MB** instead of inheriting the container's limit,
-  which on Helidon was effectively 2 GB. An explicitly set value still wins.
-- **The example servers no longer switch on the built-in developer logins by starting.** They need
-  `--dev-login`.
-- **Locks are granted only on objects the server sent the caller.** No login is required.
-- **Unexpected server errors no longer send their internal message to the client.** They send a
-  reference that matches the server log. Application exceptions and the framework's own refusals are
-  unchanged.
+- **A live change is now checked against every object it reaches, not only the outermost one.**
+  A `@LiveSync` model nested inside a `@ClientWritable` model needs its own `@ClientWritable`, and
+  its own roles, before a client may edit it as part of the outer one. One refusal refuses the whole
+  change: nothing is applied, nothing is broadcast, and the writer is told which type it was not
+  allowed to write ("The change also alters a …").
+
+    **If an edit that used to work now comes back refused**, pick one of two fixes: put
+    `@ClientWritable` on the inner model, or stop sending that model to the client at all.
+
+- **A client can read an object back only if the server actually sent it to that browser.**
+  Every object travels with a name attached — a **handle** — and the client asks for an object again
+  by naming it, after a dropped connection most of all. The server now keeps a record of which
+  objects it sent to which browser, and answers only from that record. Naming an object that was
+  never sent gets the same silent answer as naming one the server no longer has.
+
+    The record is kept per browser, not per connection, so reconnecting still restores everything.
+    It holds **10,000 objects per browser** (`zeroz.disclosure.maxHandlesPerClient`) and is dropped
+    after **24 hours** with no activity (`zeroz.disclosure.idleHours`). A dropped record behaves
+    like a server restart: the client is told nothing was found and fetches the objects the way it
+    first obtained them.
+
+    **A client that carries no browser cookie** — a test harness, a non-browser client — is
+    remembered only for the life of one connection, so after a reconnect it re-fetches instead of
+    re-syncing. The server log says so once.
+
+- **The largest message the server accepts is now 4 MB** (`zeroz.ws.maxBinaryMessageBytes`).
+  It used to be whatever the container allowed, which on Helidon was about 2 GB. A value you set
+  yourself still wins, in either direction. The limit in force is logged once at startup, naming the
+  property.
+
+    **If a call starts closing the connection instead of returning**, its response is over 4 MB.
+    Either raise the limit, or return less — page the results, or return identifiers and fetch the
+    details on demand. File contents belong in the new file upload feature, not in an RMI call.
+
+- **The example servers no longer switch on the built-in `demo` and `admin` logins by starting.**
+  Pass `--dev-login` on the command line — the `run.bat` scripts already do — or set
+  `-Dzeroz.security.mode=dev` yourself. A server running with them on prints a warning at startup
+  and again at the first sign-in.
+
+- **A lock is granted only on an object the server sent that browser.** `LiveMutex.lock()` on
+  anything else is refused straight away with a sentence saying so, instead of waiting. No sign-in
+  is required, because applications with no login use locking too. A deployment that does have
+  logins can additionally allow locking only on signed-in connections with
+  `zeroz.livemutex.requireAuthentication=true`.
+
+    **If a lock is refused for an object you really did hold**, fetch it again from your service and
+    lock the copy you get back — that browser's record had expired or filled up.
+
+- **An unexpected server error no longer sends its own message to the client.** The caller now sees
+  `The server could not complete this request. Reference: 4f2a91cc`, and the real message and stack
+  trace go to the server log under the same code, so a user reading the code off their screen is
+  enough to find the log line.
+
+    Two kinds of message still travel word for word: the framework's own refusals — authentication
+    required, access denied, unknown service, unknown method, failed argument validation — and
+    anything you throw as the new `com.zeroz4j.server.ClientVisibleException`.
+
+    **If your client showed the text of an application exception to the user**, wrap that case in
+    `ClientVisibleException` and the text comes back.
 
 ### Added
 
-- **File upload.** A drop-or-pick component with per-file progress and cancel, an HTTP address that
-  streams to disk, one-time passes issued over the live connection, and a CDI handler that receives
-  the finished file. Works on both bindings. See `docs/guides/file-uploads.md`.
-- `zeroz.hosts`, an allowlist of host names a handshake may be addressed to — the standard defence
-  against DNS rebinding. Unset, behaviour is unchanged.
-- Per-connection bounds on frames being handled and frames waiting to go out, both configurable.
-- `zeroz.livemutex.waitSeconds` and `zeroz.livemutex.requireAuthentication`.
+- **File upload.** Drop files on a box or pick them, with a progress bar and a cancel button for
+  each one. Put `FileUpload` on a screen, write one `@ApplicationScoped` class implementing
+  `FileUploadHandler`, and that class is handed each finished file. Files travel over their own HTTP
+  address rather than the live connection, which is what makes progress and cancelling work. The
+  default limit is 25 MB per file. The WAR module and the standalone module both carry the address
+  already, so there is no route to map. See [Accepting file uploads](docs/guides/file-uploads.md).
+- **`zeroz.hosts`** — the host names this deployment answers for, comma-separated, e.g.
+  `app.example.com`. A handshake addressed to any other name is refused. Unset, nothing changes.
+- **A ceiling on how much one connection can have in flight.** 32 messages being handled at once
+  (`zeroz.ws.maxConcurrentFramesPerSession`), and 256 messages or 8 MB waiting to go out
+  (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`). An empty outgoing
+  queue always accepts the next message however large it is, so a single big response is never
+  refused.
+- **`zeroz.livemutex.waitSeconds`** — how long a caller waits for a lock somebody else holds, 30
+  seconds by default. **`zeroz.livemutex.requireAuthentication`** — off by default; on, only
+  signed-in connections may lock.
+- **`zeroz.disclosure.maxHandlesPerClient`** and **`zeroz.disclosure.idleHours`** — the size and the
+  lifetime of the record of what was sent to each browser. 10,000 and 24.
+- **`zeroz.upload.maxBytes`, `zeroz.upload.passSeconds`, `zeroz.upload.tempDir`** — the largest file
+  accepted (25 MB), how long an upload permission stays usable (60 seconds), and where a file is
+  written while it arrives (a `zeroz4j-uploads` folder inside the system temporary directory).
+- **`com.zeroz4j.server.ClientVisibleException`** — throw it from a service to send its message to
+  the caller word for word.
+- **A refused handshake now says which check refused it** — the page it came from, or the host name
+  it was addressed to — in the WebSocket close reason. The full explanation, with the configured
+  values, is in the server log.
+- Every setting the framework reads is now listed in one table, in
+  [Packaging and running](docs/guides/packaging.md).
 
 ### Fixed
 
-- **A short message could ask the server to allocate gigabytes.** Every length read from the wire is
-  now checked against the bytes actually present, at the true width of each element; collections grow
-  rather than pre-sizing from a claimed count; nesting is capped.
-- **One unresponsive client could stop the whole server.** Writes held a lock on the connection while
-  blocking, and on JDK 21 that pinned a carrier thread per stalled write — measured, not assumed.
-  Each connection now has its own bounded outbox and one writer.
-- **Two owners could hold the same lock at once**, because an unlock and a disconnect could both
-  release it. Ownership removal is now atomic.
-- Encoded path traversal is refused before any resource lookup, on both bindings.
-- The identity context is established before arguments are decoded, not after.
+- **A short message could make the server reserve gigabytes of memory.** Every length and element
+  count in the binary format is a number the sender chose, and each one is now compared against the
+  bytes actually present, at the width of the element it describes, before anything is allocated.
+  Collections grow as items arrive instead of being sized from a claimed count, a negative length is
+  refused with a readable message rather than escaping as `NegativeArraySizeException`, and nesting
+  is capped at 256 levels. Applications see this only as a clearer exception on a damaged stream.
+- **One browser that stopped reading could stall the whole server.** Sending held a lock on the
+  connection while it waited, and on JDK 21 that pinned a platform thread for every stalled send —
+  measured, not assumed. Each connection now has its own outgoing queue and its own writer, so a
+  browser that has stopped reading delays only its own messages. Past the queue limits that
+  connection is closed with WebSocket code `1013`, and the log names the limit that was reached.
+- **Two owners could hold the same lock at once**, because releasing a lock and closing the
+  connection could both hand it on. Ownership is now removed in one step.
+- **Locks no longer pile up.** An object has an entry in the lock table only while somebody holds its
+  lock or is waiting for it, and the entry goes as soon as the last of them leaves.
+- **A request path is answered with 404 before any file is looked up** when it contains `..` in any
+  spelling, a backslash, a control character, or a first segment of `WEB-INF` or `META-INF`. Both
+  the WAR binding and the standalone binding apply this, so the two cannot disagree.
+- **The caller's identity is established before a call's arguments are decoded**, not after, so
+  everything decoding does runs under the right identity.
 
 ## [0.6.2] — 2026-08-20
 
@@ -120,7 +193,7 @@ file upload feature that review made it clear was missing.
   postpones the next ping, so a connection in use sends none at all.
 
   On by default; `Keepalive.configure(seconds)` changes the interval and zero turns it off. Answering
-  costs the server nothing: no service lookup, no security check beyond the connection already being
+  costs the server nothing: no service lookup, nothing checked beyond the connection already being
   open, no request context. Pinned by `KeepaliveFrameTest`.
 
   Raising the proxy's own timeout is still worth doing where you control it. This exists because
@@ -191,7 +264,7 @@ gained two bytes.
   - **`SessionThreadFactoryProvider`**, a `ServiceLoader` SPI supplying the threads RMI calls run on.
     The engine previously created its own virtual threads, and a thread the application server did
     not create carries none of the container's thread-locals — no naming context behind
-    `java:comp/env/…`, no transaction context, no security context. A service doing a JNDI lookup
+    `java:comp/env/…`, no transaction context, no caller identity. A service doing a JNDI lookup
     failed a long way from the cause. It cannot be repaired from *inside* such a thread by handing
     work to a `ManagedExecutorService`, because there is no context there to capture; it has to be
     right at thread creation, hence a factory. No provider registered means virtual threads, exactly
@@ -420,7 +493,7 @@ gained two bytes.
 - **ZeroZ DB 0.1.0 → 0.2.0.** Purely additive; no API this framework uses changed shape. It brings
   diagnostics for a write-block that was never ended, and one of them fixes a real failure mode in
   `TenantStorageProvider.shutdownAll()` without any change on our side: `close()` used to park for
-  ever on a leaked write transaction, so one wedged tenant hung shutdown and every remaining tenant
+  ever on a write transaction that was never ended, so one wedged tenant hung shutdown and every remaining tenant
   went unclosed. It is now bounded (30s, or `-Dzerozdb.closeTimeoutSeconds=N`) and throws
   `StoreBusyException` naming the thread that holds the block — which the existing per-node `catch`
   logs before moving on to the next tenant.

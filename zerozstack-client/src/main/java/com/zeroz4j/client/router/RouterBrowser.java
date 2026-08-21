@@ -60,7 +60,7 @@ final class RouterBrowser {
     /**
      * Routes clicks on in-application links without a page reload.
      *
-     * <p>Deliberately opt-in, matching only anchors carrying {@code data-route}: hijacking every
+     * <p>Deliberately opt-in, matching only anchors carrying {@code data-route}: taking over every
      * anchor on the page would swallow links to other sites and to server-rendered downloads.
      * Modified clicks — new tab, new window, download — are left to the browser, because a user
      * asking for a new tab means it.</p>

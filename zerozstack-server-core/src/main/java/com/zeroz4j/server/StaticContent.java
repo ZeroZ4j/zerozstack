@@ -167,10 +167,10 @@ public final class StaticContent {
      * <p><b>Paths arrive already percent-decoded, and this class never decodes again.</b> The JAX-RS
      * runtime decodes a {@code @PathParam} before the resource method sees it, and a servlet
      * container decodes {@code getPathInfo()} — so {@code ..%2f..%2f} is a plain {@code ../../} by
-     * the time it gets here. Decoding a second time would be a hole of its own: it would turn a
-     * harmless file name containing a literal {@code %} into something else, and it is how
-     * double-encoded traversal gets through servers that do it. A {@code %} that survives to this
-     * point is therefore treated as an ordinary character in a file name.</p>
+     * the time it gets here. Decoding a second time would turn an ordinary file name containing a
+     * literal {@code %} into a different path, and would let {@code %252e%252e} become {@code ..}
+     * after the check had already passed. A {@code %} that survives to this point is therefore
+     * treated as an ordinary character in a file name.</p>
      *
      * <p>The check still looks at a decoded copy, because a request may have been double-encoded
      * ({@code %252e%252e}) and arrived here as {@code %2e%2e}. That copy is only ever inspected; it
@@ -178,8 +178,9 @@ public final class StaticContent {
      *
      * <p>Refused: a {@code ..} segment in any form, a backslash (a path separator on Windows and in
      * some class loaders), a null byte or any other control character, and anything under
-     * {@code WEB-INF/} or {@code META-INF/}. A refused path gets the same 404 an unknown asset gets,
-     * because an error naming the rule would tell an attacker what to try next.</p>
+     * {@code WEB-INF/} or {@code META-INF/}. A refused path gets the same 404 an unknown asset gets:
+     * one answer for "no such file" and "not a path we serve", so the answer reveals nothing about
+     * which it was.</p>
      *
      * <p>The classpath loader happens to collapse {@code ..} lexically, so most of this could not
      * escape a jar in practice. "Probably safe because of how somebody else's class loader behaves"

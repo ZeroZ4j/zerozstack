@@ -304,7 +304,7 @@ A support-ticket queue with two roles:
     tickets with Close buttons.
   The admin panel must not merely be hidden — verify the server also rejects
   close()/allTickets() for non-admins (client-side hiding is cosmetic; the
-  @RolesAllowed annotations are the actual security boundary).
+  @RolesAllowed annotations on the server are what actually decide).
 - Handle the rejection gracefully: catching the RMI error and showing an Alert.
 - Maintenance banner via a client-writable shared signal: declare
       Signals.sharedWritable("support.banner", "", "admin")
@@ -365,7 +365,7 @@ ACCEPTANCE:
 
 ## Task 6 — Capstone: `zeroboard`, a real-time team kanban
 
-Feature focus: everything composed — persistence, RMI, typed events, signals, security. This is the hardest task; attempt it only with the other examples green.
+Feature focus: everything composed — persistence, RMI, typed events, signals, signing in and roles. This is the hardest task; attempt it only with the other examples green.
 
 ```text
 TASK: Build the capstone example "zeroboard" under zerozstack-examples/zeroboard.

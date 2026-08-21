@@ -28,8 +28,8 @@ import java.util.logging.Logger;
  * the application server created.
  *
  * <p>That is what makes {@code java:comp/env/…} resolvable, and what gives a service the container's
- * transaction and security context. Threads the framework creates itself have none of it, and the
- * resulting failure looks like a wiring problem rather than a threading one.</p>
+ * transaction context and the caller's identity. Threads the framework creates itself have none of
+ * it, and the resulting failure looks like a wiring problem rather than a threading one.</p>
  *
  * <h2>Configuration</h2>
  * <p>The JNDI name defaults to the Jakarta EE standard

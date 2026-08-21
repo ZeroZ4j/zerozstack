@@ -185,7 +185,7 @@ try (var local = db.<Catalog>localReads()) {
 
 The live graph when this process owns the store, a continuously refreshed replica when it does not
 — trailing the owner by about one round trip. Use `db.query(...)` when a read must be exactly
-current, security checks especially.
+current — deciding whether a caller may do something, especially.
 
 Full detail: [docs/store-modes.md](docs/store-modes.md), [docs/guides/persistence.md](docs/guides/persistence.md),
 and the [ZeroZ DB guide](https://github.com/ZeroZ4j/zerozdb/blob/main/docs/Guide.md).
@@ -351,9 +351,9 @@ not**: they build runnable jars and have their own main classes and ports, so tw
 
 | Example | Run | Port |
 |---|---|---|
-| `routing-tour` | `java -jar routing-tour-server/target/routing-tour-server-0.6.0.jar` | 8080 |
-| `oidc-login` | `java -jar oidc-login-server/target/oidc-login-server-0.6.0.jar` | 8081 (needs Keycloak) |
-| `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.6.0.jar` | 8082 |
+| `routing-tour` | `java -jar routing-tour-server/target/routing-tour-server-0.7.0.jar` | 8080 |
+| `oidc-login` | `java -jar oidc-login-server/target/oidc-login-server-0.7.0.jar` | 8081 (needs Keycloak) |
+| `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.7.0.jar` | 8082 |
 
 **Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
 `components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup` and
@@ -396,26 +396,52 @@ call: `onResolved(() -> new Thread(this::mountUi).start())`.
 
 **Deploying as a WAR:** take `zerozstack-server-jakarta` instead of `zerozstack-server-helidon`. It
 registers the WebSocket endpoint, calls `BinaryRegistry.init()` at startup, and supplies the
-container's `ManagedThreadFactory` so RMI calls carry naming, transaction and security context —
-without which a `java:comp/env/…` lookup inside a service fails. Map `Zeroz4jShellServlet` yourself;
+container's `ManagedThreadFactory` so RMI calls carry the container's context for naming,
+transactions and the caller's identity — without which a `java:comp/env/…` lookup inside a service
+fails. Map `Zeroz4jShellServlet` yourself;
 it is deliberately unmapped so it cannot claim `/` in a WAR that has its own servlets. **Do not add
 `zerozstack-server-jaxrs` to a WAR**: it is a catch-all at `/`. `zerozstack-server-core` contains no
 JAX-RS type, which is what makes it safe inside somebody else's WAR.
 
-**`zeroz.ws.maxBinaryMessageBytes` defaults to 4 MB** (0.6.3+), matching gRPC. Set it only to move
+**`zeroz.ws.maxBinaryMessageBytes` defaults to 4 MB** (0.7.0+), matching gRPC. Set it only to move
 away from that. `@OnMessage` takes a whole message, so anything larger closes the socket rather than
 raising an error the application can catch. Do not leave it to the container: on Helidon the Jakarta
-WebSocket layer is Tyrus, whose message-assembly limit defaults to `Integer.MAX_VALUE`, so a chunked
-message could make the server assemble ~2 GB. This socket is not the route for file uploads.
-`zeroz.ws.idleTimeoutMinutes` stops an abandoned tab holding a session forever; it stays unset by
-default, leaving the container's own value.
+WebSocket layer is Tyrus, whose message-assembly limit is `Integer.MAX_VALUE` — about 2 GB. This
+socket is not the route for file uploads. `zeroz.ws.idleTimeoutMinutes` stops an abandoned tab
+holding a session forever; it stays unset by default, leaving the container's own value.
+
+**Per-connection ceilings (0.7.0+):** 32 messages from one connection may be handled at once
+(`zeroz.ws.maxConcurrentFramesPerSession`); 256 messages or 8 MB may be waiting to go out
+(`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`), past which that one
+connection is closed with WebSocket code `1013`. An empty outgoing queue always accepts the next
+message however large, so a single big response is never refused.
+
+**File upload (0.7.0+):** put `FileUpload` on a screen and write one `@ApplicationScoped` class
+implementing `FileUploadHandler`. Files go over their own HTTP address, not the RMI socket — never
+put file bytes in an RMI argument. 25 MB per file by default (`zeroz.upload.maxBytes`). The
+temporary file is deleted the moment the handler returns, so move it inside the method. Treat
+`getFileName()` and `getContentType()` as text the browser typed: generate the stored name yourself.
+See [docs/guides/file-uploads.md](docs/guides/file-uploads.md).
+
+**A client may only read back, and only lock, an object the server sent that browser (0.7.0+).** The
+server keeps a record per browser — 10,000 objects, dropped after 24 hours idle
+(`zeroz.disclosure.maxHandlesPerClient`, `zeroz.disclosure.idleHours`). Ask it yourself with
+`Disclosures.wasDisclosedTo(session, handleId)`.
+
+**A live change is checked against every object it reaches (0.7.0+),** not just the outermost one. A
+model nested inside a `@ClientWritable` model needs its own `@ClientWritable`, and one refusal
+refuses the whole change.
+
+**Unexpected server exceptions reach the client as `The server could not complete this request.
+Reference: <code>` (0.7.0+),** with the real message in the log under that code. To send a sentence
+the caller should read, throw `com.zeroz4j.server.ClientVisibleException`.
 
 **Client identity without a login:** every connection carries a server-issued, HMAC-signed browser id
 in an `HttpOnly` cookie, readable as `RmiRequestContext.getClientId()` and used by `Scope.CLIENT`. It
 identifies a browser, not a person. Handshakes are also origin-checked; set `zeroz.origins` when the
 page is served from a different host than the socket, and set `zeroz.hosts` to the host names the
-deployment answers for — without it the same-origin rule compares two headers a DNS-rebinding page
-controls together. `zeroz.hosts` is unset by default and changes nothing until it is set.
+deployment answers for. `zeroz.hosts` is unset by default; set, a handshake addressed to any other
+name is refused, and the close reason names which of the two checks refused it.
 
 **Making an app installable:** `Pwa.install()` in `main` before `connect`, plus a manifest and
 `<link rel="manifest">`. **Never tell a user this makes the application work offline** — every view

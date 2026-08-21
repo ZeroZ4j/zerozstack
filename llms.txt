@@ -1,13 +1,13 @@
 # ZeroZ4j
 
-> An experimental pure-Java full-stack framework (version 0.4.0). The UI is Java compiled for the
+> An experimental pure-Java full-stack framework (version 0.7.0). The UI is Java compiled for the
 > browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
 > WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
 Key things to know before generating ZeroZ Stack code:
 
-- Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.4.0` and depend on
+- Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.7.0` and depend on
   `zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`, `zerozstack-ui-components`
   and `zerozstack-store-eclipsestore` without versions.
 - To build the framework itself, requires JDK 21 and `mvn clean install -DskipTests` from the repository root; the `clean` is
@@ -29,6 +29,13 @@ Key things to know before generating ZeroZ Stack code:
   lives without changing application code. Commands and queries must be plain classes, never
   records.
 - Many failure modes are silent rather than exceptional. Read the troubleshooting page.
+- The server accepts messages up to 4 MB (`zeroz.ws.maxBinaryMessageBytes`), and a bigger one closes
+  the connection rather than raising an error. Never put file contents in an RMI argument: use the
+  `FileUpload` component and a `FileUploadHandler` bean, which move files over their own HTTP address.
+- A client may edit, re-read or lock only what the server actually sent it. Every object a live
+  change reaches needs its own `@ClientWritable`, not just the outermost one.
+- An unexpected server exception reaches the client as one sentence and a reference code. Throw
+  `com.zeroz4j.server.ClientVisibleException` when the caller should read the real message.
 
 ## Decision guides
 
@@ -41,13 +48,13 @@ Key things to know before generating ZeroZ Stack code:
 ## Getting started
 
 - [Quickstart](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/start/quickstart.md): Prerequisites, build, run an example, and which examples need dev login credentials. Build and run commands executed against main.
-- [Examples](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/examples/index.md): What each of the seven example applications demonstrates and why that mechanism. The examples are the most reliable specification of current usage.
+- [Examples](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/examples/index.md): What each example application demonstrates and why that mechanism. The examples are the most reliable specification of current usage.
 - [Troubleshooting](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/troubleshooting.md): Symptom-first, covering the silent failures. Read this when nothing happens.
 
 ## Reference
 
 - [Glossary](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/glossary.md): Event, signal, push, message, sync, mutation, handle, retained value — defined once, not interchangeable.
-- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.4.0, including features that are declared but not implemented.
+- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.7.0, including features that are declared but not implemented.
 - [Wire protocol](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/PROTOCOL.md): Frame structure, opcodes and type tags.
 - [Validation](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/VALIDATION.md): Annotate once on the model; enforced by the client binder and independently by the server.
 
@@ -57,6 +64,9 @@ Key things to know before generating ZeroZ Stack code:
 - [Server events](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/SERVER_EVENTS.md): EventTopic, EventPublisher, ServerEvents, delivery semantics.
 - [LiveSync](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/LIVESYNC.md): Two-way object synchronization, @ClientWritable gates, LiveMutationListener.
 - [UI components](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/UI_COMPONENTS.md): Layouts, the component catalogue, binding.
+- [Accepting file uploads](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/file-uploads.md): The FileUpload component, the FileUploadHandler bean, the size limit and what the application must check itself.
+- [Authentication and authorization](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/security-auth.md): AuthenticationProvider, @Secured, @RolesAllowed, client identity without a login, and which connections are accepted.
+- [Packaging and running](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/packaging.md): The four shapes a server ships in, and every zeroz.* setting with its default.
 
 ## For coding agents
 

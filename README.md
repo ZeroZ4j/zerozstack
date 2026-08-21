@@ -15,7 +15,7 @@ Modern enterprise web development is drowning in translation layers. These layer
 1. **The Database Mismatch:** Domain models in Java must be translated via SQL or JPA/Hibernate to map to relational tables, creating dual-schema maintenance.
 2. **The Network Mismatch:** Java objects are serialized into text (JSON), sent over HTTP, and parsed back into JavaScript/TypeScript objects on the client.
 3. **The UI Mismatch:** JavaScript/TypeScript is required to mutate a browser DOM, fracturing the codebase's language ecosystem.
-4. **The AI Context Collapse:** When using AI coding agents (Copilot, Cursor, bespoke LLMs), the AI must maintain context across four different languages and paradigms (SQL, Java, JSON, TS/JS). This cognitive load causes AI hallucinations, broken contracts, and security vulnerabilities.
+4. **The AI Context Collapse:** When using AI coding agents (Copilot, Cursor, bespoke LLMs), the AI must maintain context across four different languages and paradigms (SQL, Java, JSON, TS/JS). This cognitive load causes AI hallucinations, broken contracts, and defects that no single-language compiler would have caught.
 
 Every translation layer breaks static analysis, prevents fearless refactoring, and forces the enterprise to maintain three different models of the exact same data.
 
@@ -46,6 +46,9 @@ To handle thousands of persistent connections without thread exhaustion, the bac
 ZeroZ Stack relies on Ahead-of-Time (AOT) compilation via **TeaVM** to guarantee performance. Annotation processors generate binary serializers and RMI stubs at compile-time, avoiding slow runtime reflection in the browser. 
 Unlike traditional Java web frameworks (like Vaadin), **ZeroZ Stack maintains zero server-side DOM state**. UI components (styled with utility-first DaisyUI/Tailwind CSS) are instantiated, configured, and bound to listeners entirely in the client-side Wasm heap, utilizing cooperative coroutines for non-blocking I/O.
 
+### D. Files, Where Bytes Do Not Fit in a Message
+Some things are too big for a message and belong on disk. `FileUpload` gives a screen a drop-or-pick box with a progress bar and a cancel button per file; the server side is one Java class implementing `FileUploadHandler`, which is handed each finished file. The bytes travel over their own HTTP address and are streamed straight to disk, so a large file never has to be held in memory. 25 MB per file by default. See [Accepting file uploads](docs/guides/file-uploads.md).
+
 ---
 
 ## 4. Framework Modules
@@ -56,8 +59,11 @@ ZeroZ Stack is fully modular, allowing developers to pick exactly what they need
 *   **`zerozstack-apt`**: The compile-time annotation processor for generating model serializers and RMI stubs.
 *   **`zerozstack-client`**: The TeaVM bridging logic for the browser (WebSocket client, coroutines).
 *   **`zerozstack-ui-components`**: A Vaadin-inspired, DOM-less Java UI component library built on Tailwind/DaisyUI.
-*   **`zerozstack-server-core`**: The agnostic CDI engine, RMI dispatcher, and `LiveSync` logic.
+*   **`zerozstack-server-core`**: The agnostic CDI engine, RMI dispatcher, `LiveSync` logic and file-upload handling.
 *   **`zerozstack-server-helidon`**: The Helidon-specific HTTP and WebSocket bindings.
+*   **`zerozstack-server-jaxrs`**: The HTTP addresses for a standalone server — the application shell, static files and the upload address.
+*   **`zerozstack-server-jakarta`**: The same, as servlets, for deploying a WAR to WildFly, Payara, Open Liberty or TomEE.
+*   **`zerozstack-auth-oidc`**: Verifies OpenID Connect tokens at the handshake and turns their claims into roles and a tenant.
 *   **`zerozstack-store-eclipsestore`**: The native object-graph persistence adapter.
 *   **`zerozstack-archetype`**: A Maven Archetype to instantly scaffold a new multi-module project.
 
@@ -126,6 +132,7 @@ This repository contains the core framework and reference implementations.
 * **[Routing: URLs, Views and Colocated Loading](docs/ROUTING.md)** - Real URLs mapped to Java views, with each route declaring the data it needs so nothing renders half-loaded.
 * **[PWA: Installing, Fast Startup and Push](docs/PWA.md)** - One call makes an application installable and push-capable. It does not make it work offline, and the page says why.
 * **[Logging in with OpenID Connect](docs/guides/oidc-auth.md)** - Authorization-code flow with PKCE against Keycloak, and how its claims become roles and a tenant.
+* **[Accepting file uploads](docs/guides/file-uploads.md)** - A drop-or-pick box on the screen, one Java class on the server, and the file on disk.
 * **[Packaging and running](docs/guides/packaging.md)** - The four shapes a ZeroZ Stack server ships in, including a WAR on WildFly, Payara, Open Liberty or TomEE.
 * **[Validation: Annotate Once, Enforce Everywhere](docs/VALIDATION.md)** - Model annotations enforced by the client binder and automatically by the server.
 * **[LiveSync: Two-Way Object Synchronization](docs/LIVESYNC.md)** - In-place state sync down, and `@ClientWritable` automatic mutation propagation up.
@@ -151,4 +158,4 @@ Are you struggling with complex IT portfolios, legacy modernization, or the need
 
 ## License
 
-This project is open-source under the [Apache 2.0 License](LICENSE). Anyone is welcome to fork it, adapt it, and build upon it. See the [NOTICE.md](NOTICE.md) file for attribution details.
+This project is open-source under the [Apache 2.0 License](LICENSE). Anyone is welcome to fork it, adapt it, and build upon it. See the [NOTICE](NOTICE) file for attribution details.

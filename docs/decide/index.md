@@ -47,7 +47,8 @@ In every case the server names the target from the connection's own identity, ne
 the client sent — and the client is never told its own target, so it cannot ask for another's.
 
 The unscoped forms, `publish(topic, payload)` and a `Signals.shared` `set()`, reach **every connected
-session** with no principal check. Using one for somebody's data is a leak, not an inefficiency.
+session**, whoever they are. Using one for something that belongs to one person sends it to everyone
+connected. That is a correctness question, not a performance one.
 
 *No, everyone sees the same thing* → question 4.
 

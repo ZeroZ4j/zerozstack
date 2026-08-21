@@ -106,7 +106,7 @@ When building your own custom components that hook into low-level DOM events via
 
 ## Component Reference
 
-The framework provides a rich set of 105 UI components, broken down into the following functional categories:
+The framework provides a rich set of 106 UI components, broken down into the following functional categories:
 
 ### Layout Components
 Used for structuring the application and organizing other components.
@@ -131,7 +131,8 @@ Components that accept user input and can be bound to data models (implementing 
 - **Range**: A slider for selecting numeric values within a defined range.
 - **Rating**: An interactive star-based rating selector.
 - **Toggle**: A switch component, often used as an alternative to a checkbox.
-- **FileInput**: A control for selecting files from the user's system.
+- **FileInput**: A control for selecting files from the user's system. It reports the chosen file's name and sends nothing anywhere.
+- **FileUpload**: A drop-or-pick box that sends files to the server, several at once, with a progress bar and a cancel button for each. Set the wording with `setTitle` / `setSubtitle`, limit the picker with `setAccept("image/*")`, allow or forbid several files with `setMultiple`, and hear each outcome with `addUploadListener((name, accepted, message) -> …)`. On the server one `@ApplicationScoped` class implementing `FileUploadHandler` is handed each finished file. See [Accepting file uploads](guides/file-uploads.md).
 
 ### Buttons & Navigation
 Components that trigger actions or navigate between views.

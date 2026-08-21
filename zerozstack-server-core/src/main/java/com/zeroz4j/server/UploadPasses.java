@@ -41,8 +41,8 @@ import java.util.logging.Logger;
  *   <li><b>Short lived.</b> It only has to survive the gap between the page asking and the browser
  *       starting the request — one minute by default.</li>
  *   <li><b>Bound to the browser it was issued to.</b> The upload request presents the same signed
- *       client-id cookie the live connection did, and a mismatch is refused. A token leaked to
- *       another machine is worth nothing there.</li>
+ *       client-id cookie the live connection did, and a mismatch is refused. The token alone is
+ *       therefore not enough on any other machine.</li>
  * </ul>
  *
  * <p>Framework-internal.</p>

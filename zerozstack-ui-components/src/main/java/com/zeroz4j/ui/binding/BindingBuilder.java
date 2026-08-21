@@ -32,8 +32,8 @@ public interface BindingBuilder<BEAN, FIELDVALUE> {
      *       .bind(Registration::getEmail, Registration::setEmail);
      * }</pre>
      *
-     * <p>The same generated rule is enforced independently by the server, so this is user feedback
-     * rather than a security boundary.</p>
+     * <p>The same generated rule is enforced independently by the server, so this is user feedback;
+     * the server's answer is the one that counts.</p>
      *
      * @param rule a generated {@code <Model>_Rules} field rule
      * @return this builder

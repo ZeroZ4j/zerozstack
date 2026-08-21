@@ -63,7 +63,7 @@ so `profile.getTags().add("x")` reports nothing. Reassign through the setter, or
 Modelling an operation as a `@ClientWritable` field flip.
 
 ```java
-// WRONG — "approve" has no name, no security annotation, no validation point,
+// WRONG — "approve" has no name, no place for @Secured or @RolesAllowed, no validation point,
 // no audit trail, and no way to tell the caller it was refused.
 invoice.setApproved(true);
 ```
@@ -105,7 +105,8 @@ public static final ScopedSignal<Money> BALANCE =
 Note that `Signals.shared` is the unscoped one — it is a single value the whole server agrees on, and
 per-user state must never be declared with it. `Signals.scoped` is the fix, not a workaround for it.
 
-This is a security bug, not an efficiency one. Treat it as such in review.
+Everyone connected sees the same value. Treat that as a correctness bug in review, not a performance
+note.
 
 ## Polling a live object
 
@@ -130,10 +131,11 @@ Calling `syncEngine.notifyChanged(obj)` on an object the server has never sent t
 **Fix:** return the object from an RMI method at least once — that is what registers the handle — then
 `notifyChanged` works for the lifetime of the connection.
 
-## Leaked effect
+## An effect that is never disposed
 
 Creating an `Effect` in a view that is removed without disposing it. The upstream signal holds a
-reference to the effect, which holds your view, which holds its components.
+reference to the effect, which holds your view, which holds its components — so none of them can be
+collected.
 
 ```java
 private final List<Disposable> disposables = new ArrayList<>();

@@ -28,7 +28,7 @@ import java.util.concurrent.ThreadFactory;
  * <h2>Why this exists</h2>
  * <p>By default the framework creates its own virtual threads. Inside a Jakarta EE server that is a
  * problem: the container attaches thread-locals — the naming context behind {@code java:comp/env/…},
- * the transaction context, the security context — before calling application code, and a thread the
+ * the transaction context, the caller's identity — before calling application code, and a thread the
  * container did not create carries none of them. A service doing a JNDI lookup, or holding an
  * {@code @Resource} resolved lazily on the calling thread, then fails a long way from the cause.</p>
  *
@@ -47,7 +47,7 @@ import java.util.concurrent.ThreadFactory;
  *
  * <p>The framework's side of this contract is narrow and complete: <b>calls are dispatched on threads
  * this factory produced</b>. Whether a particular container's factory really carries naming,
- * transaction and security context is that container's contract, not this framework's.</p>
+ * transactions and the caller's identity is that container's contract, not this framework's.</p>
  *
  * <p><b>A container factory produces platform threads, not virtual ones.</b> That is the right trade
  * inside a server — container context matters more than cheap threads — but it is a trade, and worth

@@ -29,7 +29,7 @@ container's job through a `<security-constraint>`, not the framework's.
 
 Up to and including 0.5.0 a servlet filter in `zerozstack-server-core` contradicted this: deployed in
 a WAR it answered 401 to every page unless the *container* had authenticated the request, which the
-model above never does. It has been removed — see the 0.6.1 changelog.
+model above never does. It has been removed — see the 0.6.0 changelog.
 
 ## Replacing the development provider
 
@@ -138,15 +138,14 @@ positive signal a form needs, since silence cannot be distinguished from a slow 
     `onResolved(() -> new Thread(this::mountUi).start())`. Otherwise it fails with
     *"suspension point reached from non-threading context"*.
 
-!!! warning "Fixed in 0.6.1"
-    Before 0.6.1 the frame did not carry the flag, and the client marked *any* AUTH frame as
-    authenticated. A connection the provider had declined arrived named `"anonymous"` with no roles
-    and `isAuthenticated()` returned `true`, so a gate built on `onAuthenticated` let every credential
-    through. If you worked around this by checking for a role your provider only grants on success,
-    that check is no longer needed.
+!!! warning "Changed in 0.6.0"
+    Before 0.6.0 the frame did not carry the flag, and the client treated *any* AUTH frame as a
+    successful sign-in. A connection the provider had declined arrived named `"anonymous"` with no
+    roles, and `isAuthenticated()` still returned `true`. If you worked around that by checking for a
+    role your provider only grants on success, that check is no longer needed.
 
-Neither of these is a security boundary. They decide what the client shows; the server re-checks every
-call.
+Neither of these decides anything. They decide what the client shows; the server checks every call
+again for itself.
 
 ## Authorizing calls
 
@@ -188,10 +187,10 @@ which browser, and answers a request to re-read an object only when that record 
 sent there. Naming an object you were never given gets you nothing, and is not reported as an error:
 it is treated exactly like naming an object the server no longer has.
 
-This matters because names leak by design. An object nested inside a broadcast event or a shared
-signal goes out with its own name attached, so everybody who received the outer payload learned the
-name of everything inside it. Before the record existed, any of them could ask for those objects
-afterwards — including after their access had been withdrawn.
+Names travel further than the objects do. An object nested inside a broadcast event or a shared
+signal goes out with its own name attached, so everybody who received the outer payload also learned
+the names of the parts inside it. The record is what separates knowing a name from having been sent
+the object, and only the second one counts.
 
 Three consequences:
 
@@ -233,11 +232,13 @@ on them.
 
 **Everything else becomes one sentence and a code.** The caller sees
 `The server could not complete this request. Reference: 4f2a91cc`, and the real message and stack
-trace go to the server log under the same code. So a user quoting the code from their screen is
-enough to find the log line. The reason for hiding the rest is that an unplanned failure's message
-describes the machinery — class names, field names, query fragments, container internals — and
-anybody who can reach your server can provoke those failures on purpose and read the system's shape
-out of the answers.
+trace go to the server log under the same code. A user quoting the code from their screen is enough
+to find the log line.
+
+An unplanned failure's message describes the machinery — class names, field names, query fragments,
+container internals — which is useful in a log and useless on a screen. If your client used to show
+the text of an application exception to the person using it, wrap that case in
+`ClientVisibleException` and write the sentence you actually want them to read.
 
 ## Reading the identity in a service
 
@@ -264,7 +265,7 @@ syncEngine.notifyChanged(config, Scope.TENANT, tenantId);
 ```
 
 A session with no tenant — anonymous, or authenticated by a provider that reports none — **never**
-matches a `Scope.TENANT` push, so tenant data cannot leak to an unauthenticated connection by default.
+matches a `Scope.TENANT` push. So a connection that did not sign in receives nothing sent that way.
 
 Tenancy at the storage layer is separate: see `TenantResolver` and the EclipseStore
 `TenantStorageProvider`.
@@ -282,9 +283,8 @@ edit, so the server issues it instead:
   handshake if the browser presents none.
 * Signed with an HMAC, so tampering is detectable and verification needs no server-side registry —
   which is what lets it survive a restart and work across a cluster.
-* Delivered in an **`HttpOnly`** cookie. This is the part that matters: page script cannot read it,
-  so a cross-site scripting bug cannot steal it the way it could read browser storage. `Secure` and
-  `SameSite=Strict` are set too.
+* Delivered in an **`HttpOnly`** cookie, which means page script cannot read it — unlike anything
+  kept in browser storage. `Secure` and `SameSite=Strict` are set too.
 
 Read it in a service with `RmiRequestContext.getClientId()`.
 
@@ -301,10 +301,9 @@ Read it in a service with `RmiRequestContext.getClientId()`.
 
 ## Origin checks
 
-A browser attaches cookies to **any** connection to your origin, including one opened by a page the
-user happens to be visiting.
-Since the handshake now carries an identity cookie, an unchecked `Origin` would hand that page the
-victim's client id — so the handshake is refused unless the page that opened it is trusted.
+A browser sends your cookies with **any** connection to your address, whichever page opened it.
+So the server decides for itself which pages it will accept a connection from, and refuses the rest.
+The `Origin` header names the page; the rule below decides what counts.
 
 | `zeroz.origins` | Behaviour |
 |---|---|
@@ -312,21 +311,21 @@ victim's client id — so the handshake is refused unless the page that opened i
 | a comma-separated list | Exactly those origins, e.g. `https://app.example.com,https://admin.example.com`. Needed when the page is served from a different host than the socket. |
 | `*` | No check. Only when something in front of the application already enforces one. |
 
-A handshake carrying no `Origin` at all is allowed: browsers always send one, so its absence means a
-non-browser client, which has no ambient cookies to abuse.
+A handshake carrying no `Origin` at all is allowed: browsers always send one, so its absence means
+the caller is not a browser and carries no cookies of its own.
 
 A refused handshake is closed immediately with WebSocket close code 1008. The close reason names
-which check refused it — the origin, or the host name the connection asked for — and nothing else
-about the deployment. The full explanation, with the configured values, is in the server log.
+which check refused it — the page it came from, or the host name it was addressed to — and nothing
+else about the deployment. The full explanation, with the configured values, is in the server log.
 
 ## Naming the hosts you answer for
 
-The origin check on its own compares two headers that the same attacker controls together.
-Set `zeroz.hosts` to close that gap.
+`zeroz.hosts` is the second rule, and it asks a different question: not *which page opened this
+connection*, but *which name was it addressed to*.
 
 | `zeroz.hosts` | Behaviour |
 |---|---|
-| unset (default) | No host check, exactly as before this setting existed. |
+| unset (default) | No host check: a handshake addressed to any name at all is accepted. |
 | a comma-separated list | The `Host` header must be one of them, e.g. `app.example.com,app.example.com:8443`. An entry with no port accepts that name on any port. Case does not matter. |
 | `*` | No host check, said out loud. |
 
@@ -334,28 +333,21 @@ Set `zeroz.hosts` to close that gap.
 java -Dzeroz.hosts=app.example.com -jar myapp-server.jar
 ```
 
-**What goes wrong without it.** An attacker puts up a page at `evil.com`.
-They also make the name `evil.com` point at your server's address, which anyone who owns a domain
-name can do.
-A visitor's browser then opens a socket to your server and sends `Origin: http://evil.com` and
-`Host: evil.com`.
-Those two match, so the same-origin rule lets the connection through, and the attacker's page is
-talking to your application as the visitor's browser.
-This is called **DNS rebinding**.
+**Why it is a separate setting.** Anyone who owns a domain name can point it at any address,
+including yours, and a browser that reaches your server under that name will say so in both headers
+at once. The default rule only asks whether the two headers agree, so they do. Listing the names you
+actually serve is what makes the second question answerable.
 
-Listing `app.example.com` stops it, because `evil.com` is not a name your deployment answers for.
-The check runs on every handshake, including one that sends no `Origin` header at all — the question
-it asks is which name the request was addressed to, not which page sent it.
+The check runs on every handshake, including one that sends no `Origin` header at all.
 
-Two things to know:
+Three things to know:
 
-* `zeroz.origins=*` turns the origin check off and leaves the host check running. They are separate.
+* `zeroz.origins=*` turns the page check off and leaves the host check running. They are separate.
 * List every name the application is reached by, including the port when you pin one. A name you
   forget stops working, and the log line for the refusal says exactly what would have been accepted.
-
-**Serve the application over HTTPS.** A rebound name has to present a certificate for itself, and it
-cannot get one for yours — so TLS is what stops the browser accepting the rebinding in the first
-place. The host allowlist is the second line, for the plain-HTTP case and for anything TLS misses.
+* **Serve the application over HTTPS.** A certificate names the host it is for, so a name pointed at
+  your server has nothing valid to present and the browser stops there. `zeroz.hosts` is the second
+  rule, for the plain-HTTP case.
 
 ## Development authentication
 
@@ -404,8 +396,8 @@ a literal `%` in it from turning into something else.
 ## Limits
 
 - **Identity is fixed for the life of the connection.** Roles are read once at handshake, so a user
-  whose roles change must reconnect. Re-evaluating per frame would put a security check on the hot
-  path.
+  whose roles change must reconnect. Working them out again on every frame would put that lookup on
+  the busiest path there is.
 - **A record of what was sent is not a record of who may see it.** It is keyed by browser, so two
   people sharing a machine share it, and it says only that the server sent the object once — not that
   the reason for sending it still holds. Data that must follow a person needs `Scope.USER` or
@@ -417,10 +409,15 @@ a literal `%` in it from turning into something else.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.
 - **Nothing gates HTTP.** Every page and asset is public; only RMI calls are checked. An application
   that needs the documents themselves protected uses a container `<security-constraint>`.
-- **The host allowlist is off until you set it.** With `zeroz.hosts` unset, a name somebody has
-  pointed at your server is accepted, as long as the page's `Origin` says the same name.
+- **The list of host names is off until you set it.** With `zeroz.hosts` unset, the server accepts a
+  handshake addressed to any name at all, as long as the page's `Origin` says the same name.
+- **Uploading a file inherits the connection's identity and nothing more.** The framework checks that
+  the browser has a live connection, and applies one size limit. Who may upload, how often, and how
+  much in total are the application's to decide — see
+  [Accepting file uploads](file-uploads.md#what-the-application-must-check-itself).
 
 ## See also
 
-- [Choosing how state moves](../decide/index.md) — scoping a push is a security decision
+- [Choosing how state moves](../decide/index.md) — which scope you give a push decides who receives it
+- [Accepting file uploads](file-uploads.md) — how an upload borrows the connection's identity
 - [Limitations](../reference/limitations.md)

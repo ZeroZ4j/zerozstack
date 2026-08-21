@@ -122,7 +122,7 @@ public final class SyncFrameTypes {
      *
      * <p>The client sends {@code ping} with no arguments and a correlation id of 0 - fire and
      * forget, because nothing waits for the answer. The server replies with one {@link #PONG}
-     * frame and does nothing else: no service lookup, no security check beyond the connection
+     * frame and does nothing else: no service lookup, nothing checked beyond the connection
      * already being open, no request context.
      *
      * <p><b>Why the framework does this at all.</b> A WebSocket that carries nothing is closed by

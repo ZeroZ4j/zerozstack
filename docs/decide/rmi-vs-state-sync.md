@@ -12,8 +12,8 @@ Anything you would describe with a verb: *approve*, *check out*, *cancel*, *dele
 
 1. **A name.** `approve(invoiceId)` says what happened. `invoice.setApproved(true)` says a field
    changed and leaves intent to the reader.
-2. **A security point.** `@Secured` and `@RolesAllowed` attach to methods. A field flip is gated only
-   by the coarse `@ClientWritable("role")` on the whole class.
+2. **A place to decide who may do it.** `@Secured` and `@RolesAllowed` attach to methods. A field
+   flip is governed only by the coarse `@ClientWritable("role")` on the whole class.
 
     Put these annotations on the **`@RmiService` interface**, not on the implementation. The dispatcher
     scans the interface and its declared methods only — an annotation on the bean class is never read,
@@ -80,7 +80,7 @@ liveState = chatService.getState();   // RMI — establishes the handle
 |---|---|---|
 | Expresses | an operation | an edit |
 | Has a name | yes | no |
-| Per-method security | yes | no — per class |
+| Per-method `@Secured` / `@RolesAllowed` | yes | no — per class |
 | Can reject with a reason | yes | rejects silently |
 | Returns a result | yes | no |
 | Initiated by | the client | either tier |

@@ -34,9 +34,10 @@ import java.util.logging.Logger;
  * The single outbound write path for every binary frame the server sends.
  *
  * <p>The Jakarta WebSocket API forbids two writes being in flight on one connection at the same
- * time, so writes to a connection have to be serialized somehow. Until 0.6.3 that was
+ * time, so writes to a connection have to be serialized somehow. Until 0.7.0 that was
  * {@code synchronized (session) { session.getBasicRemote().sendBinary(...) }} on whichever thread
- * produced the frame, and it had two faults that a single unresponsive client could exploit.</p>
+ * produced the frame, and one client that stopped reading was enough to expose two faults in
+ * it.</p>
  *
  * <p><b>Fault one: head-of-line blocking across connections.</b> A basic remote blocks until the
  * bytes have been handed to the operating system. When a client stops reading, TCP flow control
@@ -73,9 +74,9 @@ import java.util.logging.Logger;
  * limit a backlog and never refuse a single large message. Reaching either bound closes it with
  * {@link CloseReason.CloseCodes#TRY_AGAIN_LATER}. That is the honest outcome: the client has
  * already missed frames it will never see, so its copy of the world is wrong either way, and the
- * client reconnects and re-syncs on its own. The alternatives are worse — waiting would hand the
- * client control of a server thread, and buffering without limit would move the failure from
- * threads to heap.</p>
+ * client reconnects and re-syncs on its own. The alternatives are worse — waiting would let one
+ * connection decide how long a server thread is occupied, and buffering without limit would let it
+ * decide how much heap the server uses.</p>
  *
  * <p>The close is performed on a separate one-shot thread, because closing a connection whose send
  * window is shut can block too, and the point of all this is that nothing a slow client does ever
