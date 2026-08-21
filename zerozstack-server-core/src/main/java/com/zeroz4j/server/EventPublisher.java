@@ -66,7 +66,7 @@ public interface EventPublisher {
      * Publishes a payload to the sessions matching a scope.
      *
      * <p>{@link #publish(EventTopic, Object)} reaches <b>every connected session</b> with no principal
-     * check, which is correct for genuinely public news and a data leak for anything else. Use this
+     * check, which is correct for genuinely public news and wrong for anything else. Use this
      * overload whenever the payload belongs to somebody.</p>
      *
      * @param <T>     payload type bound by the topic

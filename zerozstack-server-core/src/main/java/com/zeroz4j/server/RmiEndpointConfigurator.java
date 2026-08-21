@@ -135,8 +135,8 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         super.modifyHandshake(config, request, response);
 
         // Origin first: a browser attaches the client-id cookie to any connection to this origin,
-        // including one opened by an attacker's page, so an unchecked Origin would hand that page
-        // the victim's identity. Nothing else about the handshake matters if this fails.
+        // whichever page opened it, so which page opened it is the first thing decided.
+        // Nothing else about the handshake matters if this fails.
         String origin = firstHeader(request, "Origin");
         String host = firstHeader(request, "Host");
         if (!OriginPolicy.isAllowed(origin, host)) {
@@ -285,8 +285,8 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
      * {@link com.zeroz4j.api.Scope#CLIENT}.</p>
      *
      * <p>A rejected token is deliberately indistinguishable from a first visit: the connection
-     * simply becomes a new client, because reporting the difference would tell an attacker whether
-     * a guessed id exists.</p>
+     * simply becomes a new client. The two answers are the same, so no id can be tested against the
+     * server.</p>
      */
     private static void resolveClientId(ServerEndpointConfig config,
                                         HandshakeRequest request,

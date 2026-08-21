@@ -31,6 +31,12 @@ Causes, in order:
 3. the proposed value passes the model's validation annotations;
 4. the canonical instance exists on the server, i.e. it was synced out at least once.
 
+If the message says **"The change also alters a …"**, the edit reached a second object further
+inside. Every object a change touches is checked separately, so a model nested inside a
+`@ClientWritable` model needs its own `@ClientWritable` and its own roles. Either mark the inner
+model, or stop sending it to the client. See
+[LiveSync](../LIVESYNC.md#every-object-the-change-touches-is-checked-not-just-the-outer-one).
+
 ### `events.publish(...)` reaches no client
 
 The payload is not wire-serializable. `publish` now throws `IllegalArgumentException` naming the
@@ -223,7 +229,7 @@ A reconnect is a **new session with a new id**. Anything the application keyed b
 session. Re-register from a `StateListener` on `CONNECTED`, and observe the CDI event
 `SessionClosedEvent` server-side to drop the stale entry.
 
-## Security and access
+## Sign-in and access
 
 ### `SecurityException: Rejected RMI call to unregistered service`
 
@@ -247,9 +253,50 @@ real deployment by registering an `AuthenticationProvider` — see
 ### `@RolesAllowed` is ignored
 
 You put it on the implementation. The dispatcher scans the `@RmiService` **interface** and its declared
-methods only, so an annotation on the bean class is never read and the method stays unprotected. Move it
+methods only, so an annotation on the bean class is never read and the method stays open. Move it
 to the interface — and check you imported `com.zeroz4j.api.RolesAllowed`, not the Jakarta annotation of
 the same name.
+
+### The examples ask for a password and nothing you type works
+
+Since 0.7.0 an example server does not switch on the built-in `demo` and `admin` logins by starting.
+Add `--dev-login` to the command line, or run the example's `run.bat`, which already passes it. A
+server running that way prints a warning at startup.
+
+### The error says "The server could not complete this request. Reference: …"
+
+That is every unexpected exception. Search the server log for the same code and you have the real
+message and the stack trace. If this is a refusal your own code raised on purpose, throw
+`com.zeroz4j.server.ClientVisibleException` instead and its message reaches the caller word for word.
+
+### `LiveMutex.lock()` fails at once instead of waiting
+
+The server only grants a lock on an object it actually sent to that browser. Fetch the object from
+your service and lock the copy you get back. A record of what was sent holds 10,000 objects per
+browser and is dropped after 24 hours idle, so a very old object may need re-fetching. If the
+message mentions signing in, this deployment has `zeroz.livemutex.requireAuthentication=true`.
+
+### An object comes back empty after a reconnect
+
+Same rule: the server answers a re-read only for objects it sent to that browser. This happens with
+a client that carries no cookie — a test harness, a non-browser client — because it is remembered
+only for the life of one connection. Fetch the objects again the way you first obtained them; that
+always works.
+
+### An upload is refused
+
+Read the sentence the component shows; it is what the server sent.
+
+| Sentence | What to do |
+|---|---|
+| "That file is too big. The largest we can take is 25 MB." | Choose a smaller file, or raise `zeroz.upload.maxBytes`. |
+| "That took too long to start. Please choose the file again." | The permission expired after 60 seconds. Pick the file again. |
+| "That file did not finish sending. Please try again." | The connection dropped part-way, or the upload was cancelled. |
+| "We could not accept that file. Reload the page and try again." | The live connection is gone. A reload gets a new one. |
+
+If nothing happens at all and the browser console shows a 404 for `zeroz4j-upload`, the deployment
+is missing `zerozstack-server-jakarta` (in a WAR) or `zerozstack-server-jaxrs` (standalone), or a
+`web.xml` has taken that servlet name over. See [Accepting file uploads](file-uploads.md).
 
 ## When you are stuck
 

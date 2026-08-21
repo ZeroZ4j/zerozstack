@@ -17,16 +17,20 @@ Every WebSocket frame in ZeroZ Stack is binary and begins with a 4-byte ID:
 
 ## The handshake
 
-Everything above happens on a connection that has already been accepted. Two checks run first, before
-any frame is exchanged.
+Everything above happens on a connection that has already been accepted. Two checks run first,
+before any frame is exchanged.
 
-**Origin.** The `Origin` header must match the host the request was sent to, or one of the origins in
-`zeroz.origins`. This is not optional politeness: a browser attaches cookies to any connection to your
-origin, including one opened by a page the user is merely visiting, so an unchecked `Origin` would
-hand that page the visitor's identity. A refused handshake is closed with WebSocket close code 1008, with a reason naming which check
-refused it and nothing else about the deployment.
-A handshake carrying no `Origin` at all is allowed — browsers always send one, so its absence means a
-non-browser client with no ambient cookies to abuse.
+**Origin — which page opened it.** The `Origin` header must match the host the request was sent to,
+or one of the origins listed in `zeroz.origins`. A handshake carrying no `Origin` at all is allowed:
+browsers always send one, so its absence means the caller is not a browser and carries no cookies of
+its own.
+
+**Host — which name it was addressed to.** With `zeroz.hosts` set, the `Host` header must be one of
+the names listed there. Unset, this check does not run.
+
+A refused handshake is closed with WebSocket close code 1008, and the reason names which of the two
+checks refused it and nothing else about the deployment. The full explanation, with the configured
+values, is in the server log.
 
 **Client identity.** Every connection carries a browser id the *server* minted: 256 random bits,
 HMAC-signed, delivered in an `HttpOnly`, `SameSite=Strict` cookie that page script cannot read. It is
@@ -39,6 +43,13 @@ state to itself.
 application's `AuthenticationProvider`. A provider that declines does not fail the upgrade: the
 connection proceeds anonymously and is refused at every `@Secured` call, because a rejected upgrade
 gives the client no way to report why.
+
+## What does not travel on this wire
+
+**File contents.** A message here is assembled whole in memory and is limited to 4 MB by default
+(`zeroz.ws.maxBinaryMessageBytes`), so files go over a separate HTTP address instead — see
+[Accepting file uploads](guides/file-uploads.md). The only part of an upload that touches this wire
+is a small call asking for a one-time pass.
 
 ## RPC Protocol (RMI)
 
@@ -74,9 +85,8 @@ Server responses include an explicit opcode byte at index 4.
     (`com.zeroz4j.server.ClientVisibleException`), and the framework's own refusals — authentication
     required, access denied, unknown service, unknown method, failed argument validation.
   * Every other failure is answered with `The server could not complete this request. Reference: <code>`.
-    The real message and stack trace are written to the server log under the same code. An
-    unplanned failure's message names classes, fields and container internals, and an anonymous
-    caller can trigger those failures on purpose to learn how the system is put together.
+    The real message and stack trace are written to the server log under the same code, so a user
+    reading the code off their screen is enough to find the log line.
 * **0x02 — PUSH (Server-initiated)**
   * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
 * **0x03 — AUTH (Authentication Result)**
@@ -111,17 +121,16 @@ application's service interface.
 After **25 seconds of silence** the client sends a five-byte RMI-shaped frame naming the reserved
 service `zeroz4j.keepalive`, method `ping`, with correlation id `0` — fire and forget, because
 nothing waits for the answer. The server recognises the name before service dispatch and replies with
-one `0x19 PONG`: no service lookup, no security check beyond the connection already being open, no
+one `0x19 PONG`: no service lookup, nothing checked beyond the connection already being open, no
 request context.
 
 Any real traffic postpones the next ping, so a connection in use sends none at all. `Keepalive.configure(seconds)`
 changes the interval; zero turns it off.
 
-Because a ping is answered before any check, it is also the cheapest frame to send in a loop. One
-connection is answered at most once per second (`zeroz.ws.keepaliveMinIntervalMillis`); pings that
-arrive faster are ignored and cost nothing. A working client is nowhere near that limit — it waits 25
-seconds. The answer is written on the connection's own read thread and never becomes a task, so a
-connection is still answered while it is busy.
+**One connection is answered at most once per second** (`zeroz.ws.keepaliveMinIntervalMillis`).
+Pings that arrive faster than that are ignored and cost nothing. A working client is nowhere near
+the limit — it waits 25 seconds between pings. The answer is written on the connection's own read
+thread and never becomes a task, so a connection is still answered while it is busy.
 
 ## LiveSync Protocol (0x10 – 0x1F)
 
@@ -226,10 +235,10 @@ itself in this order, all as fire-and-forget frames:
    fetched — produce no frame and one server-side log line naming the count.
 
 A handle presented to `zeroz4j.resync` is answered only when the server's own record says that
-browser was sent the object. Presenting a handle used to be proof enough, on the theory that a handle
-can only be learned by being sent the object — which is not so, because an object nested inside a
-broadcast event or a shared signal goes out with its handle attached, teaching every recipient the
-handles of things it was never given.
+browser was sent the object. **A handle names an object; it does not stand for permission to have
+it.** Handles travel inside payloads — an object nested in a broadcast event or a shared signal goes
+out with its own handle attached — so every recipient of the outer payload knows the handles of the
+parts inside, and the record is what separates knowing a handle from having been sent the object.
 
 The record is kept per **browser id**, not per session, so a reconnect — which is always a new session
 — still restores what that browser holds. A connection carrying no browser id is remembered for the

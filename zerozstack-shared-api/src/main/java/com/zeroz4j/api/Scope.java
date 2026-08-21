@@ -23,9 +23,9 @@ package com.zeroz4j.api;
  * <p>One concept shared by every push mechanism — LiveSync updates and server events alike — so that
  * "who receives this" is asked and answered the same way regardless of which one you are using.</p>
  *
- * <p>Choosing a scope is a security decision, not a performance one. {@link #GLOBAL} reaches every
- * connected session with no principal check, so anything belonging to one user or one tenant must be
- * scoped explicitly.</p>
+ * <p>Choosing a scope decides who receives the push; it is not a performance setting. {@link #GLOBAL}
+ * reaches every connected session with no principal check, so anything belonging to one user or one
+ * tenant must be scoped explicitly.</p>
  */
 public enum Scope {
 
@@ -53,7 +53,7 @@ public enum Scope {
      * changes on every drop) and a page reload. A user's two tabs share it; a different browser,
      * device or private window does not.</p>
      *
-     * <p><b>Not a security boundary.</b> A client id identifies a browser, not a person: two people
+     * <p><b>A browser, not a person.</b> A client id identifies a browser: two people
      * sharing a machine share it, and clearing cookies mints a new one. Use it to keep a browser's
      * own state to itself, never to keep one person's data away from another — that is what
      * {@link #USER} and {@link #TENANT} are for, and they require real authentication.</p>
@@ -73,8 +73,8 @@ public enum Scope {
      *
      * <p>Requires an {@code AuthenticationProvider} that reports a tenant on the authenticated
      * principal. A session with no tenant — anonymous, or authenticated by a provider that does not
-     * set one — never matches, so a tenant-scoped push cannot leak to an unauthenticated connection by
-     * default.</p>
+     * set one — never matches, so a connection that did not sign in receives nothing sent this
+     * way.</p>
      */
     TENANT
 }

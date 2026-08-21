@@ -116,13 +116,13 @@ Whichever shape you ship, set these before anyone outside your machine can reach
 They all default to the behaviour that is convenient during development, which is not the behaviour
 you want in front of the internet.
 
-| Property | Set it to | Why |
+| Property | Set it to | What it does |
 |---|---|---|
-| `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | Refuses a handshake addressed to a name you do not serve. Without it, an attacker who points their own domain at your server has a page that can talk to your application from a visitor's browser. |
-| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Generated at startup when unset, so a restart logs everyone's browser out and other nodes reject each other's ids. |
-| `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means same-origin only, which is what you want. |
-| `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two accounts whose passwords are printed in this documentation. |
-| `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | See below. |
+| `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | The server accepts a connection only when it was addressed to one of these names. Unset, it accepts any name at all. |
+| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Unset, a new one is made at every startup, so a restart gives everybody a new browser id and other nodes do not recognise this node's ids. |
+| `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means the page must come from the same address as the socket, which is what you want. |
+| `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two built-in accounts whose passwords are printed in this documentation. |
+| `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | The largest message the server accepts. 4 MB unless you say otherwise; see below. |
 
 ```bash
 java -Dzeroz.hosts=app.example.com \
@@ -131,14 +131,89 @@ java -Dzeroz.hosts=app.example.com \
      -jar myapp-server.jar
 ```
 
-**Serve it over HTTPS.** The identity cookie is marked `Secure`, and TLS is what stops a browser
-accepting a name that has been repointed at your server. Behind a proxy that terminates TLS, set
-`zeroz.clientId.secureCookie=true` so the cookie keeps that mark.
+**Serve it over HTTPS.** The identity cookie is marked `Secure`, which a browser only keeps on an
+`https://` page. Behind a proxy that terminates TLS — where the application itself only ever sees
+plain HTTP — set `zeroz.clientId.secureCookie=true` so the cookie keeps that mark anyway.
 
 The development accounts are described in
 [Authentication and authorization](security-auth.md#development-authentication). The examples take a
 `--dev-login` flag to switch them on; nothing switches them on by itself, and a server that has them
 on says so at startup.
+
+## Every setting the framework reads
+
+All of them are JVM system properties: `-Dname=value` on the command line. Every one has a working
+default, and a fresh application needs none of them set.
+
+### The connection
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.origins` | Which pages may open a connection. A comma-separated list, or `*` for no check | the page must come from the same address as the socket |
+| `zeroz.hosts` | Which host names this deployment answers for. A comma-separated list; an entry with no port accepts that name on any port | any name is accepted |
+| `zeroz.ws.maxBinaryMessageBytes` | Largest message the server accepts | **4 MB (4,194,304 bytes)** |
+| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
+| `zeroz.ws.maxConcurrentFramesPerSession` | Messages from one connection being handled at the same time | **32** |
+| `zeroz.ws.maxPendingFramesPerSession` | Messages that may be waiting to go out on one connection | **256** |
+| `zeroz.ws.maxPendingBytesPerSession` | Bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
+| `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive answers to one connection | **1000** |
+
+### Who the caller is
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.clientId.secret` | The key that signs the browser id. Set the same value on every node | a new key at every startup |
+| `zeroz.clientId.ttlDays` | How long a browser id stays valid | **365** |
+| `zeroz.clientId.secureCookie` | Forces the `Secure` mark on the identity cookie on or off | follows the request: on for `https`, off for `http` |
+| `zeroz.security.mode` | `dev` switches on the built-in `demo` and `admin` logins | off |
+
+### Editing locks
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.livemutex.waitSeconds` | How long a caller waits for a lock somebody else holds | **30** |
+| `zeroz.livemutex.requireAuthentication` | `true` allows locking only on signed-in connections | off |
+
+### The record of what was sent to each browser
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.disclosure.maxHandlesPerClient` | Objects remembered as sent to one browser | **10,000** |
+| `zeroz.disclosure.idleHours` | How long that record survives with no activity | **24** |
+
+### File uploads
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.upload.maxBytes` | Largest file the server accepts | **25 MB (26,214,400 bytes)** |
+| `zeroz.upload.passSeconds` | How long an upload permission stays usable | **60** |
+| `zeroz.upload.tempDir` | Where a file is written while it arrives | `zeroz4j-uploads` inside the system temporary directory |
+
+### Inside an application server
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.threads.jndiName` | The JNDI name of the thread factory RMI calls run on | `java:comp/DefaultManagedThreadFactory` |
+
+### Logging in with OpenID Connect
+
+Read only when `zerozstack-auth-oidc` is on the classpath. Full explanation in
+[Logging in with OpenID Connect](oidc-auth.md).
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.oidc.issuer` | The realm URL that appears in your tokens' `iss` claim | **required** — startup fails without it |
+| `zeroz.oidc.jwksUri` | Where the signing keys are published | Keycloak's location under the issuer |
+| `zeroz.oidc.clientId` | This application's client id | none |
+| `zeroz.oidc.audience` | The `aud` value a token must carry | the `azp` claim is compared with `clientId` instead |
+| `zeroz.oidc.principalClaim` | Which claim becomes the user name | `preferred_username` |
+| `zeroz.oidc.rolesClaim` | A flat claim holding the roles | Keycloak's own role structure is read |
+| `zeroz.oidc.tenantClaim` | Which claim carries the tenant | none |
+| `zeroz.oidc.tenantFromRealm` | `true` takes the tenant from the realm in the issuer URL | off |
+| `zeroz.oidc.clockSkewSeconds` | How much clock difference an expiry check tolerates | **60** |
+
+Storage has its own settings under a different prefix, `zeroz4j.store.*` — see
+[Store modes](../store-modes.md).
 
 ## Shape 4: a WAR on a Jakarta EE server
 
@@ -157,7 +232,7 @@ of `zerozstack-server-helidon`:
 </dependency>
 ```
 
-That module carries the three things every WAR otherwise had to work out for itself:
+That module carries the things every WAR otherwise had to work out for itself:
 
 | Class | Does | Needs configuration? |
 |---|---|---|
@@ -165,6 +240,7 @@ That module carries the three things every WAR otherwise had to work out for its
 | `Zeroz4jWebSocketConfig` | Publishes the `/wasm-rmi` endpoint, which container scanning does not find inside a dependency jar | No |
 | `ManagedThreadFactoryProvider` | Runs RMI calls on container threads (see below) | No — registered via `META-INF/services` |
 | `Zeroz4jShellServlet` | Serves the client bundle and the shell for client-route deep links | **Yes** — map it yourself |
+| `FileUploadServlet` | Receives file uploads at `/zeroz4j-upload` | No — `@WebServlet` |
 
 The servlet is deliberately unmapped: where it sits is the deployment's decision, and a WAR with its
 own servlets must be able to take this module without something claiming `/`. Map it in `web.xml`:
@@ -188,9 +264,9 @@ it out; `zerozstack-server-core` contains no JAX-RS type at all.
 ### Container threads
 
 By default the framework dispatches RMI calls onto virtual threads it creates itself. Inside an
-application server that is a problem: the container attaches thread-locals — the naming context behind
-`java:comp/env/…`, the transaction context, the security context — before calling application code,
-and a thread the container did not create has none of them. A service doing a JNDI lookup, or holding
+application server that is a problem: the container attaches thread-locals — the naming context
+behind `java:comp/env/…`, the transaction context, and the caller's identity — before calling
+application code, and a thread the container did not create has none of them. A service doing a JNDI lookup, or holding
 an `@Resource` resolved lazily on the calling thread, then fails a long way from the cause.
 
 It cannot be repaired from inside such a thread by handing the work to a `ManagedExecutorService`:
@@ -217,38 +293,19 @@ threads — degraded but running, rather than a deployment that will not start.
     knowing before a load test surprises you.
 
 The framework's side of this contract is narrow: **calls are dispatched on threads the supplied
-factory produced.** Whether a particular container's factory really carries naming, transaction and
-security context is that container's contract, and worth asserting in your own integration test.
+factory produced.** Whether a particular container's factory really carries naming, transactions and
+the caller's identity is that container's contract, and worth asserting in your own integration test.
 
-### WebSocket limits
+## How big a message can be, and what happens when one is too big
 
-Every limit the framework applies, in one place. All of them have a working default; a fresh
-application needs none of them set.
+**The server accepts messages up to 4 MB** (`zeroz.ws.maxBinaryMessageBytes`), the same default
+gRPC uses.
 
-| Property | Effect | Unset |
-|---|---|---|
-| `zeroz.ws.maxBinaryMessageBytes` | Largest binary message the endpoint accepts | **4 MB (4,194,304 bytes)** |
-| `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
-| `zeroz.ws.maxPendingFramesPerSession` | Most messages that may be waiting to go out on one connection | **256** |
-| `zeroz.ws.maxPendingBytesPerSession` | Most bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
-| `zeroz.ws.maxConcurrentFramesPerSession` | Most messages from one connection being handled at the same time | **32** |
-| `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive replies to one connection | **1000** |
-| `zeroz.livemutex.waitSeconds` | How long a client waits for an item somebody else is editing | **30** |
-| `zeroz.livemutex.requireAuthentication` | Restricts editing locks to signed-in users | **off** |
-| `zeroz.disclosure.maxHandlesPerClient` | Objects remembered as sent to one browser | **10,000** |
-| `zeroz.disclosure.idleHours` | How long that memory survives with no activity | **24** |
-| `zeroz.upload.maxBytes` | Largest file an upload may carry | **25 MB (26,214,400 bytes)** |
-| `zeroz.upload.passSeconds` | How long an upload permission slip stays valid | **60** |
-| `zeroz.upload.tempDir` | Where a file is written while the application decides on it | the system temporary directory |
-
-The size limit has a framework default because the container's own is not a safe one to inherit.
-The framework uses the Jakarta WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus
-2.1.5.
-Tyrus starts each connection's message limit at `Integer.MAX_VALUE` — about 2 GB — and Helidon never
-changes it.
-A client that splits one message into many small pieces can therefore make the server hold all of
-them in memory before a single line of your code runs.
-4 MB is the same default gRPC uses.
+The framework sets that number itself rather than taking the container's. It uses the Jakarta
+WebSocket API, which Helidon 4.0.8 implements by embedding Tyrus 2.1.5, and Tyrus starts each
+connection's message limit at `Integer.MAX_VALUE` — about 2 GB. A message is assembled whole before
+any of your code sees it, so that number is what the server would be prepared to hold in memory for
+one connection.
 
 An explicit setting always wins, up or down, so a deployment that already tuned this keeps its
 number:
@@ -260,15 +317,15 @@ number:
 The server logs the limit in force once at startup, naming the property, so a message that is
 refused later can be explained without guessing.
 
-#### When a browser stops reading
+### When a browser stops reading
 
-The last two properties are about the other direction: messages the server is trying to send.
+`zeroz.ws.maxPendingFramesPerSession` and `zeroz.ws.maxPendingBytesPerSession` are about the other
+direction: messages the server is trying to send.
 
 The server sends a message by handing it to the operating system, which puts it on the network as
 fast as the browser accepts it.
 A browser that has stopped accepting — a laptop that went to sleep, a phone that lost signal, a tab
-that is wedged, or a client written on purpose to connect and then read nothing — makes that hand-off
-stop part-way.
+that is wedged — makes that hand-off stop part-way.
 The server keeps the messages for that one connection in a queue until it starts moving again.
 
 The queue has a size, and the two settings above are it.
@@ -281,8 +338,7 @@ Closing is deliberate.
 A browser that is that far behind has already missed messages it will never see, so its copy of your
 data is wrong whichever choice is made, and the client reconnects and asks for a fresh copy on its
 own.
-The alternative would be holding the messages until the server ran out of memory, and one browser
-would be able to decide that.
+Holding the queue open instead would mean one connection deciding how much memory the server uses.
 
 **Nothing else on the server waits for a connection in this state.**
 Each connection has its own queue and its own thread that empties it, so a browser that has stopped
@@ -309,8 +365,21 @@ or return identifiers and fetch details on demand.
 !!! warning "This connection is not for file uploads"
     Do not send file contents over the RMI socket. It is sized for the messages an application
     exchanges, not for documents, images or video, and a big enough file simply closes the
-    connection. File upload is a separate feature.
+    connection. Use [file upload](file-uploads.md), which posts to its own HTTP address and streams
+    straight to disk.
 
-The idle timeout matters for a different reason: without one, an abandoned browser tab holds a
-session and its server-side resources indefinitely. The client's automatic reconnect means closing an
-idle connection is invisible to a user who comes back.
+### How many messages one connection may be running at once
+
+One connection may have **32** messages being decoded and executed at the same time
+(`zeroz.ws.maxConcurrentFramesPerSession`). A message that arrives while the connection is at its
+limit waits its turn — nothing is dropped and no call fails, so a burst is served a few at a time.
+The waiting happens on that one connection's read loop, so other connections carry on unaffected.
+
+Decoding is where a small message turns into a large object graph, so the size limit above is a real
+ceiling on memory only when the number of messages being decoded at once is bounded too.
+
+### The idle timeout
+
+`zeroz.ws.idleTimeoutMinutes` is unset by default, so an abandoned browser tab holds a session and
+its server-side resources for as long as the container allows. The client reconnects by itself, so
+closing an idle connection is invisible to a user who comes back.

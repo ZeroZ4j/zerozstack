@@ -41,7 +41,8 @@ package com.zeroz4j.server;
  *
  * <p><b>Identity is fixed for the life of the connection.</b> Roles are read once at handshake, so a
  * user whose roles change must reconnect. That is a deliberate simplification, not an oversight —
- * re-evaluating identity per frame would mean a security check on the hot path.</p>
+ * working the identity out again on every frame would put that lookup on the busiest path there
+ * is.</p>
  *
  * <p><b>This is the only authentication boundary.</b> Client-side checks are user feedback; every
  * {@code @Secured}, {@code @RolesAllowed} and {@code @ClientWritable} decision is made server-side

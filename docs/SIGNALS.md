@@ -110,7 +110,7 @@ that other targets exist, let alone what they hold.
 
 ### Choosing a scope
 
-Picking one is a security decision, not a preference.
+Picking one decides who receives the value. It is not a preference.
 
 | Scope | Keyed by | Needs a login? | Survives reconnect? |
 |---|---|---|---|

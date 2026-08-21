@@ -59,7 +59,7 @@ public class SaveToDisk implements FileUploadHandler {
             return UploadResult.rejected("That file is empty.");
         }
         Files.createDirectories(FOLDER);
-        // The stored name is generated here. file.getFileName() is untrusted and never a path.
+        // The stored name is generated here. file.getFileName() is text from the browser, never a path.
         Path target = FOLDER.resolve(UUID.randomUUID().toString());
         Files.move(file.getTempFile(), target, StandardCopyOption.REPLACE_EXISTING);
         return UploadResult.accepted("Saved.");
@@ -93,13 +93,13 @@ wording of a refusal.
 
 `UploadedFile` carries the file and who sent it.
 
-| Method | What it is | Can you trust it? |
+| Method | What it is | Who decided it |
 |---|---|---|
-| `getTempFile()` | the complete file, under a name the framework generated | yes |
-| `getSizeBytes()` | how many bytes the server counted | yes |
-| `getPrincipal()`, `getRoles()`, `getTenantId()`, `getClientId()`, `getSessionId()` | the identity of the live connection that asked to upload | yes |
-| `getFileName()` | the name the browser reported | **no** |
-| `getContentType()` | the type the browser reported | **no** |
+| `getTempFile()` | the complete file, under a name the framework generated | the server |
+| `getSizeBytes()` | how many bytes the server counted as they arrived | the server |
+| `getPrincipal()`, `getRoles()`, `getTenantId()`, `getClientId()`, `getSessionId()` | the identity of the live connection that asked to upload | the server, at the handshake |
+| `getFileName()` | the name the browser reported | **the browser** — treat it as text |
+| `getContentType()` | the type the browser reported | **the browser** — treat it as text |
 
 Return `UploadResult.accepted(message)` or `UploadResult.rejected(message)`.
 The message is shown next to the file in the browser, so write it for the person sitting there:
@@ -122,29 +122,32 @@ java -Dzeroz.upload.maxBytes=104857600 -cp "target/classes;target/libs/*" com.ex
 |---|---|---|
 | `zeroz.upload.maxBytes` | `26214400` (25 MB) | the largest file the server accepts |
 | `zeroz.upload.passSeconds` | `60` | how long an upload permission stays usable |
-| `zeroz.upload.tempDir` | the JVM temp directory | where a file is written while it arrives |
+| `zeroz.upload.tempDir` | a `zeroz4j-uploads` folder inside the JVM's temporary directory | where a file is written while it arrives |
 
 Put `zeroz.upload.tempDir` on the same filesystem as wherever your handler moves files to, so the
 move is a rename rather than a copy.
 
-## What the framework guarantees
+## What the framework does for you
 
-- **Only a live session can upload.**
-  The page asks its existing connection for a one-time pass, and the upload address accepts nothing
-  without one.
-  The pass expires in seconds, works once, and is refused if it is presented by a different browser
-  than the one it was issued to.
-  Uploading therefore inherits exactly the same login as every other call, with nothing extra to
-  remember.
-- **An unauthenticated request consumes no disk.**
-  The pass is checked before a temporary file is created.
-- **The size limit is enforced twice** — once from the declared length before the body is read, and
-  again from the bytes actually counted, in case the declaration lied.
-- **The temporary file is named by the framework.** Nothing the browser sent reaches the filesystem.
-- **The file is complete when the handler runs.** A cancelled or dropped upload never reaches it.
+- **An upload needs a live connection.**
+  The page asks its existing WebSocket connection for a one-time pass, and the upload address
+  accepts nothing without one.
+  A pass lasts 60 seconds, works once, and is accepted only from the browser it was issued to.
+  So an upload carries exactly the same identity as every other call on that connection, with
+  nothing extra for you to arrange — and there is no other way in: no API key, no signed URL.
+- **The pass is checked before any file is created**, so a request without one writes nothing to
+  disk.
+- **The size is checked twice** — first against the length the request declares, before any of the
+  body is read, and then against the bytes actually counted as they arrive.
+- **The temporary file is named by the framework.** Nothing the browser sent is used to build a
+  path.
+- **The file is whole when the handler runs.** An upload that was cancelled or whose connection
+  dropped is answered "That file did not finish sending. Please try again." and never reaches your
+  code.
 - **The temporary file is always deleted** — on success, on rejection, on a handler that threw, on a
   cancel, and on a connection that died mid-upload.
-- **The address is origin-checked**, using the same `zeroz.origins` rule as the WebSocket handshake.
+- **The upload address applies the same `zeroz.origins` rule as the WebSocket handshake**, so the
+  pages allowed to open a connection are the pages allowed to upload.
 
 ## What the application must check itself
 
@@ -164,10 +167,10 @@ move is a rename rather than a copy.
   The framework enforces one login and one size limit.
   Quotas, per-role limits and per-tenant rules are application rules — read `getPrincipal()`,
   `getRoles()` and `getTenantId()` and decide.
-- **Where the file goes.**
-  Generate the stored name, as the sample above does.
-  `getFileName()` may be `../../etc/passwd`, may contain a null byte, may be `CON`, and must never
-  become a path segment.
+- **What the stored file is called.**
+  Generate the name yourself, as the sample above does.
+  `getFileName()` is a piece of text the browser sent: it can contain slashes, dots, control
+  characters, or a name the operating system treats specially, and none of that is checked.
   Keep it as data — a database column, a text file beside the upload — if you want to show it later.
 - **Virus scanning.** The framework does none.
 
@@ -176,7 +179,8 @@ move is a rename rather than a copy.
 `setAccept(...)` filters the file picker and warns about a dragged file that does not match, and the
 component refuses a file over the limit without sending it.
 Both exist so a person is told immediately rather than after a long upload.
-Neither is a boundary: the server checks the size again and never believes the type at all.
+Neither decides anything: the server checks the size again for itself, and ignores the type
+altogether.
 
 ## Limits
 

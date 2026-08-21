@@ -139,8 +139,8 @@ mechanism is unrelated, despite the similar feel.
 **Scope**
 : *Who* a push reaches — `GLOBAL`, `SESSION`, `CLIENT`, `USER`, `TENANT`. It applies to events,
 LiveSync updates and scoped signals alike, and the server always resolves the target from the
-connection's own identity rather than from anything the client sent. Choosing one is a security
-decision, not a performance one.
+connection's own identity rather than from anything the client sent. Choosing one decides who
+receives the push; it is not a performance setting.
 
 **Scoped signal**
 : A signal declared once but holding *one value per target* — `Signals.scoped(name, initial, scope)`.

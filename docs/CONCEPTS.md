@@ -20,8 +20,8 @@ The bootstrap mechanism for your Wasm client application. By calling `Zeroz4jCli
 ## 4. `Zeroz4jServer`
 The bootstrap mechanism for your Helidon-based backend. Calling `Zeroz4jServer.start(port, name)` spins up the HTTP/WebSocket server, initializes the CDI environment (Weld), and binds the `zerozstack-server-core` RMI dispatcher to incoming connections.
 
-## 5. Security: `@Secured` and `@RolesAllowed`
-ZeroZ Stack supports method-level security on the server. By annotating an `@RmiService` implementation method with `@Secured`, you ensure only authenticated users can call it. Adding `@RolesAllowed("admin")` restricts invocation to specific roles.
+## 5. Access control: `@Secured` and `@RolesAllowed`
+ZeroZ Stack decides per method, on the server, who may call what. Annotating an `@RmiService` method with `@Secured` allows only signed-in users to call it. Adding `@RolesAllowed("admin")` narrows that to specific roles.
 
 ## 6. Authentication: `RmiSecurityContext`
 Credentials are presented **once, on the WebSocket handshake**, and your `AuthenticationProvider` decides. The client never sends an `AUTH` frame; the server sends one back carrying its decision, the user name and the roles. Nothing gates HTTP — an unauthenticated visitor loads the page normally and is refused at every `@Secured` call.

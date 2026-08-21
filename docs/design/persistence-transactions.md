@@ -346,7 +346,7 @@ Option C is the only design with no window, and it requires EclipseStore to dura
   are Narayana defaults, not spec guarantees — depend on them knowingly.
 - Use **`@TransactionScoped`**, not `@RequestScoped`, for the per-transaction accumulator: it follows
   the transaction rather than the thread, survives suspend/resume, and dies exactly when the
-  transaction ends. `@RequestScoped` would leak across transaction boundaries inside one request.
+  transaction ends. `@RequestScoped` would stay alive across transaction boundaries inside one request.
 
 #### The residual window, and why it is not closable today
 

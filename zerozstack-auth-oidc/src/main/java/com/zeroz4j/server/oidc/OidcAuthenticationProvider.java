@@ -132,7 +132,7 @@ public final class OidcAuthenticationProvider implements AuthenticationProvider 
     private static JWKSource<SecurityContext> defaultKeySource(OidcConfiguration config) {
         try {
             // Cached and rate-limited: a handshake must not become a round trip to the identity
-            // provider, and a burst of reconnects must not look like an attack on its JWKS endpoint.
+            // provider, and a burst of reconnects must not become a burst of JWKS fetches.
             return JWKSourceBuilder.create(URI.create(config.jwksUri()).toURL())
                     .retrying(true)
                     .build();

@@ -39,8 +39,8 @@ import java.lang.annotation.Target;
  *       tracked fields need setters, and clients must mutate through them. Collection
  *       contents changed in place (e.g. {@code getTags().add(...)}) are not observed —
  *       reassign via the setter or call {@code LiveMutationTracker.touch(obj)}.</li>
- *   <li><b>Security Default:</b> Without this annotation, client mutations of a live
- *       object are ignored — deny by default.</li>
+ *   <li><b>Default:</b> Without this annotation, client mutations of a live
+ *       object are ignored — nothing is writable until it is marked.</li>
  * </ul>
  */
 @Retention(RetentionPolicy.RUNTIME)

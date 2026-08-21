@@ -85,7 +85,7 @@ The accounts those six use are the framework's built-in development ones, and **
 does not switch them on.** Ask for them with `--dev-login`:
 
 ```bash
-java -jar scoped-signals-server/target/scoped-signals-server-0.6.2.jar --dev-login
+java -jar scoped-signals-server/target/scoped-signals-server-0.7.0.jar --dev-login
 ```
 
 The `run.bat` scripts pass the flag already. A server running this way prints a warning saying so.

@@ -52,7 +52,7 @@ public class Registration {
 
 The annotation processor emits `Registration_Rules`, the client shows the messages, and the **server
 enforces the same rules independently** on every RMI argument. Client-side validation is user
-feedback, never a security boundary.
+feedback; the server's answer is the one that counts.
 
 Use `withValidator` for logic that isn't expressible as a model annotation:
 

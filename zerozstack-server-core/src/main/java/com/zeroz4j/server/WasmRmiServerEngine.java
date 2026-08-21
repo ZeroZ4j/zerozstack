@@ -318,7 +318,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         applyWebSocketLimits(session);
         // Threads come from the resolved factory rather than being created here, so a deployment
         // inside a Jakarta EE server can supply a ManagedThreadFactory whose threads carry the
-        // container's naming, transaction and security context. With no provider registered this is
+        // container's naming, transaction and identity context. With no provider registered this is
         // a virtual-thread factory, identical to newVirtualThreadPerTaskExecutor().
         sessionExecutors.put(session.getId(),
                 Executors.newThreadPerTaskExecutor(SessionThreads.factory()));
@@ -443,10 +443,10 @@ public class WasmRmiServerEngine implements EventPublisher {
      * for that their origin was rejected sends them to read origin configuration that was never the
      * problem.</p>
      *
-     * <p>What it must not do is describe the deployment. This text goes to a browser, including a
-     * hostile one — that is the whole reason the connection is being refused — so it names the check
-     * and the setting to look at, never the configured values. The full explanation, with the
-     * configured list, is in the server log, which only the operator can read.</p>
+     * <p>What it must not do is describe the deployment. This text goes to whoever opened the
+     * connection, so it names the check and the setting to look at, never the configured values.
+     * The full explanation, with the configured list, is in the server log, which only the operator
+     * can read.</p>
      *
      * @param config the handshake configuration, carrying what the configurator decided
      * @return the close reason, within the 123 bytes the protocol allows

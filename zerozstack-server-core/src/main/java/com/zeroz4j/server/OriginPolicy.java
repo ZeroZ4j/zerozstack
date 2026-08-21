@@ -26,11 +26,10 @@ import java.util.logging.Logger;
 /**
  * Decides whether a WebSocket handshake may proceed, based on the page that opened it.
  *
- * <p>A browser attaches cookies to <em>any</em> connection to an origin, including one opened by a
- * page the user happens to be visiting. Since {@link ClientIdentity} puts an identity cookie on the
- * handshake, an unchecked {@code Origin} would let an attacker's page open a socket and be handed
- * the victim's client id by the browser. This check is what closes that: the connection is refused
- * unless the page that opened it is one this deployment trusts.</p>
+ * <p>A browser attaches cookies to <em>any</em> connection to an origin, whichever page opened it,
+ * and {@link ClientIdentity} puts an identity cookie on the handshake. So the server decides for
+ * itself which pages it accepts a connection from: the handshake is refused unless the page that
+ * opened it is one this deployment names.</p>
  *
  * <h2>Configuration</h2>
  * <table border="1">
@@ -45,21 +44,20 @@ import java.util.logging.Logger;
  *           {@code https://app.example.com,https://admin.example.com}. Needed when the page is
  *           served from a different host than the socket.</td></tr>
  *   <tr><td>{@code *}</td>
- *       <td>No check at all. Only for a deployment that already enforces origin in front of the
- *           application; otherwise it reopens the hijack this class exists to prevent.</td></tr>
+ *       <td>No check at all. Only for a deployment where something in front of the application
+ *           already decides which pages may connect.</td></tr>
  * </table>
  *
  * <p>A handshake carrying <b>no</b> {@code Origin} header is allowed. Browsers always send one, so
- * its absence means a non-browser client — which has no ambient cookies to be abused in the first
- * place, and would be refusing legitimate native and test clients for nothing.</p>
+ * its absence means the caller is not a browser and carries no cookies of its own; refusing it would
+ * turn away native and test clients for nothing.</p>
  *
- * <h2>The host allowlist, and why the same-origin rule is not enough on its own</h2>
+ * <h2>Naming the hosts this deployment answers for</h2>
  *
- * <p>The default rule compares two headers the attacker's page controls together. Under <b>DNS
- * rebinding</b> a page on {@code evil.com} makes that name resolve to this server's address; the
- * browser then opens a socket carrying {@code Origin: http://evil.com:8080} and
- * {@code Host: evil.com:8080}, they match, and the handshake is allowed. Naming the hosts this
- * deployment answers for closes it:</p>
+ * <p>{@code zeroz.hosts} asks a second, different question: not which page opened the connection,
+ * but which name it was addressed to. The default rule only asks whether {@code Origin} and
+ * {@code Host} agree, and they agree for any name that has been pointed at this server's address.
+ * Listing the names actually served is what makes the second question answerable.</p>
  *
  * <table border="1">
  *   <caption>{@code zeroz.hosts}</caption>
@@ -116,13 +114,11 @@ public final class OriginPolicy {
     /**
      * Whether the {@code Host} this request was addressed to is one this deployment answers for.
      *
-     * <p><b>The attack this closes is DNS rebinding.</b> The default same-origin rule compares the
-     * {@code Origin} header to the {@code Host} header, and a page the victim is visiting controls
-     * both. The attacker serves {@code evil.com}, points that name at this server's address, and the
-     * victim's browser opens a socket sending {@code Origin: http://evil.com:8080} and
-     * {@code Host: evil.com:8080} — which match, so the same-origin rule lets it through. Listing the
-     * names this deployment actually answers for is what stops it, because {@code evil.com} is not
-     * one of them.</p>
+     * <p>The default rule compares the {@code Origin} header to the {@code Host} header, and any
+     * name pointed at this server's address makes those two agree. This check asks the other
+     * question instead: is the name the request was addressed to one of the names listed in
+     * {@code zeroz.hosts}? A name that is not listed is refused however consistent the headers
+     * are.</p>
      *
      * <p>Checked on every handshake, including one with no {@code Origin} header: the question is
      * which name the request was addressed to, not which page sent it.</p>

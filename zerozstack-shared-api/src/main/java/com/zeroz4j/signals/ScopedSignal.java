@@ -45,10 +45,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * Effect.create(() -> badge.setText(BasketSignals.BASKET.mine().get().itemCount() + " items"));
  * }</pre>
  *
- * <p>Which scope to pick is a security decision, and {@link Scope} documents each one. The short
- * version: {@link Scope#CLIENT} needs no login and survives reconnects and reloads, making it the
- * default for an open application; {@link Scope#USER} and {@link Scope#TENANT} require
- * authentication and are the only ones that are a real boundary between people.</p>
+ * <p>Which scope to pick decides who receives the value, and {@link Scope} documents each one. The
+ * short version: {@link Scope#CLIENT} needs no login and survives reconnects and reloads, making it
+ * the default for an open application; {@link Scope#USER} and {@link Scope#TENANT} require
+ * authentication and are the only ones that separate one person from another.</p>
  *
  * <h2>Which tier does what</h2>
  * <ul>

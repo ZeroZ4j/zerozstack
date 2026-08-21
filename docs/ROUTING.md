@@ -136,7 +136,7 @@ In markup, add `data-route` to an anchor and the router takes it over:
 <a data-route href="/tasks/42">Open task</a>
 ```
 
-Only anchors carrying that attribute are intercepted — hijacking every link would swallow links to
+Only anchors carrying that attribute are intercepted — taking over every link would swallow links to
 other sites and to downloads. Modified clicks (new tab, new window) are always left to the browser.
 
 ## Deployed somewhere other than the site root
@@ -178,9 +178,9 @@ public class AdminView implements RouteView<Void> { ... }
 Checked against `RmiSecurityContext`, which is populated from the server at connect. Every layout in
 the chain is checked too, so a guarded shell protects everything inside it.
 
-**This is not a security boundary.** A client-side check decides what to show; the server re-checks
-every RMI call against `@Secured` and `@RolesAllowed`, and that is what actually protects data.
-Skipping the annotation only means the user reaches a view whose calls then fail.
+**This check decides nothing on its own.** A client-side check decides what to show; the server
+checks every RMI call again against `@Secured` and `@RolesAllowed`, and that is the check that
+counts. Skipping the annotation only means the user reaches a view whose calls then fail.
 
 ## Fallbacks
 

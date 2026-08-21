@@ -110,8 +110,8 @@ public final class ClientIdentity {
         String payload = token.substring(0, lastDot);
         String presented = token.substring(lastDot + 1);
 
-        // Constant-time: a byte-by-byte early exit would leak how much of a guessed signature
-        // was correct, which is enough to forge one a byte at a time.
+        // Constant-time: every comparison takes the same time whether the first byte differs or
+        // the last one does, so how long the answer took says nothing about the signature.
         byte[] expectedBytes = sign(payload).getBytes(StandardCharsets.UTF_8);
         byte[] presentedBytes = presented.getBytes(StandardCharsets.UTF_8);
         if (!MessageDigest.isEqual(expectedBytes, presentedBytes)) {
