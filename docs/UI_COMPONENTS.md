@@ -162,7 +162,14 @@ Components used to present data, alerts, and content to the user.
 - **Collapse**: A generic expand/collapse container.
 - **ContextMenu**: A popup menu triggered by a right-click or long-press.
 - **Countdown**: Displays a timer counting down to a specific event.
-- **Dialog**: A modal overlay that interrupts the user workflow for critical interaction.
+- **Dialog**: A panel that takes over the page until it is answered. Opening it hands the
+  element to the browser, so Escape closes it, focus stays inside it, the page behind it stops
+  responding, and it is drawn above everything else. A click on the dimmed area outside the
+  panel closes it too. `setWidth` and `setHeight` size the visible panel rather than the
+  full-window overlay, and the panel is never larger than the window. `addCloseListener` fires
+  once per close however it closed. For a question that must be answered, take the exits away
+  with `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)` — and leave the user a
+  button. `setModal(false)` restores the appearance-only dialog of 0.7.0 and earlier.
 - **Diff / DiffView**: Components for displaying file or text differences side-by-side.
 - **Divider**: A visual separator between content sections.
 - **Drawer**: A sliding side panel for navigation or secondary content.

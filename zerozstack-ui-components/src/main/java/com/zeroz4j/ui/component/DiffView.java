@@ -26,9 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Unified-diff renderer: one collapsible section per file with +N ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢M badges, colored
+ * Unified-diff renderer: one collapsible section per file with +N −M badges, colored
  * add/remove gutters, hunk headers. Understands git-style headers (diff --git, ---, +++).
- * This is a CODE diff ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â DaisyUI's own `diff` class is an image-compare widget.
+ * This is a CODE diff — DaisyUI's own `diff` class is an image-compare widget.
  */
 public final class DiffView extends Div {
 
@@ -105,7 +105,7 @@ public final class DiffView extends Div {
         path.addClassName("font-mono text-xs flex-1 truncate");
         Span addBadge = new Span("+" + file.adds());
         addBadge.addClassName("text-success text-xs font-mono");
-        Span delBadge = new Span("ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢" + file.dels());
+        Span delBadge = new Span("−" + file.dels());
         delBadge.addClassName("text-error text-xs font-mono");
         header.add(chevron);
         header.getElement().appendChild(path.getElement());

@@ -79,7 +79,7 @@ public final class KeyedList<T> {
             return false;
         });
         // Mount new keys / update existing, then fix order by re-appending in sequence
-        // (appendChild moves an already-attached node ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â cheap and order-correct).
+        // (appendChild moves an already-attached node — cheap and order-correct).
         for (Map.Entry<String, T> entry : wanted.entrySet()) {
             Component existing = mounted.get(entry.getKey());
             if (existing == null) {

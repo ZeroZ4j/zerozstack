@@ -26,7 +26,7 @@ import java.util.Set;
 
 /**
  * Syntax-highlighted code with a header (language chip + copy button). The tokenizer is a
- * deliberately small single-pass scanner (comments, strings, numbers, keywords) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â enough
+ * deliberately small single-pass scanner (comments, strings, numbers, keywords) — enough
  * to make code readable, zero external JS. All content enters the DOM as text nodes;
  * nothing from the model is ever parsed as HTML.
  */

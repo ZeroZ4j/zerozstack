@@ -26,7 +26,7 @@ import java.util.function.Function;
 /**
  * Windowed list: renders only the visible slice of a large item list (fixed row height),
  * so 10k-event transcripts scroll at full speed in TeaVM. Supports follow-tail mode for
- * live streams ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sticks to the bottom until the user scrolls up.
+ * live streams — sticks to the bottom until the user scrolls up.
  *
  * @param <T> item type
  */

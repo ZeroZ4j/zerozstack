@@ -65,7 +65,7 @@ public class StatShowcase extends ComponentShowcase {
         
         Div desc2 = new Div();
         desc2.addClassName("stat-desc");
-        desc2.getElement().setTextContent("Ã¢â€ â€”Ã¯Â¸Å½ 400 (22%)");
+        desc2.getElement().setTextContent("↗︎ 400 (22%)");
         
         stat2.add(title2, value2, desc2);
 

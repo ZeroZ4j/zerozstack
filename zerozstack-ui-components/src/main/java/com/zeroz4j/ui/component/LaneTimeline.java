@@ -31,9 +31,9 @@ import java.util.List;
 import com.zeroz4j.signals.Effect;
 
 /**
- * Swimlane replay timeline (design Ãƒâ€šÃ‚Â§6.5): one lane per worker session, colored by outcome,
+ * Swimlane replay timeline (design §6.5): one lane per worker session, colored by outcome,
  * with event ticks; a draggable cursor drives the {@code cursor} signal (epoch millis) that
- * the run graph time-travels on. Play at 1ÃƒÆ’Ã¢â‚¬â€ / 4ÃƒÆ’Ã¢â‚¬â€ / 16ÃƒÆ’Ã¢â‚¬â€; "Live" resets to now (cursor null).
+ * the run graph time-travels on. Play at 1× / 4× / 16×; "Live" resets to now (cursor null).
  */
 public final class LaneTimeline extends Div {
 
@@ -92,10 +92,10 @@ public final class LaneTimeline extends Div {
         title.addClassName("font-bold tracking-wider text-[10px] text-base-content/40 mr-2");
         bar.getElement().appendChild(title.getElement());
 
-        bar.add(speedButton(bar, "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶ 1ÃƒÆ’Ã¢â‚¬â€", 1));
-        bar.add(speedButton(bar, "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶ 4ÃƒÆ’Ã¢â‚¬â€", 4));
-        bar.add(speedButton(bar, "ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶ 16ÃƒÆ’Ã¢â‚¬â€", 16));
-        Button pause = new Button("ÃƒÂ¢Ã‚ÂÃ‚Â¸");
+        bar.add(speedButton(bar, "▶ 1×", 1));
+        bar.add(speedButton(bar, "▶ 4×", 4));
+        bar.add(speedButton(bar, "▶ 16×", 16));
+        Button pause = new Button("⏸");
         pause.addClassName("btn-ghost btn-xs");
         pause.addClickListener(e -> {
             playing = false;
@@ -137,7 +137,7 @@ public final class LaneTimeline extends Div {
         return button;
     }
 
-    /** ~30fps playback: advances the cursor by speed ÃƒÆ’Ã¢â‚¬â€ frame time until the end. */
+    /** ~30fps playback: advances the cursor by speed × frame time until the end. */
     private void tick() {
         if (!playing || playSpeed == 0) {
             return;
@@ -193,7 +193,7 @@ public final class LaneTimeline extends Div {
             }
         }
 
-        // Cursor line ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â draggable across the plot area.
+        // Cursor line — draggable across the plot area.
         Long at = cursor.get();
         int cursorX = LABEL_W + (at == null ? plotW : x(at, plotW));
         Element cursorLine = SvgCanvas.el("line",
@@ -255,7 +255,7 @@ public final class LaneTimeline extends Div {
     }
 
     private static String truncate(String s, int max) {
-        return s == null ? "" : s.length() <= max ? s : s.substring(0, max - 1) + "ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦";
+        return s == null ? "" : s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 }
 

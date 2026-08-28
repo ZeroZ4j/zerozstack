@@ -20,7 +20,7 @@ package com.zeroz4j.ui.component;
 import com.zeroz4j.ui.layout.Span;
 
 /**
- * Inline SVG glyphs (24ÃƒÆ’Ã¢â‚¬â€24 viewBox, stroke-based, currentColor) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no icon font, no CDN.
+ * Inline SVG glyphs (24×24 viewBox, stroke-based, currentColor) — no icon font, no CDN.
  * Usage: {@code Icon.of("gear")} or {@code Icon.of("play", "w-6 h-6 text-success")}.
  */
 public final class Icon extends Span {

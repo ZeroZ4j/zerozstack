@@ -8,6 +8,92 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [0.8.0] — unreleased
+
+Two faults in `Dialog`, both found in an application built on 0.7.0, and one round of text that had
+been stored wrong since the library was first published.
+
+### Breaking
+
+- **A dialog now takes over the page.** `open()` used to add a stylesheet class and nothing else, so
+  the element never became a real dialog as far as the browser was concerned. Escape did nothing,
+  the keyboard could wander out of it, the page behind it stayed live, and there was no dimmed area
+  to click. A dialog shipped without a Close button was therefore a trap: in the application this
+  came from, opening one froze everything until the page was reloaded, taking a half-written message
+  with it. `open()` now hands the element to the browser, which is what Escape, the focus trap and
+  the dim have always needed.
+
+    **If your application relied on the page behind a dialog staying usable**, or on Escape doing
+    nothing, two calls before opening give you the old behaviour back:
+
+    ```java
+    dialog.setModal(false);              // the browser does not own it
+    dialog.setCloseOnOutsideClick(false); // and a click outside does not close it
+    ```
+
+    Both are needed. The first is about what the browser does; a click outside the panel is drawn
+    and handled by the component itself, so it survives the first call on its own.
+
+    **If you only want to stop the user walking away from a question**, keep the new behaviour and
+    take the exits away one at a time with `setCloseOnEsc(false)` and
+    `setCloseOnOutsideClick(false)`. Whenever you do, leave a button on the dialog: it becomes the
+    only way out.
+
+- **`setWidth` and `setHeight` on a dialog now size the visible panel, not the full-window
+  overlay.** They did not exist on `Dialog` before this release, so nothing can break — but if you
+  reached past the API for the first child element and set a width on it yourself, that code is now
+  redundant and should be deleted before the two fight each other.
+
+### Added
+
+- **A dialog can be given a width.** A dialog is two boxes: a full-window overlay, and the panel
+  you actually see. Everything worth changing lives on the panel, and until now the component
+  handed out no way to reach it, so applications took the overlay's first child element and pushed
+  stylesheet classes onto it — six separate hand-written copies of the same workaround across
+  eleven places in one application, each written by somebody who could not find the previous one.
+
+    ```java
+    Dialog dialog = new Dialog();
+    dialog.setWidth("56rem");
+    ```
+
+    The panel is never wider than the window, so a width chosen for a desktop still fits a phone.
+
+    A method that adds a stylesheet class to the panel, or one that hands the panel out as a
+    component, would have removed the same workaround. Both were turned down. They make the
+    dialog's internal shape part of its public contract, so it could never be rebuilt; and they put
+    stylesheet class names back into application code, which is the one thing this framework exists
+    to keep out. A width is a width — the same `setWidth` every other sizeable component already
+    has, taking a length rather than the name of a rule in somebody's stylesheet.
+
+- **`addCloseListener`** — called once every time a dialog closes, however it closed: Escape, a
+  click outside, or `close()` in your own code. `isFromClient()` on the event is false only when
+  your code closed it. Use it to release whatever the dialog was holding, rather than trusting that
+  your Close button is the only way out — it no longer is.
+
+- **`setCloseOnEsc`, `setCloseOnOutsideClick`, `setModal`, `isOpened`** — see the Breaking section
+  above for when you want each of them.
+
+### Fixed
+
+- **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
+  library.** Eight strings were stored that way, three rounds of it deep, so an application using
+  them rendered `ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â` where a dash belonged. The affected components are
+  `LaneTimeline` (its play, speed and pause labels, and the ellipsis it uses to shorten a label),
+  `DiffView` (the minus sign in front of a deleted-line count), `PropertyGrid` (the dash it shows
+  for a missing value) and `StreamingText` (the block cursor). The component gallery had the same
+  fault on its keyboard, pagination, stat and swap pages.
+
+    The build was never at fault and nothing could have caught this: the corruption was in the
+    committed source, so every build reproduced it exactly, without a warning. A new test now reads
+    every Java file in the checkout and fails on any text that survives being written as
+    Windows-1252 and read back as UTF-8, naming the file, the line and the characters that were
+    meant.
+
+- **A dialog taken out of the page while it was open** used to leave the browser believing it was
+  still open, so it could not be shown again. It is now closed properly when it is removed, its
+  close listeners are told, and a leftover open marker is repaired before it is shown again.
+
 ## [0.7.0] — 2026-08-20
 
 File upload, plus a round of work on the live connection, the binary wire format, the HTTP addresses
@@ -869,6 +955,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.0...v0.6.1

@@ -22,7 +22,7 @@ import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.component.Component;
 
 /**
- * Two-column key/value inspector grid. Values are monospace and copy on click ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
+ * Two-column key/value inspector grid. Values are monospace and copy on click —
  * the standard way ids, paths, and hashes are shown everywhere in the Console.
  */
 public final class PropertyGrid extends Div {
@@ -34,7 +34,7 @@ public final class PropertyGrid extends Div {
     public PropertyGrid row(String key, String value) {
         Span keySpan = new Span(key);
         keySpan.addClassName("text-base-content/60 whitespace-nowrap");
-        Span valueSpan = new Span(value == null ? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â" : value);
+        Span valueSpan = new Span(value == null ? "—" : value);
         valueSpan.addClassName("font-mono text-xs break-all cursor-pointer hover:text-primary");
         valueSpan.getElement().setAttribute("title", "click to copy");
         valueSpan.getElement().addEventListener("click", threaded(e -> {
