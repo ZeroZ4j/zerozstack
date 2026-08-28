@@ -156,13 +156,19 @@ first published, and repairs to the two components whose labels an application c
     Windows-1252 and read back as UTF-8, naming the file, the line and the characters that were
     meant.
 
-    A second test now guards the release itself. It opens every jar the build has produced and
-    reads the text inside them — the words baked into compiled classes, the resource files, and the
-    files the build generates — and stops the build if any of it is damaged in that way. The two
-    checks together cover both ends: one watches what a developer types, the other watches what
-    leaves the building. Checked against the 0.7.0 jar that was actually published, the new test
-    finds every damaged string in it; checked against this release it reads about three thousand
-    files and reports nothing.
+    A second test now guards the release itself. It reads the text of everything this project
+    publishes — the words baked into the compiled program files, the resource files, the files the
+    build generates, and the starter project the framework hands to anyone creating a new
+    application — and stops the build if any of it is damaged in that way. The two checks together
+    cover both ends: one watches what a developer types, the other watches what leaves the building.
+    Checked against the 0.7.0 file that was actually published, the new test finds every damaged
+    piece of text in it; checked against this release it reads several thousand files and reports
+    nothing.
+
+    It also refuses to pass quietly on a partial job. It works out for itself which parts of the
+    project get published, by reading the build files rather than from a list that could go stale,
+    and it fails and names the part it could not read. A check that silently looks at less than it
+    claims to is the same kind of fault it was written to catch.
 
 - **Six example applications had their logging setting saved in the wrong kind of file, so it did
   nothing.** The file said to log in full detail. It had been written by a Windows shell, which

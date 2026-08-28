@@ -18,7 +18,15 @@
 package com.zeroz4j.store;
 
 import org.junit.jupiter.api.Test;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -35,6 +43,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -47,37 +56,63 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Nothing this repository publishes carries text that was UTF-8 once and got read back through a
- * single-byte code page.
+ * single-byte code page - and the check knows which modules it was supposed to read, so it cannot
+ * quietly cover fewer of them than it claims.
  *
  * <p>This is the release gate for the fault that shipped in 0.7.0: strings in the component library
  * were stored corrupted in the committed source, so every build reproduced them faithfully and the
  * published jar rendered Latin-1 punctuation where a dash, a play triangle or a block cursor
- * belonged. {@code SourceTextEncodingTest} in {@code zerozstack-ui-components} guards the source a
- * developer types. This one guards what actually leaves the building, and so also covers the three
- * things a source check cannot see: string constants inside compiled classes, resources that are
- * not Java at all, and the files the annotation processor generates.</p>
+ * belonged. {@code SourceTextEncodingTest} in {@code zerozstack-ui-components} guards the Java a
+ * developer types. This one guards everything that leaves the building, including the three things
+ * a Java-source check cannot see: the strings baked into compiled classes, resources that are not
+ * Java at all, and the project template the archetype hands to every new application.</p>
  *
- * <p><b>What it reads.</b> Every jar this build produced - any {@code target/*.jar} in the
- * checkout, minus the copied dependency jars under {@code target/libs} - plus every module's
- * {@code target/classes}, {@code target/generated-sources} and {@code src/main/resources}. Reading
- * those directories as well as the jars is what makes the check independent of build order: a
- * module packaged later in the reactor than this one is still covered, because a jar is only ever
- * a copy of them.</p>
+ * <h2>It works out for itself what it must read</h2>
  *
- * <p><b>How it detects corruption.</b> The damage is reversible, and that is the whole test. Take a
- * run of non-ASCII characters, write it back out in one of the code pages that cause this, and try
- * to read those bytes as UTF-8. Text that was never corrupted is not valid UTF-8 in that form and
- * the read fails, which is the passing case. Text that survives the round trip and comes back
- * different was UTF-8 misread, and what comes back is what the author actually typed. The reversal
- * repeats until it stops changing, because a string can go through this more than once.</p>
+ * <p>The list of modules that publish is read out of the POM files, starting at the root and
+ * following the module declarations down. A module that turns publishing off with
+ * {@code maven.deploy.skip} is dropped together with everything beneath it, which is how the
+ * examples are excluded. Nothing is hard-coded and no prose is trusted: a module added, removed,
+ * renamed or re-scoped changes what this check demands, in the same commit that changes it.</p>
+ *
+ * <p>Each module then has to account for itself, by its packaging:</p>
+ *
+ * <ul>
+ *   <li><b>A jar module</b> must show its Java sources - which are what the sources jar is made of
+ *       - and its compiled form, either as a packaged jar or as {@code target/classes}.</li>
+ *   <li><b>The archetype</b> must show {@code src/main/resources}. That directory is the project
+ *       template, copied into every application anyone generates, and it is checked from the
+ *       checkout rather than from the archetype jar deliberately: the archetype is built at the
+ *       very end of the reactor and its jar does not exist while this test runs, and the checkout
+ *       is where a contributor would introduce the fault in the first place.</li>
+ *   <li><b>Every module</b>, whatever its packaging, must show its own {@code pom.xml}.</li>
+ * </ul>
+ *
+ * <p>If any of that produced nothing to read, the test fails and names the module and what was
+ * missing. An expected artifact that is absent is a finding, not a skip. That single rule is what
+ * stops this check rotting: reorder the reactor, add a module, rename an output directory, and it
+ * says so instead of passing on a smaller job than it was given. It matters here because the
+ * reactor order is not the order the modules are declared in - the examples depend on the store
+ * module, which moves it a long way up the build - so reasoning about what will have been built by
+ * the time this runs is exactly the kind of thing that quietly stops being true.</p>
+ *
+ * <h2>How it detects corruption</h2>
+ *
+ * <p>The damage is reversible, and that is the whole test. Take a run of non-ASCII characters,
+ * write it back out in one of the code pages that cause this, and try to read those bytes as UTF-8.
+ * Text that was never corrupted is not valid UTF-8 in that form and the read fails, which is the
+ * passing case. Text that survives the round trip and comes back different was UTF-8 misread, and
+ * what comes back is what the author actually typed. The reversal repeats until it stops changing,
+ * because a string can go through this more than once - the 0.7.0 strings went through it three
+ * times.</p>
  *
  * <p><b>Why it does not fire on good text.</b> Surviving that round trip is a demanding accident:
  * the run has to read as a UTF-8 lead byte followed by continuation bytes, which ordinary accented
  * words, quotation marks, arrows, mathematical symbols and box-drawing diagrams are not. Measured
- * on this repository it reads about three thousand class files, resources and generated sources -
- * including the complete javadoc of every module and the ASCII-art directory trees in the
- * documentation - and reports nothing, while it recovers every corrupted string the published
- * 0.7.0 jar carries.</p>
+ * on this repository it reads several thousand class files, sources, resources and generated files
+ * - including the complete javadoc of every module and the ASCII-art directory trees in the
+ * documentation - and reports nothing, while the same check against the jar actually published as
+ * 0.7.0 recovers every damaged string in it.</p>
  *
  * <p>This file deliberately contains no corrupted text of its own, since it would then fail on its
  * own compiled constants.</p>
@@ -87,24 +122,128 @@ class PublishedArtifactTextTest {
     @Test
     void nothingPublishedCarriesMisreadUtf8() throws IOException {
         Path root = repositoryRoot();
-        List<String> findings = new ArrayList<>();
-        int[] scanned = {0};
+        List<PublishedModule> modules = publishedModules(root);
 
+        assertTrue(modules.size() > 1,
+                "Could not work out which modules this build publishes by reading the POM files "
+                        + "under " + root + ". That is a fault in this check, not in the text it "
+                        + "was asked to inspect.");
+
+        Scan scan = new Scan(root);
         for (Path jar : jarsUnder(root)) {
-            readJar(root, jar, findings, scanned);
+            scan.readJar(jar);
         }
         for (Path dir : directoriesUnder(root)) {
-            readDirectory(root, dir, findings, scanned);
+            scan.readDirectory(dir);
+        }
+        for (PublishedModule module : modules) {
+            scan.readFile(root.resolve(module.path()).resolve("pom.xml"));
         }
 
-        assertTrue(scanned[0] > 0,
-                "This check found nothing to read under " + root + ". It reads compiled output, so "
-                        + "build the modules first (mvn install) and run it again.");
-
-        assertTrue(findings.isEmpty(), failureMessage(findings, scanned[0]));
+        List<String> gaps = coverageGaps(root, modules, scan);
+        assertTrue(gaps.isEmpty(), coverageMessage(gaps, modules, scan));
+        assertTrue(scan.findings.isEmpty(), failureMessage(scan));
     }
 
-    private static String failureMessage(List<String> findings, int scanned) {
+    // ---------------------------------------------------------------- what must be covered
+
+    /** A module this build publishes, as the POM files describe it. */
+    private record PublishedModule(String path, String packaging) { }
+
+    /**
+     * Every module the release publishes, read out of the POM files rather than named here. A
+     * module that sets {@code maven.deploy.skip} is dropped together with everything beneath it.
+     */
+    private static List<PublishedModule> publishedModules(Path root) {
+        List<PublishedModule> modules = new ArrayList<>();
+        collectModules(root, "", modules);
+        return modules;
+    }
+
+    private static void collectModules(Path root, String relativePath,
+                                       List<PublishedModule> collected) {
+        Path pom = root.resolve(relativePath).resolve("pom.xml");
+        if (!Files.isRegularFile(pom)) {
+            return;
+        }
+        Element project = parse(pom);
+        if (Boolean.parseBoolean(property(project, "maven.deploy.skip"))) {
+            return;                                        // this module and its children opt out
+        }
+        String packaging = textOf(child(project, "packaging"));
+        collected.add(new PublishedModule(relativePath.isEmpty() ? "." : relativePath,
+                packaging.isEmpty() ? "jar" : packaging));
+
+        Element modules = child(project, "modules");
+        if (modules == null) {
+            return;
+        }
+        for (Element module : children(modules, "module")) {
+            String name = textOf(module);
+            if (!name.isEmpty()) {
+                collectModules(root, relativePath.isEmpty() ? name : relativePath + "/" + name,
+                        collected);
+            }
+        }
+    }
+
+    /** What each module had to show, and the complaint when it showed nothing. */
+    private static List<String> coverageGaps(Path root, List<PublishedModule> modules, Scan scan) {
+        List<String> gaps = new ArrayList<>();
+        for (PublishedModule module : modules) {
+            Path dir = root.resolve(module.path()).normalize();
+            String name = module.path();
+
+            if (!scan.read(dir.resolve("pom.xml"))) {
+                gaps.add("  " + name + " - its own pom.xml was not read");
+            }
+            switch (module.packaging()) {
+                case "jar" -> {
+                    if (!scan.readAnythingIn(dir.resolve("src").resolve("main").resolve("java"))) {
+                        gaps.add("  " + name + " - no Java source was read from src/main/java, "
+                                + "which is what the sources jar is made of");
+                    }
+                    if (!scan.readAnythingIn(dir.resolve("target").resolve("classes"))
+                            && !scan.readAnyJarIn(dir.resolve("target"))) {
+                        gaps.add("  " + name + " - its compiled form was not read. Neither a "
+                                + "packaged jar nor target/classes was there, so this module has "
+                                + "not been built");
+                    }
+                }
+                case "maven-archetype" -> {
+                    if (!scan.readAnythingIn(
+                            dir.resolve("src").resolve("main").resolve("resources"))) {
+                        gaps.add("  " + name + " - the project template under src/main/resources "
+                                + "was not read. That template is copied into every application "
+                                + "generated from this archetype");
+                    }
+                }
+                default -> {
+                    // A pom module publishes only its pom, which is checked above.
+                }
+            }
+        }
+        return gaps;
+    }
+
+    private static String coverageMessage(List<String> gaps, List<PublishedModule> modules,
+                                          Scan scan) {
+        String nl = System.lineSeparator();
+        return "This check is meant to read everything this build publishes, and it could not."
+                + nl
+                + "That matters more than it looks. A check that silently inspects less than it "
+                + "claims is the same defect it was written to catch, so do not narrow it to make "
+                + "this pass." + nl
+                + "Missing:" + nl
+                + String.join(nl, gaps) + nl
+                + "If a module simply has not been compiled yet, build the whole reactor first - "
+                + "mvn install from the repository root - and run this again. If a module was "
+                + "moved, renamed or given different packaging, teach this check about it." + nl
+                + "(" + modules.size() + " publishing modules found in the POM files, "
+                + scan.entries + " entries read.)";
+    }
+
+    private static String failureMessage(Scan scan) {
         String nl = System.lineSeparator();
         return "Text that was UTF-8 and got read back through a single-byte code page is about to "
                 + "be published." + nl
@@ -119,11 +258,106 @@ class PublishedArtifactTextTest {
                 + "A line that says a file is not UTF-8 at all means the whole file was saved in "
                 + "another encoding - UTF-16 from a shell redirect is the usual one. Save it again "
                 + "as UTF-8." + nl
-                + String.join(nl, findings) + nl
-                + "(" + scanned + " entries read.)";
+                + String.join(nl, scan.findings) + nl
+                + "(" + scan.entries + " entries read.)";
     }
 
-    // ---------------------------------------------------------------- what to read
+    // ---------------------------------------------------------------- reading
+
+    /** Everything read, what it said, and where it came from. */
+    private static final class Scan {
+
+        private final Path root;
+        private final List<String> findings = new ArrayList<>();
+        private final Set<Path> sources = new LinkedHashSet<>();
+        private int entries;
+
+        Scan(Path root) {
+            this.root = root;
+        }
+
+        boolean read(Path file) {
+            return sources.contains(file.normalize());
+        }
+
+        boolean readAnythingIn(Path directory) {
+            Path wanted = directory.normalize();
+            return sources.stream().anyMatch(p -> p.startsWith(wanted));
+        }
+
+        boolean readAnyJarIn(Path directory) {
+            Path wanted = directory.normalize();
+            return sources.stream().anyMatch(
+                    p -> p.startsWith(wanted) && p.getFileName().toString().endsWith(".jar"));
+        }
+
+        void readJar(Path jar) {
+            String label = root.relativize(jar).toString();
+            try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(jar))) {
+                ZipEntry entry;
+                while ((entry = zip.getNextEntry()) != null) {
+                    if (!entry.isDirectory()) {
+                        inspect(jar, label + " ! " + entry.getName(), entry.getName(),
+                                zip.readAllBytes());
+                    }
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("Could not read " + jar, e);
+            }
+        }
+
+        void readDirectory(Path directory) throws IOException {
+            try (Stream<Path> files = Files.walk(directory)) {
+                for (Path p : files.filter(Files::isRegularFile).toList()) {
+                    readFile(p);
+                }
+            }
+        }
+
+        void readFile(Path file) {
+            if (!Files.isRegularFile(file)) {
+                return;
+            }
+            try {
+                inspect(file, root.relativize(file).toString(), file.getFileName().toString(),
+                        Files.readAllBytes(file));
+            } catch (IOException e) {
+                throw new UncheckedIOException("Could not read " + file, e);
+            }
+        }
+
+        private void inspect(Path origin, String label, String name, byte[] bytes) {
+            List<String> texts;
+            if (name.endsWith(".class")) {
+                texts = stringConstantsOf(bytes);
+            } else if (isText(name)) {
+                String decoded = decodeUtf8OrNull(bytes);
+                if (decoded == null) {
+                    findings.add("  " + label + "  is not UTF-8 at all");
+                    accept(origin);
+                    return;
+                }
+                texts = List.of(decoded);
+            } else {
+                return;
+            }
+            accept(origin);
+            for (String text : texts) {
+                for (String run : nonAsciiRunsOf(text)) {
+                    String repaired = repair(run);
+                    if (repaired != null) {
+                        findings.add("  " + label + "  " + codePoints(run)
+                                + "  ->  " + codePoints(repaired) + "   " + repaired);
+                    }
+                }
+            }
+        }
+
+        private void accept(Path origin) {
+            entries++;
+            sources.add(origin.normalize());
+        }
+    }
 
     /** Every jar this build produced. Copied dependency jars and test scratch are not ours. */
     private static List<Path> jarsUnder(Path root) throws IOException {
@@ -141,10 +375,14 @@ class PublishedArtifactTextTest {
         return jars;
     }
 
-    /** The directories a jar is built from: compiled output, generated sources and resources. */
+    /**
+     * The directories an artifact is built from: sources, resources, compiled output and generated
+     * output. Reading these as well as the jars is what makes the check independent of build order,
+     * since a module packaged later in the reactor is still covered by what it is made of.
+     */
     private static List<Path> directoriesUnder(Path root) throws IOException {
         List<Path> dirs = new ArrayList<>();
-        try (Stream<Path> all = Files.walk(root, 7)) {
+        try (Stream<Path> all = Files.walk(root, 8)) {
             all.filter(p -> !hidden(root, p))
                .filter(Files::isDirectory)
                .filter(PublishedArtifactTextTest::isBuildInput)
@@ -164,7 +402,7 @@ class PublishedArtifactTextTest {
         if (parentName.equals("target")) {
             return name.equals("classes") || name.equals("generated-sources");
         }
-        return name.equals("resources") && parentName.equals("main");
+        return parentName.equals("main") && (name.equals("java") || name.equals("resources"));
     }
 
     /** Skips .git, editor state and any private Maven repository a worktree keeps beside itself. */
@@ -186,31 +424,6 @@ class PublishedArtifactTextTest {
         return false;
     }
 
-    private static void readJar(Path root, Path jar, List<String> findings, int[] scanned) {
-        String label = root.relativize(jar).toString();
-        try (ZipInputStream zip = new ZipInputStream(Files.newInputStream(jar))) {
-            ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.isDirectory()) {
-                    inspect(label + " ! " + entry.getName(), entry.getName(),
-                            zip.readAllBytes(), findings, scanned);
-                }
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not read " + jar, e);
-        }
-    }
-
-    private static void readDirectory(Path root, Path dir, List<String> findings, int[] scanned)
-            throws IOException {
-        try (Stream<Path> files = Files.walk(dir)) {
-            for (Path p : files.filter(Files::isRegularFile).toList()) {
-                inspect(root.relativize(p).toString(), p.getFileName().toString(),
-                        Files.readAllBytes(p), findings, scanned);
-            }
-        }
-    }
-
     // ---------------------------------------------------------------- what counts as text
 
     /**
@@ -220,34 +433,6 @@ class PublishedArtifactTextTest {
     private static final Set<String> TEXT_EXTENSIONS = Set.of(
             "java", "txt", "md", "html", "htm", "css", "js", "mjs", "json", "properties",
             "xml", "yml", "yaml", "svg", "sql", "csv", "mf", "bat", "sh", "cmd", "vm");
-
-    private static void inspect(String label, String name, byte[] bytes,
-                                List<String> findings, int[] scanned) {
-        List<String> texts;
-        if (name.endsWith(".class")) {
-            texts = stringConstantsOf(bytes);
-        } else if (isText(name)) {
-            String decoded = decodeUtf8OrNull(bytes);
-            if (decoded == null) {
-                findings.add("  " + label + "  is not UTF-8 at all");
-                scanned[0]++;
-                return;
-            }
-            texts = List.of(decoded);
-        } else {
-            return;
-        }
-        scanned[0]++;
-        for (String text : texts) {
-            for (String run : nonAsciiRunsOf(text)) {
-                String repaired = repair(run);
-                if (repaired != null) {
-                    findings.add("  " + label + "  " + codePoints(run)
-                            + "  ->  " + codePoints(repaired) + "   " + repaired);
-                }
-            }
-        }
-    }
 
     private static boolean isText(String name) {
         int dot = name.lastIndexOf('.');
@@ -365,19 +550,19 @@ class PublishedArtifactTextTest {
         return decodeUtf8OrNull(bytes);
     }
 
+    /** What a decoder puts where a code page leaves a byte value undefined. */
+    private static final char REPLACEMENT = '\uFFFD';
+
     /**
      * The code pages that turn UTF-8 into this. Windows-1252 is what a European Windows editor
      * uses; ISO-8859-1 is the default of many tools that predate UTF-8; IBM437 and IBM850 are the
      * console code pages, which give the corruption its box-drawing look.
      *
      * <p>Windows-1252 leaves five byte values undefined. The string that damaged
-     * {@code PropertyGrid} in 0.7.0 contained one of them, so for that code page the undefined
-     * five are mapped straight through - without which this check would miss exactly the kind of
-     * string it was written for.</p>
+     * {@code PropertyGrid} in 0.7.0 contained one of them, so for that code page the undefined five
+     * are mapped straight through - without which this check would miss exactly the kind of string
+     * it was written for.</p>
      */
-    /** What a decoder puts where a code page leaves a byte value undefined. */
-    private static final char REPLACEMENT = '�';
-
     private static final Map<String, Map<Character, Byte>> CODE_PAGES = codePages();
 
     private static Map<String, Map<Character, Byte>> codePages() {
@@ -415,6 +600,48 @@ class PublishedArtifactTextTest {
             sb.append(String.format("U+%04X ", (int) run.charAt(i)));
         }
         return sb.toString().trim();
+    }
+
+    // ---------------------------------------------------------------- small XML helpers
+
+    private static Element parse(Path pom) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(false);
+            factory.setExpandEntityReferences(false);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document document = builder.parse(pom.toFile());
+            return document.getDocumentElement();
+        } catch (ParserConfigurationException | SAXException | IOException e) {
+            throw new IllegalStateException("Could not read " + pom, e);
+        }
+    }
+
+    private static String property(Element project, String name) {
+        Element properties = child(project, "properties");
+        return properties == null ? "" : textOf(child(properties, name));
+    }
+
+    private static Element child(Element parent, String name) {
+        List<Element> found = children(parent, name);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
+    private static List<Element> children(Element parent, String name) {
+        List<Element> found = new ArrayList<>();
+        NodeList nodes = parent.getChildNodes();
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Node node = nodes.item(i);
+            if (node.getNodeType() == Node.ELEMENT_NODE && node.getNodeName().equals(name)) {
+                found.add((Element) node);
+            }
+        }
+        return found;
+    }
+
+    private static String textOf(Element element) {
+        return element == null ? "" : element.getTextContent().trim();
     }
 
     // ---------------------------------------------------------------- where the checkout is

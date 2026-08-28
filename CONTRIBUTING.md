@@ -30,8 +30,16 @@ you paste into them.
 Two tests enforce it and both are worth knowing about before you hit them:
 
 - `SourceTextEncodingTest` reads every Java file in the checkout.
-- `PublishedArtifactTextTest` reads every jar the build produced, plus the compiled classes,
-  generated sources and resources that go into one.
+- `PublishedArtifactTextTest` reads everything the build publishes: every jar it produced, the
+  compiled classes and generated sources behind them, every module's resources, and the project
+  template the archetype hands to new applications.
+
+  This one also checks itself. It reads the list of published modules out of the POM files rather
+  than having it written down, and it fails if any of those modules turned out to have nothing for
+  it to read — naming the module. So it cannot quietly end up inspecting less than it says it does.
+  The practical consequence: build the whole project once (`mvn install` from the root) before
+  running it. If you have only built part of the project, it will tell you which module it could
+  not see, and that is the message, not a bug.
 
 They look for text that was saved as UTF-8 once and then read back as if it were Windows-1252 or
 one of the console code pages. That accident turns a dash into three or four pieces of nonsense,

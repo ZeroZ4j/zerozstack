@@ -21,12 +21,17 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
 5. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
    covered by `${revision}`.
 6. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
-   opens every jar the build has produced and reads the text inside it: the strings baked into
-   compiled classes, the resource files, and the generated sources. It fails the build if it finds
-   text that was saved as UTF-8 and then read back through a single-byte code page, which is what
-   put nonsense in place of a dash, a play triangle and a block cursor in the 0.7.0 component
-   library. Nothing to run by hand — just do not skip tests before a release, and if it fails,
-   fix the source file it names and build again.
+   reads the text of everything this build publishes: the strings baked into compiled classes, the
+   resource files, the generated sources, and the project template inside the archetype. It fails
+   the build if it finds text that was saved as UTF-8 and then read back through a single-byte code
+   page, which is what put nonsense in place of a dash, a play triangle and a block cursor in the
+   0.7.0 component library.
+
+   It also refuses to pass on a partial job. It works out which modules the release publishes by
+   reading the POM files — never from a list written down here, which would drift — and fails,
+   naming the module, if one of them had nothing for it to read. So do not skip tests before a
+   release, and if it says a module was not covered, that is a real gap: build the whole reactor
+   and run it again rather than narrowing the check.
 
 ## Publishing to Maven Central
 
