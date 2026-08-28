@@ -107,12 +107,9 @@ public class InventoryView extends Card {
             String msg = statusMessage.get();
             statusDiv.getElement().setInnerHTML("");
             if (msg != null && !msg.trim().isEmpty()) {
-                Alert alert = new Alert(msg);
-                if (Boolean.TRUE.equals(statusSuccess.get())) {
-                    alert.addClassName("alert-success");
-                } else {
-                    alert.addClassName("alert-error");
-                }
+                Alert alert = Boolean.TRUE.equals(statusSuccess.get())
+                        ? Alert.success(msg)
+                        : Alert.danger(msg);
                 statusDiv.add(alert);
             }
         }));

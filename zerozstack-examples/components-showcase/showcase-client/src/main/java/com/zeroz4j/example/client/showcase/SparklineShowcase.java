@@ -20,6 +20,7 @@ package com.zeroz4j.example.client.showcase;
 import com.zeroz4j.ui.component.Sparkline;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class SparklineShowcase extends ComponentShowcase {
 
@@ -60,7 +61,7 @@ public class SparklineShowcase extends ComponentShowcase {
         Div inline = new Div();
         inline.addClassName("flex items-center gap-2 text-secondary");
         Span label = new Span("requests/s");
-        label.addClassName("text-xs text-base-content/60");
+        TextStyle.CAPTION.applyTo(label);
         Sparkline spark = new Sparkline(80, 18);
         spark.setValues(data.wave(30, 40, 15, 2, 3));
         Span value = new Span("412");
@@ -74,7 +75,7 @@ public class SparklineShowcase extends ComponentShowcase {
         Div host = new Div();
         host.addClassName("flex flex-col gap-1");
         Span text = new Span(caption);
-        text.addClassName("text-xs text-base-content/50");
+        TextStyle.CAPTION.applyTo(text);
         Div sparkHost = new Div();
         if (colorClass != null) {
             sparkHost.addClassName(colorClass);

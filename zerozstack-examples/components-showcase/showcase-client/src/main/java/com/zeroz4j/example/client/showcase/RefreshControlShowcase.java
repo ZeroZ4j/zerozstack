@@ -25,6 +25,7 @@ import com.zeroz4j.ui.chart.ValueFormat;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import org.teavm.jso.browser.Window;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class RefreshControlShowcase extends ComponentShowcase {
 
@@ -39,7 +40,8 @@ public class RefreshControlShowcase extends ComponentShowcase {
             + "fetched', and during an incident those are opposite conclusions.");
 
         Span log = new Span("no scan yet");
-        log.addClassName("font-mono text-xs text-base-content/60");
+        TextStyle.CAPTION.applyTo(log);
+        log.addClassName("font-mono");
 
         RefreshControl manual = new RefreshControl();
         manual.onRefresh(() -> {
