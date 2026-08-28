@@ -327,7 +327,7 @@ first published, and repairs to the two components whose labels an application c
   and a button, changing the message would have thrown those away too. `setText` now changes the
   message and leaves the rest of the notice alone.
 
-## [Unreleased] — 0.8.0
+<!-- Entries below are still to be folded into the sections above. -->
 
 Work in progress. This section is filled as features land; each entry says what changes and, for a
 breaking change, what to do about it.
