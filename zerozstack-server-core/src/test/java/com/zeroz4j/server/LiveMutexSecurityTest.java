@@ -60,12 +60,20 @@ public class LiveMutexSecurityTest {
     private LiveMutexManager manager;
     private LiveMutexRpcImpl rpc;
 
+    /**
+     * One server per test. Static because the helpers below are, and they build connections on it;
+     * each test replaces it, so nothing carries over.
+     */
+    private static ServerRuntime server;
+
     @BeforeEach
     public void setup() {
-        Disclosures.resetForTesting();
+        server = new ServerRuntime();
         manager = new LiveMutexManager();
+        manager.runtime = server;
         rpc = new LiveMutexRpcImpl();
         rpc.manager = manager;
+        rpc.runtime = server;
         System.clearProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY);
         System.clearProperty(LiveMutexRpcImpl.REQUIRE_AUTHENTICATION_PROPERTY);
     }
@@ -73,7 +81,7 @@ public class LiveMutexSecurityTest {
     @AfterEach
     public void teardown() {
         RmiRequestContext.clear();
-        Disclosures.resetForTesting();
+        server.shutDown();
         System.clearProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY);
         System.clearProperty(LiveMutexRpcImpl.REQUIRE_AUTHENTICATION_PROPERTY);
     }
@@ -83,7 +91,8 @@ public class LiveMutexSecurityTest {
         WasmRmiServerEngineTest.FakeSession session =
                 new WasmRmiServerEngineTest.FakeSession(sessionId);
         session.getUserProperties().put(RmiEndpointConfigurator.CLIENT_KEY, browserId);
-        Disclosures.sessionOpened(session);
+        server.addSessionForTesting(session);
+        server.disclosures().sessionOpened(session);
         return session;
     }
 
@@ -147,7 +156,7 @@ public class LiveMutexSecurityTest {
     @DisplayName("a session that was sent an object can lock it")
     public void aDisclosedObjectCanBeLocked() {
         connection("s1", "browser-1");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", "browser-1");
 
         rpc.acquireLock("handle-a");
@@ -160,13 +169,13 @@ public class LiveMutexSecurityTest {
     @DisplayName("and can still lock it after a reconnect: new session id, same browser")
     public void aDisclosedObjectCanStillBeLockedAfterAReconnect() {
         connection("s1", "browser-1");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", "browser-1");
         rpc.acquireLock("handle-a");
         rpc.releaseLock("handle-a");
 
         // The socket drops. A reconnect is a brand-new session; the browser is the same.
-        Disclosures.sessionClosed("s1");
+        server.disclosures().sessionClosed("s1");
         connection("s2", "browser-1");
         callingAs("s2", "browser-1");
 
@@ -181,7 +190,7 @@ public class LiveMutexSecurityTest {
     public void oneBrowserCannotLockAnothersObject() {
         connection("s1", "browser-insider");
         connection("s2", "browser-outsider");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
 
         callingAs("s2", "browser-outsider");
         assertThrows(SecurityException.class, () -> rpc.acquireLock("handle-a"));
@@ -197,8 +206,8 @@ public class LiveMutexSecurityTest {
         // A non-browser client carries no cookie, so its record is kept under the session id.
         WasmRmiServerEngineTest.FakeSession headless =
                 new WasmRmiServerEngineTest.FakeSession("s1");
-        Disclosures.sessionOpened(headless);
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().sessionOpened(headless);
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", null);
 
         rpc.acquireLock("handle-a");
@@ -210,13 +219,13 @@ public class LiveMutexSecurityTest {
     @DisplayName("releasing is protected by ownership, not by the disclosure record")
     public void releaseStillWorksWhenTheRecordIsGone() {
         connection("s1", "browser-1");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", "browser-1");
         rpc.acquireLock("handle-a");
 
         // The record expires or is evicted while the edit is in progress. Releasing must still work,
         // or the lock would be stranded until the session closed.
-        Disclosures.resetForTesting();
+        server.disclosures().clear();
 
         rpc.releaseLock("handle-a");
 
@@ -229,8 +238,8 @@ public class LiveMutexSecurityTest {
     public void aReleaseFromANonHolderDoesNothing() {
         connection("s1", "browser-1");
         connection("s2", "browser-2");
-        Disclosures.record("s1", "handle-a");
-        Disclosures.record("s2", "handle-a");
+        server.disclosures().record("s1", "handle-a");
+        server.disclosures().record("s2", "handle-a");
 
         callingAs("s1", "browser-1");
         rpc.acquireLock("handle-a");
@@ -259,7 +268,7 @@ public class LiveMutexSecurityTest {
     @DisplayName("locking without a login works by default, and can be switched off")
     public void authenticationIsOptIn() {
         connection("s1", "browser-1");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", "browser-1");
 
         rpc.acquireLock("handle-a");                 // anonymous, by default allowed
@@ -282,8 +291,8 @@ public class LiveMutexSecurityTest {
     public void theSecondSessionWaitsAndThenGetsIt() throws Exception {
         connection("s1", "browser-1");
         connection("s2", "browser-2");
-        Disclosures.record("s1", "handle-a");
-        Disclosures.record("s2", "handle-a");
+        server.disclosures().record("s1", "handle-a");
+        server.disclosures().record("s2", "handle-a");
 
         callingAs("s1", "browser-1");
         rpc.acquireLock("handle-a");
@@ -321,7 +330,7 @@ public class LiveMutexSecurityTest {
     public void theWaitIsConfigurableAndTheTimeoutExplainsItself() {
         System.setProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY, "1");
         connection("s1", "browser-1");
-        Disclosures.record("s1", "handle-a");
+        server.disclosures().record("s1", "handle-a");
         callingAs("s1", "browser-1");
 
         manager.lock("handle-a", "thread:someone-else");   // held by server-side code
@@ -350,17 +359,17 @@ public class LiveMutexSecurityTest {
     @DisplayName("the default wait is still thirty seconds")
     public void theDefaultWaitIsUnchanged() {
         assertEquals(30, LiveMutexManager.DEFAULT_WAIT_SECONDS);
-        assertEquals(30, LiveMutexManager.configuredWaitSeconds(),
+        assertEquals(30, manager.configuredWaitSeconds(),
                 "with nothing configured, the wait is what it always was");
 
         System.setProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY, "5");
-        assertEquals(5, LiveMutexManager.configuredWaitSeconds());
+        assertEquals(5, manager.configuredWaitSeconds());
 
         System.setProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY, "not a number");
-        assertEquals(30, LiveMutexManager.configuredWaitSeconds(), "nonsense falls back");
+        assertEquals(30, manager.configuredWaitSeconds(), "nonsense falls back");
 
         System.setProperty(LiveMutexManager.WAIT_SECONDS_PROPERTY, "0");
-        assertEquals(30, LiveMutexManager.configuredWaitSeconds(), "so does zero");
+        assertEquals(30, manager.configuredWaitSeconds(), "so does zero");
     }
 
     // ------------------------------------------------------------- the bound on the table
@@ -371,7 +380,7 @@ public class LiveMutexSecurityTest {
         connection("s1", "browser-1");
         callingAs("s1", "browser-1");
         for (int i = 0; i < 500; i++) {
-            Disclosures.record("s1", "handle-" + i);
+            server.disclosures().record("s1", "handle-" + i);
         }
 
         for (int i = 0; i < 500; i++) {
@@ -390,10 +399,10 @@ public class LiveMutexSecurityTest {
         connection("s2", "browser-2");
         callingAs("s1", "browser-1");
         for (int i = 0; i < 20; i++) {
-            Disclosures.record("s1", "handle-" + i);
+            server.disclosures().record("s1", "handle-" + i);
             rpc.acquireLock("handle-" + i);
         }
-        Disclosures.record("s2", "handle-99");
+        server.disclosures().record("s2", "handle-99");
         callingAs("s2", "browser-2");
         rpc.acquireLock("handle-99");
 

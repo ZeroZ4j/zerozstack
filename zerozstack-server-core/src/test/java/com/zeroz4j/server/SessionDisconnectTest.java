@@ -41,8 +41,8 @@ class SessionDisconnectTest {
     @BeforeEach
     void setUp() {
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = new com.zeroz4j.api.ObjectMapper();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
     }
 
     private WasmRmiServerEngineTest.FakeSession session(String id, String user) {
@@ -52,7 +52,7 @@ class SessionDisconnectTest {
             s.getUserProperties().put(RmiEndpointConfigurator.PRINCIPAL_KEY, principal);
         }
         s.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, Set.of());
-        WasmRmiServerEngine.addActiveSessionForTesting(s);
+        engine.addActiveSessionForTesting(s);
         return s;
     }
 

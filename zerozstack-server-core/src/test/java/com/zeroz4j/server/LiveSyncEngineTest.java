@@ -57,6 +57,7 @@ public class LiveSyncEngineTest {
         syncEngine = new SyncEngine();
         mapper = new ObjectMapper();
         syncEngine.mapper = mapper;
+        syncEngine.runtime = new ServerRuntime();
     }
 
     public static class Node implements BinaryPackable {

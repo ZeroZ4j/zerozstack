@@ -44,10 +44,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LazyFieldSerializationTest {
 
+    /**
+     * The server the frames in this test are written on behalf of.
+     *
+     * <p>Since 0.8.0 a lazy handle belongs to one server as well as to one connection, so a write
+     * is bracketed with both. Two servers in one process no longer share a handle registry.</p>
+     */
+    private com.zeroz4j.server.ServerRuntime server;
+
+    @org.junit.jupiter.api.BeforeEach
+    void freshServer() {
+        server = new com.zeroz4j.server.ServerRuntime();
+    }
+
     @org.junit.jupiter.api.AfterEach
     void detach() {
         com.zeroz4j.api.BinaryRegistry.setLazyAdapter(null);
-        com.zeroz4j.server.LazyHandles.resetForTesting();
+        server.shutDown();
     }
 
     @Test
@@ -66,8 +79,8 @@ class LazyFieldSerializationTest {
     @Test
     void aLazyFieldTravelsAsAHandleNotItsContents() {
         EclipseStoreLazyAdapter.install();
-        com.zeroz4j.server.LazyHandles.setCurrentSession("session-A");
-        try {
+        try (com.zeroz4j.server.LazyHandles.Write write =
+                     com.zeroz4j.server.LazyHandles.writingTo(server, "session-A")) {
             List<String> heavy = new java.util.ArrayList<>();
             for (int i = 0; i < 500; i++) {
                 heavy.add("row-" + i + "-with-padding-so-a-by-value-encoding-would-be-obvious");
@@ -81,8 +94,6 @@ class LazyFieldSerializationTest {
             assertEquals(BinarySerializer.TAG_LAZY, bytes[0]);
             assertTrue(bytes.length < 64,
                     "the deferred subgraph must stay behind, but " + bytes.length + " bytes were written");
-        } finally {
-            com.zeroz4j.server.LazyHandles.setCurrentSession(null);
         }
     }
 
@@ -91,28 +102,31 @@ class LazyFieldSerializationTest {
         EclipseStoreLazyAdapter.install();
         Lazy<List<String>> lazy = Lazy.Reference(Arrays.asList("a", "b"));
 
-        com.zeroz4j.server.LazyHandles.setCurrentSession("session-A");
         GrowableBuffer buffer = new GrowableBuffer(32);
-        BinarySerializer.writeValue(buffer, lazy, new ObjectMapper());
-        com.zeroz4j.server.LazyHandles.setCurrentSession(null);
+        try (com.zeroz4j.server.LazyHandles.Write write =
+                     com.zeroz4j.server.LazyHandles.writingTo(server, "session-A")) {
+            BinarySerializer.writeValue(buffer, lazy, new ObjectMapper());
+        }
 
         // Recover the handle the same way the resolve handler does.
         java.nio.ByteBuffer read = java.nio.ByteBuffer.wrap(buffer.toByteArray());
         read.get();                                   // skip TAG_LAZY
         String handle = BinarySerializer.readString(read);
 
-        Object resolved = com.zeroz4j.server.LazyHandles.resolve(handle, "session-A");
+        Object resolved = resolveOn(server, handle, "session-A");
         assertEquals(Arrays.asList("a", "b"),
                 new EclipseStoreLazyAdapter().contentsOf(resolved));
-        assertNull(com.zeroz4j.server.LazyHandles.resolve(handle, "another-session"),
-                "another session must not be able to resolve it");
+        assertNull(resolveOn(server, handle, "another-session"),
+                "another connection must not be able to resolve it");
+        assertNull(resolveOn(new com.zeroz4j.server.ServerRuntime(), handle, "session-A"),
+                "a second server in this process must not be able to resolve it either");
     }
 
     @Test
     void aLazyIsNotResolvedJustBySerializingIt() {
         EclipseStoreLazyAdapter.install();
-        com.zeroz4j.server.LazyHandles.setCurrentSession("session-A");
-        try {
+        try (com.zeroz4j.server.LazyHandles.Write write =
+                     com.zeroz4j.server.LazyHandles.writingTo(server, "session-A")) {
             // Lazy.Reference is already loaded, so instead assert the contents were never *read*:
             // a by-value encoding would have had to walk the list.
             final boolean[] walked = {false};
@@ -128,8 +142,23 @@ class LazyFieldSerializationTest {
                     Lazy.Reference(tracking), new ObjectMapper());
 
             assertFalse(walked[0], "serializing a lazy reference must not traverse its contents");
-        } finally {
-            com.zeroz4j.server.LazyHandles.setCurrentSession(null);
+        }
+    }
+
+    /**
+     * Looks a handle up on one server, from inside that server's own write bracket — the same way
+     * the lazy-resolve handler does.
+     *
+     * @param runtime   the server being asked
+     * @param handle    the handle presented
+     * @param sessionId the connection presenting it
+     * @return the lazy reference, or null when that server never gave it to that connection
+     */
+    private static Object resolveOn(com.zeroz4j.server.ServerRuntime runtime, String handle,
+                                    String sessionId) {
+        try (com.zeroz4j.server.LazyHandles.Write write =
+                     com.zeroz4j.server.LazyHandles.writingTo(runtime, sessionId)) {
+            return com.zeroz4j.server.LazyHandles.resolve(handle, sessionId);
         }
     }
 

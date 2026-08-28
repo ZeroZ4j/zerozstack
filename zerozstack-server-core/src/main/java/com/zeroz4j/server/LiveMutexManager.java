@@ -62,8 +62,16 @@ public class LiveMutexManager {
 
     private static final Logger LOG = Logger.getLogger(LiveMutexManager.class.getName());
 
+    /**
+     * This server, for its settings. Two servers in one process each keep their own lock table
+     * already, because this is an application-scoped bean; what they could not do before 0.8.0 was
+     * wait for different lengths of time, because the wait came from a system property.
+     */
+    @jakarta.inject.Inject
+    ServerRuntime runtime;
+
     /** How long a caller waits for a lock somebody else holds, in seconds. */
-    static final String WAIT_SECONDS_PROPERTY = "zeroz.livemutex.waitSeconds";
+    static final String WAIT_SECONDS_PROPERTY = ServerSettings.LIVE_MUTEX_WAIT_SECONDS;
 
     /**
      * The wait applied when {@link #WAIT_SECONDS_PROPERTY} is not set.
@@ -218,30 +226,19 @@ public class LiveMutexManager {
     }
 
     /** @return the configured wait in seconds, or {@link #DEFAULT_WAIT_SECONDS} */
-    private static int waitSeconds() {
-        String configured = System.getProperty(WAIT_SECONDS_PROPERTY);
-        if (configured == null || configured.trim().isEmpty()) {
-            return DEFAULT_WAIT_SECONDS;
-        }
-        try {
-            int value = Integer.parseInt(configured.trim());
-            if (value <= 0) {
-                LOG.warning("[zeroz4j] Ignoring " + WAIT_SECONDS_PROPERTY + "=" + configured
-                        + ": it must be a positive number of seconds.");
-                return DEFAULT_WAIT_SECONDS;
-            }
-            return value;
-        } catch (NumberFormatException ex) {
-            LOG.warning("[zeroz4j] Ignoring non-numeric " + WAIT_SECONDS_PROPERTY
-                    + "='" + configured + "'.");
-            return DEFAULT_WAIT_SECONDS;
-        }
+    private int waitSeconds() {
+        return config().positiveInt(WAIT_SECONDS_PROPERTY, DEFAULT_WAIT_SECONDS);
+    }
+
+    /** @return this server's settings, or the system properties when there is no server */
+    private ServerConfig config() {
+        return runtime != null ? runtime.config() : ServerConfig.fromSystemProperties();
     }
 
     // ------------------------------------------------------------------ test support
 
     /** @return how many objects have a lock entry right now */
-    int trackedLockCount() {
+    public int trackedLockCount() {
         return locks.size();
     }
 
@@ -249,12 +246,12 @@ public class LiveMutexManager {
      * @param objectId the object's handle
      * @return who holds that object's lock, or null when nobody does
      */
-    String ownerOf(String objectId) {
+    public String ownerOf(String objectId) {
         return owners.get(objectId);
     }
 
-    /** @return how long a caller currently waits for a lock, in seconds */
-    static int configuredWaitSeconds() {
+    /** @return how long a caller of this server currently waits for a lock, in seconds */
+    int configuredWaitSeconds() {
         return waitSeconds();
     }
 }

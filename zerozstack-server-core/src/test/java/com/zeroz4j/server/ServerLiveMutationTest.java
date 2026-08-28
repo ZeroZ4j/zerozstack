@@ -114,14 +114,19 @@ public class ServerLiveMutationTest {
     @BeforeEach
     public void setup() {
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = new ObjectMapper();
         engine.syncEngine = new SyncEngine();
         engine.syncEngine.mapper = engine.mapper;
+        engine.syncEngine.runtime = engine.injectedRuntime;
     }
 
     private WasmRmiServerEngineTest.FakeSession fakeSession(String id, Set<String> roles) {
         WasmRmiServerEngineTest.FakeSession session = new WasmRmiServerEngineTest.FakeSession(id);
         session.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, roles);
+        // Connections belong to a server since 0.8.0, and code holding only a connection finds its
+        // server through it. Opening one for real does this; a hand-built one has to say so.
+        engine.addActiveSessionForTesting(session);
         return session;
     }
 
@@ -232,7 +237,7 @@ public class ServerLiveMutationTest {
     @Test
     public void testWritableSharedSignalRoleGate() throws Exception {
         com.zeroz4j.signals.Signals.resetForTesting();
-        ServerSignalTransport.install(engine.mapper);
+        ServerSignalTransport.install(engine.injectedRuntime, engine.mapper);
         com.zeroz4j.signals.Signals.sharedWritable("test.banner", "welcome", "admin");
 
         WasmRmiServerEngineTest.FakeSession intruder = fakeSession("s1", Set.of("user"));

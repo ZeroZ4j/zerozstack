@@ -32,19 +32,28 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class FileUploadRpcImpl implements FileUploadRpc {
 
+    /** This server, so its own upload limit applies rather than the whole process's. */
+    @jakarta.inject.Inject
+    ServerRuntime runtime;
+
     @Override
     public long maxUploadBytes() {
-        return UploadLimits.maxBytes();
+        return UploadLimits.maxBytes(config());
     }
 
     @Override
     public String requestUploadPass(String fileName, String contentType, long sizeBytes) {
         try {
-            return UploadPasses.issue(fileName, contentType, sizeBytes).getToken();
+            return UploadPasses.issue(config(), fileName, contentType, sizeBytes).getToken();
         } catch (UploadRefusedException refused) {
             // The RMI layer sends the message back to the browser, and the component shows it, so it
             // has to read like a sentence rather than a diagnostic.
             throw new IllegalArgumentException(refused.getMessage(), refused);
         }
+    }
+
+    /** @return this server's settings, or the system properties when there is no server */
+    private ServerConfig config() {
+        return runtime != null ? runtime.config() : ServerConfig.fromSystemProperties();
     }
 }

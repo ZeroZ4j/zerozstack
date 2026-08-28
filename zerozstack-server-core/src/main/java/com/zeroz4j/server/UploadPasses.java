@@ -77,10 +77,25 @@ public final class UploadPasses {
      *                                which is the earliest point at which it can be refused
      */
     public static UploadPass issue(String fileName, String contentType, long sizeBytes) {
-        long max = UploadLimits.maxBytes();
+        return issue(ServerConfig.fromSystemProperties(), fileName, contentType, sizeBytes);
+    }
+
+    /**
+     * Mints a pass for the identity currently on this thread, using one server's settings.
+     *
+     * @param config      that server's settings
+     * @param fileName    the name the browser reported; recorded, not trusted
+     * @param contentType the type the browser reported; recorded, not trusted
+     * @param sizeBytes   the size the browser reported
+     * @return the new pass
+     * @throws UploadRefusedException when the declared size is already over that server's maximum
+     */
+    public static UploadPass issue(ServerConfig config, String fileName, String contentType,
+                                   long sizeBytes) {
+        long max = UploadLimits.maxBytes(config);
         if (sizeBytes > max) {
             throw new UploadRefusedException(413, "That file is too big. The largest we can take is "
-                    + UploadLimits.describeMaxSize() + ".");
+                    + UploadLimits.describeMaxSize(config) + ".");
         }
         if (sizeBytes < 0L) {
             throw new UploadRefusedException(400, "That file could not be read. Try choosing it again.");
@@ -100,7 +115,7 @@ public final class UploadPasses {
                 fileName == null ? "" : fileName,
                 contentType == null ? "" : contentType,
                 sizeBytes,
-                System.currentTimeMillis() + UploadLimits.passLifetimeMillis());
+                System.currentTimeMillis() + UploadLimits.passLifetimeMillis(config));
         ISSUED.put(token, pass);
         return pass;
     }

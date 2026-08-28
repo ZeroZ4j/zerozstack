@@ -37,6 +37,13 @@
                 <artifactId>zerozstack-server-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- Test scope in the application that takes it: it starts a bean container, which has
+                 no business on a production classpath. -->
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-test</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-server-helidon</artifactId>

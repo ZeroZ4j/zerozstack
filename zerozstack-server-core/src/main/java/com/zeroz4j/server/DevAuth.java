@@ -70,7 +70,17 @@ public final class DevAuth {
      * @return true in dev mode
      */
     public static boolean isDevMode() {
-        boolean on = "dev".equals(System.getProperty("zeroz.security.mode"));
+        return isDevMode(ServerConfig.fromSystemProperties());
+    }
+
+    /**
+     * Whether one server has the development logins switched on.
+     *
+     * @param config that server's settings
+     * @return true when {@code zeroz.security.mode} is {@code dev} for that server
+     */
+    public static boolean isDevMode(ServerConfig config) {
+        boolean on = "dev".equals(config.get(ServerSettings.SECURITY_MODE));
         if (on && WARNED.compareAndSet(false, true)) {
             LOG.warning(WARNING_BANNER);
         }

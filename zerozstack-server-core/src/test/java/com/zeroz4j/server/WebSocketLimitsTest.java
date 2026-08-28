@@ -41,16 +41,16 @@ class WebSocketLimitsTest {
         clearProperties();
         com.zeroz4j.api.ObjectMapper mapper = new com.zeroz4j.api.ObjectMapper();
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = mapper;
         engine.syncEngine = new SyncEngine();
         engine.syncEngine.mapper = mapper;
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
+        engine.syncEngine.runtime = engine.injectedRuntime;
     }
 
     @AfterEach
     void tearDown() {
         clearProperties();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
     }
 
     private static void clearProperties() {

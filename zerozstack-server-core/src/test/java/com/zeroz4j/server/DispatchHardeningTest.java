@@ -122,6 +122,7 @@ public class DispatchHardeningTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             WasmRmiServerEngine.class,
             SyncEngine.class,
             ObjectMapperProducer.class,
@@ -162,7 +163,7 @@ public class DispatchHardeningTest {
                     }
                 });
         engine.scanServiceRegistry();
-        WasmRmiServerEngine.clearKeepaliveBudgetForTesting();
+        engine.clearKeepaliveBudgetForTesting();
         HardeningServiceImpl.gate = new CountDownLatch(0);
         HardeningServiceImpl.inFlight.set(0);
         HardeningServiceImpl.highWaterMark.set(0);

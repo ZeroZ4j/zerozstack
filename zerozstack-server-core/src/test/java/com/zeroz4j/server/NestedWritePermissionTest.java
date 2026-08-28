@@ -154,15 +154,17 @@ public class NestedWritePermissionTest {
     @BeforeEach
     public void setup() {
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = new ObjectMapper();
         engine.syncEngine = new SyncEngine();
         engine.syncEngine.mapper = engine.mapper;
-        Disclosures.resetForTesting();
+        engine.syncEngine.runtime = engine.injectedRuntime;
     }
 
     private WasmRmiServerEngineTest.FakeSession session(String id, Set<String> roles) {
         WasmRmiServerEngineTest.FakeSession s = new WasmRmiServerEngineTest.FakeSession(id);
         s.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, roles);
+        engine.addActiveSessionForTesting(s);
         return s;
     }
 

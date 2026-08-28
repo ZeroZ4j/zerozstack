@@ -72,6 +72,7 @@
         <module>zerozstack-apt</module>
         <module>zerozstack-client</module>
         <module>zerozstack-server-core</module>
+        <module>zerozstack-server-test</module>
         <module>zerozstack-server-jaxrs</module>
         <module>zerozstack-server-jakarta</module>
         <module>zerozstack-server-helidon</module>
@@ -121,6 +122,11 @@
             <dependency>
                 <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-server-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-test</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

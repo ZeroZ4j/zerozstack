@@ -39,6 +39,19 @@ import java.util.logging.Logger;
  * Subscriptions for names not yet declared in this runtime are parked and flushed the
  * moment the declaring class loads.</p>
  *
+ * <h2>One value, several servers (0.8.0)</h2>
+ *
+ * <p>A shared signal is declared as a {@code static final} field of an application class, so its
+ * <b>value</b> is one per Java process by definition — that is what {@code Signals.shared} has
+ * always meant. What used to be shared as well, and should not have been, was the delivery: the
+ * first server to start installed itself as the one transport, so a second server's connections
+ * were written to with the first server's object mapper, or not written to at all.</p>
+ *
+ * <p>Delivery is now per server. Every running server registers itself here, a value change is
+ * delivered to each server's own connections with that server's own mapper, and a subscription is
+ * answered by the server the asking connection belongs to. The value itself is still one per
+ * process; the testing guide says what that means for a test.</p>
+ *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
  *   <li><b>Installation:</b> {@link WasmRmiServerEngine} installs this transport during
@@ -51,26 +64,63 @@ public final class ServerSignalTransport implements SignalTransport {
 
     private static final Logger LOG = Logger.getLogger(ServerSignalTransport.class.getName());
 
-    private static volatile ServerSignalTransport instance;
+    /**
+     * Every running server, by runtime id.
+     *
+     * <p>The signals library takes exactly one transport for the whole process, so this map is what
+     * turns that one transport into "each server, separately". Keyed by runtime id rather than kept
+     * in a list, so a server restarting in the same process replaces its own entry instead of
+     * adding a second one.</p>
+     */
+    private static final Map<String, ServerSignalTransport> BY_RUNTIME = new ConcurrentHashMap<>();
 
+    /** The single object the signals library holds; it hands every call to each running server. */
+    private static final SignalTransport FANOUT = new Fanout();
+
+    private final ServerRuntime runtime;
     private final ObjectMapper mapper;
     /** Signal name -> sessions waiting for a signal that has not been declared yet. */
     private final Map<String, Set<Session>> pendingSubscriptions = new ConcurrentHashMap<>();
 
-    private ServerSignalTransport(ObjectMapper mapper) {
+    private ServerSignalTransport(ServerRuntime runtime, ObjectMapper mapper) {
+        this.runtime = runtime;
         this.mapper = mapper;
     }
 
     /**
-     * Installs the transport (idempotent). Called by the server engine at startup.
+     * Registers one server with the signals library. Called by that server's engine at startup, and
+     * safe to call again.
      *
-     * @param mapper the engine's object mapper used for value serialization
+     * @param runtime the server being started
+     * @param mapper  that server's object mapper, used for value serialization
      */
-    public static synchronized void install(ObjectMapper mapper) {
-        if (instance == null) {
-            instance = new ServerSignalTransport(mapper);
+    public static synchronized void install(ServerRuntime runtime, ObjectMapper mapper) {
+        BY_RUNTIME.put(runtime.id(), new ServerSignalTransport(runtime, mapper));
+        // Installed every time rather than once: a test that resets the signals library clears the
+        // transport, and a server started after that must still be able to deliver.
+        Signals.installTransport(FANOUT);
+    }
+
+    /**
+     * Stops delivering shared-signal updates to one server. Called when it shuts down.
+     *
+     * @param runtime the server that is going away
+     */
+    public static void uninstall(ServerRuntime runtime) {
+        if (runtime != null) {
+            BY_RUNTIME.remove(runtime.id());
         }
-        Signals.installTransport(instance);
+    }
+
+    /**
+     * The transport for the server a connection belongs to.
+     *
+     * @param session the connection
+     * @return that server's transport, or null when the connection belongs to no running server
+     */
+    private static ServerSignalTransport forSession(Session session) {
+        ServerRuntime runtime = ServerRuntime.ofOrNull(session);
+        return runtime == null ? null : BY_RUNTIME.get(runtime.id());
     }
 
     /**
@@ -81,7 +131,7 @@ public final class ServerSignalTransport implements SignalTransport {
      * @param session    requesting session
      */
     static void handleSubscribe(String signalName, Session session) {
-        ServerSignalTransport transport = instance;
+        ServerSignalTransport transport = forSession(session);
         if (transport == null) {
             return;
         }
@@ -152,7 +202,7 @@ public final class ServerSignalTransport implements SignalTransport {
      */
     @SuppressWarnings("unchecked")
     static void handleClientSet(String signalName, Object newValue, Session session) {
-        ServerSignalTransport transport = instance;
+        ServerSignalTransport transport = forSession(session);
         if (transport == null) {
             return;
         }
@@ -214,7 +264,7 @@ public final class ServerSignalTransport implements SignalTransport {
      * @param session the closed session
      */
     static void sessionClosed(Session session) {
-        ServerSignalTransport transport = instance;
+        ServerSignalTransport transport = forSession(session);
         if (transport == null) {
             return;
         }
@@ -262,10 +312,50 @@ public final class ServerSignalTransport implements SignalTransport {
     public void afterSet(SharedValueSignal<?> signal, Object newValue) {
         if (signal.isScoped()) {
             // Addressed by the family's name, delivered only to the sessions matching this target.
-            WasmRmiServerEngine.broadcastSignalUpdateScoped(signal.scopeFamily(), newValue,
+            WasmRmiServerEngine.broadcastSignalUpdateScoped(runtime, signal.scopeFamily(), newValue,
                     signal.scope(), signal.scopeTarget(), mapper);
             return;
         }
-        WasmRmiServerEngine.broadcastSignalUpdate(signal.name(), newValue, mapper);
+        WasmRmiServerEngine.broadcastSignalUpdate(runtime, signal.name(), newValue, mapper);
+    }
+
+    /**
+     * The one transport the signals library holds, which hands every call to each running server.
+     *
+     * <p>A shared signal's value is one per process, so a change is news for every server in it.
+     * Each server delivers it to its own connections, with its own mapper.</p>
+     */
+    private static final class Fanout implements SignalTransport {
+
+        @Override
+        public void onSharedSignalCreated(SharedValueSignal<?> signal) {
+            for (ServerSignalTransport transport : BY_RUNTIME.values()) {
+                transport.onSharedSignalCreated(signal);
+            }
+        }
+
+        @Override
+        public void onScopedFamilyCreated(ScopedSignal<?> family) {
+            for (ServerSignalTransport transport : BY_RUNTIME.values()) {
+                transport.onScopedFamilyCreated(family);
+            }
+        }
+
+        @Override
+        public boolean canSet(SharedValueSignal<?> signal) {
+            return true;
+        }
+
+        @Override
+        public boolean resolvesScopeTargets() {
+            return true;
+        }
+
+        @Override
+        public void afterSet(SharedValueSignal<?> signal, Object newValue) {
+            for (ServerSignalTransport transport : BY_RUNTIME.values()) {
+                transport.afterSet(signal, newValue);
+            }
+        }
     }
 }

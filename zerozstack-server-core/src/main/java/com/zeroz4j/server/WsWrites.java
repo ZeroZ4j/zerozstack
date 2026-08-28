@@ -97,7 +97,8 @@ final class WsWrites {
      * Most frames that may be waiting to go out on one connection; unset applies
      * {@link #DEFAULT_MAX_PENDING_FRAMES}.
      */
-    static final String MAX_PENDING_FRAMES_PROPERTY = "zeroz.ws.maxPendingFramesPerSession";
+    static final String MAX_PENDING_FRAMES_PROPERTY =
+            ServerSettings.MAX_PENDING_FRAMES_PER_SESSION;
 
     /**
      * Frames allowed to queue when {@link #MAX_PENDING_FRAMES_PROPERTY} is unset.
@@ -112,7 +113,8 @@ final class WsWrites {
      * Most bytes that may be waiting to go out on one connection; unset applies
      * {@link #DEFAULT_MAX_PENDING_BYTES}.
      */
-    static final String MAX_PENDING_BYTES_PROPERTY = "zeroz.ws.maxPendingBytesPerSession";
+    static final String MAX_PENDING_BYTES_PROPERTY =
+            ServerSettings.MAX_PENDING_BYTES_PER_SESSION;
 
     /**
      * Bytes allowed to queue when {@link #MAX_PENDING_BYTES_PROPERTY} is unset: 8 MB.
@@ -244,31 +246,23 @@ final class WsWrites {
     }
 
     /**
-     * Reads a positive integer system property.
+     * Reads a positive whole number from the settings of the server that owns a connection.
+     *
+     * <p>Taken from the connection rather than from the system properties, so two servers in one
+     * process can hold different amounts for a slow client. A connection that belongs to no running
+     * server falls back to the system properties, which is what a hand-built connection in a test
+     * gets.</p>
      *
      * <p>Same rule as the incoming limits in {@code WasmRmiServerEngine}: an unusable setting is
      * logged and ignored rather than applied, because a zero or negative bound is not a smaller
      * bound, it is a broken one.</p>
      *
-     * @return the value, or null when unset, unparseable or not positive
+     * @param session the connection whose server is being asked
+     * @param name    the setting name
+     * @return the value, or null when unset, unreadable or not positive
      */
-    private static Integer positiveIntProperty(String name) {
-        String configured = System.getProperty(name);
-        if (configured == null || configured.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            int value = Integer.parseInt(configured.trim());
-            if (value <= 0) {
-                LOG.warning("[zeroz4j] Ignoring " + name + "=" + configured
-                        + ": it must be a positive number.");
-                return null;
-            }
-            return value;
-        } catch (NumberFormatException ex) {
-            LOG.warning("[zeroz4j] Ignoring non-numeric " + name + "='" + configured + "'.");
-            return null;
-        }
+    private static Integer positiveIntProperty(Session session, String name) {
+        return ServerRuntime.configFor(session).positiveInt(name);
     }
 
     /**
@@ -303,8 +297,8 @@ final class WsWrites {
 
         SessionWriter(Session session) {
             this.session = session;
-            Integer frames = positiveIntProperty(MAX_PENDING_FRAMES_PROPERTY);
-            Integer bytes = positiveIntProperty(MAX_PENDING_BYTES_PROPERTY);
+            Integer frames = positiveIntProperty(session, MAX_PENDING_FRAMES_PROPERTY);
+            Integer bytes = positiveIntProperty(session, MAX_PENDING_BYTES_PROPERTY);
             this.maxFrames = frames != null ? frames : DEFAULT_MAX_PENDING_FRAMES;
             this.maxBytes = bytes != null ? bytes : DEFAULT_MAX_PENDING_BYTES;
             if (BOUNDS_REPORTED.compareAndSet(false, true)) {

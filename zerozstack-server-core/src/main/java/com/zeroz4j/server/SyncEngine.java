@@ -50,6 +50,10 @@ public class SyncEngine {
     @Inject
     ObjectMapper mapper;
 
+    /** This server, so a frame is written on behalf of the server that owns the connection. */
+    @Inject
+    ServerRuntime runtime;
+
     /** All active WebSocket sessions. */
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
 
@@ -126,11 +130,8 @@ public class SyncEngine {
                 GrowableBuffer buffer = new GrowableBuffer();
                 buffer.putInt(0); // reqId (0 for broadcast)
                 buffer.put(SyncFrameTypes.SUBSCRIBE); // MSG_SYNC_UPDATE
-                LazyHandles.setCurrentSession(session.getId());
-                try {
+                try (LazyHandles.Write write = LazyHandles.writingTo(runtime, session)) {
                     BinarySerializer.writeValue(buffer, obj, mapper);
-                } finally {
-                    LazyHandles.setCurrentSession(null);
                 }
                 sendFrame(session, buffer.toByteArray());
             } catch (Exception e) {

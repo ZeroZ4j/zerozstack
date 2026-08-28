@@ -32,6 +32,7 @@ public class CdiProxyFieldAccessTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             SyncEngine.class,
             TestConsumer.class,
             ObjectMapper.class
