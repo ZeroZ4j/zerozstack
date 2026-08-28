@@ -45,6 +45,49 @@ mainLayout.add(formLayout, actionsLayout);
 While programmatic layouts are powerful, there are times when declaring a layout in HTML is more convenient. ZeroZ Stack provides an optional HTML layout feature via the `FlavourWrapper` component, leveraging TeaVM Flavour templates.
 By passing a Flavour template object to the `FlavourWrapper`, the framework binds the template to a host `div` element (`Templates.bind(flavourTemplateObj, getElement())`). This allows developers to seamlessly mix declarative HTML templates for complex visual structures with programmatic component logic, without sacrificing type safety or data binding.
 
+## Naming a field
+
+An input needs a name the reader can see. Set it with `withLabel`, which returns the field so it
+reads inside the expression that creates it:
+
+```java
+TextField folder = new TextField().withLabel("Primary folder path");
+TextField email  = new TextField("you@example.com").withLabel("Email address");
+Checkbox news    = new Checkbox().withLabel("Send me the occasional release note");
+```
+
+**A caption is not a placeholder.** The single-argument constructor sets the *placeholder* — the
+grey words inside an empty box, which vanish the moment somebody types and are announced by nothing.
+That is an example of what goes in the field, never its name. The two can be used together, as the
+email field above does, and `setPlaceholder` changes one later.
+
+The caption is a real `<label>` tied to the control by a generated id, so clicking the words focuses
+the field — and ticks the box, for a checkbox — and a screen reader announces the two together. You
+never write the id; if you set one of your own with `setId`, the caption follows it.
+
+Three more things a field can say, all on the same class, so every input has them — text fields,
+text areas, selects, checkboxes, toggles, ranges, ratings, radio groups and file pickers:
+
+```java
+field.setHelperText("An absolute path. It is created if it does not exist yet.");
+field.setRequiredIndicatorVisible(true);       // the asterisk after the caption
+field.setErrorMessage("A port is a number between 1 and 65535.");
+```
+
+`setErrorMessage` shows the sentence under the field, colours the control to match and marks it
+invalid for assistive technology; passing `null` clears all three. A `Binder` calls it for you — see
+[Forms and binding](guides/ui-forms-and-validation.md).
+
+A checkbox and a toggle put the caption to the right of the control on one line; everything else
+puts it above. A radio group is captioned as a named group, since there is no single control for a
+label to point at.
+
+**Captions work anywhere, not only inside a `FormLayout`.** There is deliberately no separate
+"form item" wrapper: a field carries its own caption, so it is named the same way in a form layout,
+a vertical layout, a dialog or a card. A field with a caption is inserted into its parent as a small
+group — caption, control, explanation, message. A field with no caption is inserted exactly as
+before, so a page that uses none is unchanged.
+
 ## Data Binding to POJOs
 
 Input components (those implementing `HasValue`) can be directly bound to data POJOs using the `Binder<BEAN>` class. The Binder facilitates a two-way data flow between your UI components and your Java model.
@@ -123,8 +166,12 @@ Used for structuring the application and organizing other components.
 
 ### Input & Data-Backed Components
 Components that accept user input and can be bound to data models (implementing `HasValue`).
-- **TextField**: Standard single-line text input.
-- **TextArea**: Multi-line text input area.
+All of these carry a caption, an explanation, a required mark and a message line — see
+[Naming a field](#naming-a-field).
+
+- **TextField**: Standard single-line text input. The single-argument constructor sets the
+  placeholder; `withLabel` sets the caption.
+- **TextArea**: Multi-line text input area. Same two, same meanings.
 - **Checkbox**: A standard boolean toggle for individual options.
 - **RadioButtonGroup**: A set of mutually exclusive radio options.
 - **Select**: A dropdown list for selecting a single item from a collection.
@@ -186,7 +233,10 @@ Components used to present data, alerts, and content to the user.
   line (absolute change, percentage and direction arrow) and a trend sparkline. `setDirection`
   decides whether a rise is coloured as good news — falling free memory is bad, falling latency is
   good, and that is a judgement rather than arithmetic.
-- **LaneTimeline**: A timeline view segmented into multiple lanes.
+- **LaneTimeline**: A timeline view segmented into multiple lanes. The name column is measured
+  from the longest lane name, between 90 and 260 pixels; hovering a name shows it whole however
+  narrow the column had to be. `setLabelWidth(px)` pins the column for lining several timelines up
+  with each other, and `setLabelWidth(0)` goes back to measuring.
 - **Loading**: A spinner or indicator signifying a background process is running.
 - **MarkdownView**: Renders Markdown text safely into HTML.
 - **Mask**: A component for shaping or clipping elements (e.g., circular images).
@@ -201,7 +251,11 @@ Components used to present data, alerts, and content to the user.
 - **SplitPane**: A container with two resizable panels separated by a divider.
 - **Stack**: A layout utility for overlapping components.
 - **Stat**: A component optimized for displaying a prominent statistic or metric.
-- **StatusDot**: A small colored indicator representing a status (e.g., online/offline).
+- **StatusDot**: A small coloured indicator representing a status. It has two pieces of text and
+  they are rarely the same one: the *state* decides the colour and the pulse, the *label* is what a
+  person reads on hover and what a screen reader announces — `new StatusDot("DISPATCHED", "Sent to
+  a worker")`. Given one string it uses it for both, which is how a console full of dots ends up
+  hovering as `DISPATCHED`.
 - **StreamingText**: A component for displaying text that streams in dynamically (e.g., LLM responses).
 - **SvgCanvas**: A container for drawing and displaying SVG graphics.
 - **Table**: A structured grid for displaying tabular data.

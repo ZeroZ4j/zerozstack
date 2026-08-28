@@ -10,8 +10,9 @@ upgrading.
 
 ## [0.8.0] — unreleased
 
-Two faults in `Dialog`, both found in an application built on 0.7.0, and one round of text that had
-been stored wrong since the library was first published.
+Form fields can be given a caption at last. Plus two faults in `Dialog`, both found in an
+application built on 0.7.0, one round of text that had been stored wrong since the library was
+first published, and repairs to the two components whose labels an application could not control.
 
 ### Breaking
 
@@ -46,6 +47,50 @@ been stored wrong since the library was first published.
 
 ### Added
 
+- **A form field can be given a caption.** Until now the only text a field could carry was the
+  placeholder — the grey words inside the box — because `new TextField("Primary folder path")` sets
+  a placeholder and there was nothing else to set. So every form written on this library named its
+  fields with placeholders, which stop saying what the field is the moment somebody types in it,
+  and leave a screen reader with nothing to announce at all. One application had grown two private
+  helpers doing the same thing in two different styles before it settled on a third.
+
+    ```java
+    TextField folder = new TextField().withLabel("Primary folder path");
+    TextField email  = new TextField("you@example.com").withLabel("Email address");
+    ```
+
+    The caption is a real label tied to the control, so clicking the words puts the cursor in the
+    field — and ticks the box, for a checkbox — and assistive technology reads the two together.
+    The identifier that ties them is generated, so nothing has to be invented per page; giving the
+    field your own id afterwards moves the caption with it.
+
+    A caption also gives the field somewhere to put the other three things a field needs to say:
+
+    ```java
+    field.setHelperText("An absolute path. It is created if it does not exist yet.");
+    field.setRequiredIndicatorVisible(true);      // the asterisk after the caption
+    field.setErrorMessage("A port is a number between 1 and 65535.");
+    ```
+
+    `withLabel` and `withHelperText` return the field, so they read inside the expression that
+    creates it; `setLabel`, `setHelperText`, `setRequiredIndicatorVisible` and `setErrorMessage` are
+    there for changing one later. They work on every input in the library, since they live on the
+    class all of them extend: text fields, text areas, selects, checkboxes, toggles, ranges,
+    ratings, radio groups and file pickers. A checkbox and a toggle put their caption on the right
+    of the control, on the same line; everything else puts it above.
+
+    **A caption works anywhere, not only inside a `FormLayout`.** That is deliberate, and it is why
+    there is no "form item" to wrap a field in: most fields are not in a form layout, and a field
+    that can only be named in one container is not much use. A field with a caption is inserted
+    into its parent as a small group — caption, control, explanation, message — rather than as the
+    bare control. A field with no caption is inserted exactly as it was before, so a page that does
+    not use captions is unchanged, to the character.
+
+    A method taking a stylesheet class for the caption, and one handing the caption out as a
+    component to be styled, were both turned down for the reason `Dialog.setWidth` gave: they put
+    stylesheet class names back into application code, which is the one thing this framework exists
+    to keep out.
+
 - **A dialog can be given a width.** A dialog is two boxes: a full-window overlay, and the panel
   you actually see. Everything worth changing lives on the panel, and until now the component
   handed out no way to reach it, so applications took the overlay's first child element and pushed
@@ -74,6 +119,27 @@ been stored wrong since the library was first published.
 - **`setCloseOnEsc`, `setCloseOnOutsideClick`, `setModal`, `isOpened`** — see the Breaking section
   above for when you want each of them.
 
+- **`setPlaceholder` and `getPlaceholder` on a text field and a text area.** The placeholder could
+  only be set in the constructor, which is part of why it was doing the caption's job. Nothing has
+  changed about what `new TextField("x")` does: it still sets the placeholder, and always will.
+
+- **A status dot can be coloured by one word and read as another.** `StatusDot` took a single
+  string and used it for both the colour and the hover text, so an application that has to colour a
+  dot by an internal state was forced to show that state to the reader — every dot in one console
+  hovered as `DISPATCHED`. The two are now separate, and the reader's words are announced by a
+  screen reader as well, which a dot with no text in it previously had no way to be.
+
+    ```java
+    new StatusDot("DISPATCHED", "Sent to a worker");
+    dot.setState("FAILED", "Could not finish");
+    dot.setLabel("Waiting for a slot");        // change only the words
+    ```
+
+    Passing one string still works and still means both.
+
+- **`LaneTimeline.setLabelWidth`** — pins the width of the name column, for lining several
+  timelines up with each other. Leave it alone, or pass 0, and the column measures itself.
+
 ### Fixed
 
 - **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
@@ -93,6 +159,24 @@ been stored wrong since the library was first published.
 - **A dialog taken out of the page while it was open** used to leave the browser believing it was
   still open, so it could not be shown again. It is now closed properly when it is removed, its
   close listeners are told, and a leftover open marker is repaired before it is shown again.
+
+- **A validation message had nowhere to appear.** `Binder` put the text of a failed check into a
+  stylesheet variable on the field and stopped there, so unless the application had written a rule
+  to display that variable — and none did — the field simply turned red and the person was left to
+  guess what was wrong. The message now appears under the field, in words, and the field is marked
+  invalid for assistive technology. `asRequired` puts the asterisk on the caption for you at the
+  same time. A rule attached directly with `withRule` behaves the same way once the field has been
+  typed in.
+
+    Nothing about this needs code changes; forms that already validate simply start saying why. The
+    stylesheet variable is still set, so an application that did write a rule for it keeps working —
+    if you had one, delete it now, or the message will be shown twice.
+
+- **A lane in `LaneTimeline` could only be named in twelve characters.** The name column was 90
+  pixels wide and could not be changed, and anything longer was silently cut — `worker-0
+  qwen36-27b` arrived as a stub. The column is now measured from the longest name, between 90 and
+  260 pixels, hovering a name always shows it whole, and `setLabelWidth` pins the column where a
+  fixed one is wanted.
 
 ## [0.7.0] — 2026-08-20
 
