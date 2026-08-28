@@ -91,6 +91,43 @@ public final class Js {
     @JSBody(params = {"theme"}, script = "document.body.setAttribute('data-theme', theme);")
     public static native void setTheme(String theme);
 
+    /**
+     * Opens {@code dialog} with the element's own {@code showModal()}, putting it in the
+     * browser's top layer: Escape closes it, focus is trapped inside it, and the page behind
+     * it stops responding.
+     *
+     * <p>Returns {@code false}, having changed nothing, in the three cases where the browser
+     * would throw instead: the element is not a {@code <dialog>} or the browser has no
+     * {@code showModal()}, the element is not in the page yet, or the call was refused for any
+     * other reason. A stale {@code open} attribute — left behind when an open dialog was taken
+     * out of the page — is cleared first, because the browser refuses {@code showModal()} on an
+     * element that still claims to be open.</p>
+     */
+    @JSBody(params = {"dialog"}, script =
+        "if (typeof dialog.showModal !== 'function') { return false; }"
+        + "if (dialog.open && !dialog.isConnected) { dialog.removeAttribute('open'); }"
+        + "if (!dialog.isConnected) { return false; }"
+        + "if (dialog.open) { return true; }"
+        + "try { dialog.showModal(); } catch (e) { return false; }"
+        + "return true;")
+    public static native boolean dialogShowModal(HTMLElement dialog);
+
+    /**
+     * Closes {@code dialog} if it is natively open. Does nothing otherwise, so it is safe to
+     * call on a dialog that was only ever shown by class. The browser fires the element's
+     * {@code close} event afterwards, not during this call.
+     */
+    @JSBody(params = {"dialog"}, script = "if (dialog.open) { dialog.close(); }")
+    public static native void dialogClose(HTMLElement dialog);
+
+    /** Whether {@code dialog} currently carries the native {@code open} state. */
+    @JSBody(params = {"dialog"}, script = "return !!dialog.open;")
+    public static native boolean dialogIsOpen(HTMLElement dialog);
+
+    /** Whether {@code event}'s target is exactly {@code element} and not something inside it. */
+    @JSBody(params = {"event", "element"}, script = "return event.target === element;")
+    public static native boolean targets(org.teavm.jso.dom.events.Event event, HTMLElement element);
+
     /** The current value of a &lt;select&gt; element (TeaVM does not wrap HTMLSelectElement.value). */
     @JSBody(params = {"select"}, script = "return select.value;")
     public static native String selectValue(HTMLElement select);
