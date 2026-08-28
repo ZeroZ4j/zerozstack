@@ -40,9 +40,45 @@ public class TextField extends AbstractField<TextField, String> implements
         addDomEventListener("input", inputListener);
     }
     
+    /**
+     * Creates a text field with the given <b>placeholder</b> - the grey text shown while the field
+     * is empty, which disappears as soon as somebody types.
+     *
+     * <p>A placeholder is not a caption. If this text is the name of the field rather than an
+     * example of what goes in it, say so with {@link #withLabel(String)}:</p>
+     *
+     * <pre>{@code
+     * new TextField().withLabel("Primary folder path");
+     * new TextField("/home/me/projects").withLabel("Primary folder path");   // both
+     * }</pre>
+     *
+     * @param placeholder the grey example text shown while the field is empty
+     */
     public TextField(String placeholder) {
         this();
-        getElement().setAttribute("placeholder", placeholder);
+        setPlaceholder(placeholder);
+    }
+
+    /**
+     * Sets the grey example text shown while the field is empty.
+     *
+     * @param placeholder the placeholder text, or null to remove it
+     */
+    public void setPlaceholder(String placeholder) {
+        if (placeholder == null) {
+            getElement().removeAttribute("placeholder");
+        } else {
+            getElement().setAttribute("placeholder", placeholder);
+        }
+    }
+
+    /**
+     * Returns the grey example text shown while the field is empty, or null when it has none.
+     *
+     * @return the placeholder text
+     */
+    public String getPlaceholder() {
+        return getElement().getAttribute("placeholder");
     }
 
     @Override

@@ -18,6 +18,7 @@
 package com.zeroz4j.example.client.showcase;
 
 import com.zeroz4j.ui.component.*;
+import com.zeroz4j.ui.layout.FormLayout;
 import com.zeroz4j.ui.layout.*;
 import com.zeroz4j.ui.theme.*;
 import com.zeroz4j.signals.*;
@@ -31,6 +32,43 @@ public class TextFieldShowcase extends ComponentShowcase {
         // Basic TextField
         TextField basicTextField = new TextField("Enter text...");
         addSection("Basic TextField", basicTextField);
+
+        // Caption vs placeholder
+        TextField placeholderOnly = new TextField("Primary folder path");
+        TextField captioned = new TextField().withLabel("Primary folder path");
+        TextField both = new TextField("/home/me/projects").withLabel("Primary folder path");
+        Div captionRow = new Div();
+        captionRow.addClassName("w-full grid gap-4 md:grid-cols-3");
+        captionRow.add(placeholderOnly, captioned, both);
+        addSection("A caption is not a placeholder - type in the first one and it stops saying "
+            + "what it is. Click the words on the second one and it takes the focus.", captionRow);
+
+        // A whole form: captions, required marks, explanations and messages
+        TextField name = new TextField().withLabel("Your name");
+        name.setRequiredIndicatorVisible(true);
+        TextField email = new TextField("you@example.com").withLabel("Email address")
+            .withHelperText("We only use this to send the receipt.");
+        email.setRequiredIndicatorVisible(true);
+        TextField folder = new TextField().withLabel("Primary folder path")
+            .withHelperText("An absolute path. It is created if it does not exist yet.");
+        TextField rejected = new TextField().withLabel("Port number");
+        rejected.setValue("http://8080");
+        rejected.setErrorMessage("A port is a number between 1 and 65535.");
+        TextArea notes = new TextArea("Anything else we should know?").withLabel("Notes");
+        Checkbox terms = new Checkbox();
+        terms.withLabel("Send me the occasional release note");
+        Select region = new Select();
+        region.setItems(java.util.List.of("Europe", "North America", "Asia"));
+        region.withLabel("Region").withHelperText("Where your data is stored.");
+
+        FormLayout form = new FormLayout();
+        form.add(name, email, folder, rejected, region, notes, terms);
+        form.setColSpan(notes, 2);
+        form.setColSpan(terms, 2);
+        Div formHost = new Div();
+        formHost.addClassName("w-full");
+        formHost.add(form);
+        addSection("A form: captions, required marks, explanations and a message", formHost);
 
         // Colors
         TextField tfPrimary = new TextField("Primary").setThemeColor(ThemeColor.PRIMARY);
@@ -56,6 +94,17 @@ public class TextFieldShowcase extends ComponentShowcase {
         addSection("Sizes",
             tfXs, tfSm, tfMd, tfLg
         );
+
+        // A caption can be given to a field that is already on the page: the control moves into
+        // its group where it stands, keeping its place among its siblings.
+        TextField late = new TextField("Type here");
+        Button giveCaption = new Button("Give it a caption");
+        giveCaption.addClassName("btn-primary");
+        giveCaption.addClickListener(e -> late.setLabel("Added after the field was on the page"));
+        Div lateHost = new Div();
+        lateHost.addClassName("w-full flex items-end gap-4");
+        lateHost.add(late, giveCaption);
+        addSection("A caption can arrive later", lateHost);
 
         // Data Binding Demo
         ValueSignal<String> signal = new ValueSignal<>("Hello");

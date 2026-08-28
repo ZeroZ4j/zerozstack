@@ -241,6 +241,11 @@ public class Binder<BEAN> {
                     new ArrayList<>(validators), isRequired, requiredMessage);
             bindings.add(binding);
 
+            // asRequired said so; the field is where a person can see it.
+            if (isRequired && field instanceof com.zeroz4j.ui.component.AbstractField) {
+                ((com.zeroz4j.ui.component.AbstractField<?, ?>) field).setRequiredIndicatorVisible(true);
+            }
+
             HasValue.ValueChangeListener<FIELDVALUE> listener = event -> {
                 ValidationResult vr = binding.validate();
                 if (Binder.this.bean != null && !vr.isError()) {
@@ -342,12 +347,21 @@ public class Binder<BEAN> {
                 style.addClassName("input-error");
                 style.setStyle("--error-message", "'" + result.getErrorMessage().replace("'", "\\'") + "'");
             }
+            // Until 0.8.0 the message went only into a stylesheet variable, which nothing displayed
+            // unless the application had written a rule for it. A field can now show it itself.
+            if (field instanceof com.zeroz4j.ui.component.AbstractField) {
+                ((com.zeroz4j.ui.component.AbstractField<?, ?>) field)
+                        .setErrorMessage(result.getErrorMessage());
+            }
         }
-        
+
         private void clearError() {
             if (field instanceof HasStyle) {
                 HasStyle style = (HasStyle) field;
                 style.removeClassName("input-error");
+            }
+            if (field instanceof com.zeroz4j.ui.component.AbstractField) {
+                ((com.zeroz4j.ui.component.AbstractField<?, ?>) field).setErrorMessage(null);
             }
         }
     }

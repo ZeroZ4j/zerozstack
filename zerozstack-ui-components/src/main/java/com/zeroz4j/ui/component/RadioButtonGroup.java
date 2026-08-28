@@ -38,6 +38,15 @@ public class RadioButtonGroup extends AbstractField<RadioButtonGroup, String> {
         addClassName("gap-2");
     }
     
+    /**
+     * A radio group is a {@code <div>} holding several controls, so there is nothing for a
+     * {@code <label for>} to point at. Its caption names the group instead.
+     */
+    @Override
+    protected boolean labelTargetsControl() {
+        return false;
+    }
+
     public void setItems(List<String> items) {
         // Clear existing
         while (getElement().getLastChild() != null) {

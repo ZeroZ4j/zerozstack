@@ -39,9 +39,38 @@ public class TextArea extends AbstractField<TextArea, String> implements
         addDomEventListener("input", inputListener);
     }
     
+    /**
+     * Creates a text area with the given <b>placeholder</b> - the grey text shown while the area is
+     * empty, which disappears as soon as somebody types. For the name of the field, which has to
+     * stay visible, use {@link #withLabel(String)}.
+     *
+     * @param placeholder the grey example text shown while the area is empty
+     */
     public TextArea(String placeholder) {
         this();
-        getElement().setAttribute("placeholder", placeholder);
+        setPlaceholder(placeholder);
+    }
+
+    /**
+     * Sets the grey example text shown while the area is empty.
+     *
+     * @param placeholder the placeholder text, or null to remove it
+     */
+    public void setPlaceholder(String placeholder) {
+        if (placeholder == null) {
+            getElement().removeAttribute("placeholder");
+        } else {
+            getElement().setAttribute("placeholder", placeholder);
+        }
+    }
+
+    /**
+     * Returns the grey example text shown while the area is empty, or null when it has none.
+     *
+     * @return the placeholder text
+     */
+    public String getPlaceholder() {
+        return getElement().getAttribute("placeholder");
     }
 
     @Override

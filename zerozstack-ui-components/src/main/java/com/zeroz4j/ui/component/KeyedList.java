@@ -92,7 +92,7 @@ public final class KeyedList<T> {
         }
         for (String key : wanted.keySet()) {
             Component component = mounted.get(key);
-            container.getComponent().getElement().appendChild(component.getElement());
+            container.getComponent().getElement().appendChild(component.getOuterElement());
         }
     }
 }

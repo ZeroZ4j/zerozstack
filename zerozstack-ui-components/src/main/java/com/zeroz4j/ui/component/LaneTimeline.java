@@ -44,7 +44,12 @@ public final class LaneTimeline extends Div {
     public final ValueSignal<Long> cursor = new ValueSignal<>(null);
 
     private static final int LANE_H = 22;
-    private static final int LABEL_W = 90;
+    /** Where the automatic label column starts and stops. */
+    private static final int LABEL_W_MIN = 90;
+    private static final int LABEL_W_MAX = 260;
+    /** Advance width of one character at font-size 10 in the monospace face used for labels. */
+    private static final double LABEL_CHAR_W = 6.1;
+    private static final int LABEL_GAP = 10;
     private static final int AXIS_H = 18;
 
     private final Div svgHost = new Div();
@@ -53,12 +58,38 @@ public final class LaneTimeline extends Div {
     private long maxTime;
     private int playSpeed; // 0 = paused
     private boolean playing;
+    private int labelWidth;      // 0 = measured from the lane names
+    private int labelColumn = LABEL_W_MIN;
 
     public LaneTimeline() {
         addClassName("flex flex-col border-t border-base-300 bg-base-200/40 shrink-0");
         add(controls());
         svgHost.addClassName("px-3 pb-2 overflow-x-auto");
         add(svgHost);
+    }
+
+    /**
+     * Fixes the width of the name column, in pixels. By default the column is measured from the
+     * longest lane name and sits between 90 and 260 pixels wide, so a name like
+     * {@code worker-0 qwen36-27b} is shown in full instead of being cut after twelve characters.
+     * Set a width when several timelines on one page have to line up with each other; pass 0 to go
+     * back to measuring. A name too long even for the widest column is shortened, and hovering the
+     * lane always shows it whole.
+     *
+     * @param pixels the fixed width of the name column, or 0 to measure it
+     */
+    public void setLabelWidth(int pixels) {
+        this.labelWidth = Math.max(0, pixels);
+        redraw();
+    }
+
+    /**
+     * Returns the fixed width of the name column, or 0 when it is measured from the names.
+     *
+     * @return the configured label width in pixels
+     */
+    public int getLabelWidth() {
+        return labelWidth;
     }
 
     public void setLanes(List<Lane> newLanes) {
@@ -157,8 +188,9 @@ public final class LaneTimeline extends Div {
 
     private void redraw() {
         svgHost.removeAll();
+        labelColumn = measureLabelColumn();
         int width = Math.max(600, getElement().getClientWidth() - 24);
-        int plotW = width - LABEL_W - 10;
+        int plotW = width - labelColumn - LABEL_GAP;
         int height = AXIS_H + lanes.size() * (LANE_H + 4) + 6;
         Element svg = SvgCanvas.el("svg",
             "width", String.valueOf(width), "height", String.valueOf(height));
@@ -169,12 +201,17 @@ public final class LaneTimeline extends Div {
             Element label = SvgCanvas.el("text",
                 "x", "0", "y", String.valueOf(y + 15), "font-size", "10",
                 "fill", "currentColor", "font-family", "ui-monospace, monospace");
+            String name = lane.label() == null ? "" : lane.label();
             label.appendChild(Window.current().getDocument().createTextNode(
-                truncate(lane.label(), 12)));
+                truncate(name, charsThatFit(labelColumn))));
+            // The whole name on hover, however narrow the column had to be.
+            Element labelTitle = SvgCanvas.el("title");
+            labelTitle.appendChild(Window.current().getDocument().createTextNode(name));
+            label.appendChild(labelTitle);
             svg.appendChild(label);
 
             long end = lane.closedAt() > 0 ? lane.closedAt() : maxTime;
-            int barX = LABEL_W + x(lane.openedAt(), plotW);
+            int barX = labelColumn + x(lane.openedAt(), plotW);
             int barW = Math.max(3, x(end, plotW) - x(lane.openedAt(), plotW));
             Element bar = SvgCanvas.el("rect",
                 "x", String.valueOf(barX), "y", String.valueOf(y + 4),
@@ -184,9 +221,9 @@ public final class LaneTimeline extends Div {
             svg.appendChild(bar);
             for (long event : lane.events()) {
                 Element tickMark = SvgCanvas.el("line",
-                    "x1", String.valueOf(LABEL_W + x(event, plotW)),
+                    "x1", String.valueOf(labelColumn + x(event, plotW)),
                     "y1", String.valueOf(y + 6),
-                    "x2", String.valueOf(LABEL_W + x(event, plotW)),
+                    "x2", String.valueOf(labelColumn + x(event, plotW)),
                     "y2", String.valueOf(y + LANE_H - 6),
                     "stroke", outcomeColor(lane.outcome()), "stroke-width", "1.5");
                 svg.appendChild(tickMark);
@@ -195,7 +232,7 @@ public final class LaneTimeline extends Div {
 
         // Cursor line — draggable across the plot area.
         Long at = cursor.get();
-        int cursorX = LABEL_W + (at == null ? plotW : x(at, plotW));
+        int cursorX = labelColumn + (at == null ? plotW : x(at, plotW));
         Element cursorLine = SvgCanvas.el("line",
             "x1", String.valueOf(cursorX), "y1", "2",
             "x2", String.valueOf(cursorX), "y2", String.valueOf(height - 2),
@@ -228,7 +265,7 @@ public final class LaneTimeline extends Div {
         playing = false;
         playSpeed = 0;
         var rect = wrapper.getElement().getBoundingClientRect();
-        int px = e.getClientX() - rect.getLeft() - LABEL_W;
+        int px = e.getClientX() - rect.getLeft() - labelColumn;
         double fraction = Math.max(0, Math.min(1, (double) px / plotW));
         cursor.set(minTime + (long) (fraction * (maxTime - minTime)));
         redraw();
@@ -252,6 +289,25 @@ public final class LaneTimeline extends Div {
             case "RUNNING" -> "#38bdf8";
             default -> "#94a3b8";
         };
+    }
+
+    /** The column is as wide as the longest name needs, within the two bounds. */
+    private int measureLabelColumn() {
+        if (labelWidth > 0) {
+            return labelWidth;
+        }
+        int longest = 0;
+        for (Lane lane : lanes) {
+            if (lane.label() != null) {
+                longest = Math.max(longest, lane.label().length());
+            }
+        }
+        int needed = (int) Math.ceil(longest * LABEL_CHAR_W) + LABEL_GAP;
+        return Math.max(LABEL_W_MIN, Math.min(LABEL_W_MAX, needed));
+    }
+
+    private static int charsThatFit(int column) {
+        return Math.max(4, (int) ((column - LABEL_GAP) / LABEL_CHAR_W));
     }
 
     private static String truncate(String s, int max) {
