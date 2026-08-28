@@ -21,6 +21,7 @@ import com.zeroz4j.api.Route;
 import com.zeroz4j.client.router.RouteParams;
 import com.zeroz4j.client.router.RouteView;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * The landing view, and the simplest possible route: a path, no parameters, no data.
@@ -34,12 +35,12 @@ public class HomeView implements RouteView<Void> {
     @Override
     public Component render(Void data, RouteParams params) {
         return Ui.box("flex flex-col gap-3 max-w-2xl",
-                Ui.text("Routing tour", "text-2xl font-bold"),
+                Ui.text("Routing tour", TextStyle.PAGE_TITLE.getClassNames()),
                 Ui.text("Every route below declares the data it needs. The loader finishes before "
                         + "the view is built, so nothing here renders a spinner or refetches after "
-                        + "mounting.", "opacity-80"),
+                        + "mounting.", TextStyle.SECONDARY.getClassNames()),
                 Ui.box("flex flex-col gap-1 pt-2",
-                        Ui.text("Try these:", "font-semibold"),
+                        Ui.text("Try these:", TextStyle.SECTION_TITLE.getClassNames()),
                         Ui.routerLink("/projects", "/projects — a list, loaded by the route"),
                         Ui.routerLink("/projects/1", "/projects/1 — a path parameter"),
                         Ui.routerLink("/projects/new", "/projects/new — a literal beating :id"),

@@ -27,6 +27,7 @@ import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -53,15 +54,16 @@ public class ScopedSignalsApp {
     private static void build() {
         Div root = box("flex flex-col gap-6 p-8 max-w-3xl mx-auto");
 
-        root.add(text("Scoped signals", "text-2xl font-bold"));
-        root.add(text("Open this page in a second browser (or a private window) and watch which "
-                + "panels move together.", "opacity-70"));
+        root.add(TextStyle.PAGE_TITLE.span("Scoped signals"));
+        root.add(TextStyle.SECONDARY.span("Open this page in a second browser (or a private window) "
+                + "and watch which panels move together."));
 
-        Span identity = text("", "text-sm opacity-60 font-mono");
+        Span identity = TextStyle.SECONDARY.span("");
+        identity.addClassName("font-mono");
         root.add(identity);
 
         // ---- global -------------------------------------------------------
-        Span visitors = text("", "text-lg");
+        Span visitors = TextStyle.BODY.span("");
         Effect.create(() -> visitors.setText("Visitors (global): " + ShopSignals.VISITORS.get()));
         root.add(panel("Signals.shared — everyone", visitors,
                 button("Count a visitor", () -> service.countVisitor()),
@@ -69,7 +71,7 @@ public class ScopedSignalsApp {
                         + "for anything else."));
 
         // ---- per browser --------------------------------------------------
-        Span basket = text("", "text-lg");
+        Span basket = TextStyle.BODY.span("");
         Effect.create(() -> basket.setText("Basket (this browser): "
                 + ShopSignals.BASKET.mine().get().getItems()));
         root.add(panel("Scope.CLIENT — this browser, no login needed", basket,
@@ -79,7 +81,7 @@ public class ScopedSignalsApp {
                         + "this one. It identifies a browser, not a person."));
 
         // ---- per user -----------------------------------------------------
-        Span notice = text("", "text-lg");
+        Span notice = TextStyle.BODY.span("");
         Effect.create(() -> {
             String current = ShopSignals.NOTICE.mine().get();
             notice.setText("Notice (this user): " + (current.isEmpty() ? "—" : current));
@@ -101,10 +103,10 @@ public class ScopedSignalsApp {
 
     private static Component panel(String title, Component value, Component action, String note) {
         return box("flex flex-col gap-2 p-4 rounded bg-base-200",
-                text(title, "font-semibold"),
+                TextStyle.SECTION_TITLE.span(title),
                 value,
                 action,
-                text(note, "text-sm opacity-60"));
+                TextStyle.SECONDARY.span(note));
     }
 
     private static Button button(String label, Runnable action) {
@@ -125,16 +127,6 @@ public class ScopedSignalsApp {
             }
         }
         return div;
-    }
-
-    private static Span text(String value, String classes) {
-        Span span = new Span(value);
-        for (String cls : classes.split(" ")) {
-            if (!cls.isEmpty()) {
-                span.addClassName(cls);
-            }
-        }
-        return span;
     }
 
     @JSBody(script =

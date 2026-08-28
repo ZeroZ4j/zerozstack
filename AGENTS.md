@@ -340,9 +340,9 @@ empties the handle registry that re-sync restores from.
 
 ## Running the examples
 
-All ten examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the root,
-the seven original ones have a `run.bat` (Windows) and serve on `http://localhost:8080`; run one at a
-time.
+All eleven examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
+root, the seven original ones have a `run.bat` (Windows). **Every example binds a port of its own
+(0.8.0+), so several can run at once** — the table below has the numbers.
 
 For those seven there is no executable jar and no `exec-maven-plugin` — `java -jar` and
 `mvn exec:java` both fail regardless of what older docs say. The working invocation is the one
@@ -353,14 +353,25 @@ cd zerozstack-examples/todo-signals/todo-signals-server
 java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer   # ';' on Windows, ':' on POSIX
 ```
 
-They share the main class `com.zeroz4j.example.server.ExampleServer`. **The three added in 0.6.0 do
-not**: they build runnable jars and have their own main classes and ports, so two can run at once.
+They share the main class `com.zeroz4j.example.server.ExampleServer`. **The four added in 0.6.0 do
+not**: each has a main class of its own, and three of them also build a runnable jar.
 
-| Example | Run | Port |
-|---|---|---|
-| `routing-tour` | `java -jar routing-tour-server/target/routing-tour-server-0.7.0.jar` | 8080 |
-| `oidc-login` | `java -jar oidc-login-server/target/oidc-login-server-0.7.0.jar` | 8081 (needs Keycloak) |
-| `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.7.0.jar` | 8082 |
+| Example | Port | Example | Port |
+|---|---|---|---|
+| `routing-tour` | 8091 | `job-monitor` | 8087 |
+| `oidc-login` | 8081 (needs Keycloak) | `form-signup` | 8088 |
+| `scoped-signals` | 8082 | `inventory-crud` | 8089 |
+| `pwa-install` | 8083 | `components-showcase` | 8090 |
+| `todo-signals` | 8084 | | |
+| `chat-events` | 8085 | | |
+| `chat-livesync` | 8086 | | |
+
+`routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
+`java -jar routing-tour-server/target/routing-tour-server-0.8.0-SNAPSHOT.jar`.
+
+**To move one:** `--port 9000` on the command line, or `-Dzeroz.port=9000`, or — for the seven with
+a `run.bat` — `run.bat 9000`. Each server reads them in that order and falls back to its own
+`DEFAULT_PORT` constant.
 
 **Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
 `components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup` and

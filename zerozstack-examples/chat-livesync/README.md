@@ -12,6 +12,6 @@ full feature guide, including the two-way `@ClientWritable` direction.
 Build the reactor once from the repository root (`mvn install -DskipTests`), then
 double-click `run.bat` in this folder — it launches the server with plain `java`.
 
-Open `http://localhost:8080` in two browser windows and sign in as a different demo
+Open `http://localhost:8086` in two browser windows and sign in as a different demo
 user in each — `demo` / `demo` and `admin` / `admin` — then chat between them. The
 credentials are validated server-side during the WebSocket handshake (dev-mode login).

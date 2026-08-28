@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -176,7 +177,7 @@ public final class BarGauge extends Div {
         removeAll();
         if (rows.isEmpty()) {
             Div empty = new Div("No data");
-            empty.addClassName("py-4 text-center text-xs text-base-content/40");
+            empty.addClassName("py-4 text-center " + TextStyle.SECONDARY.getClassNames());
             add(empty);
             return;
         }
@@ -198,7 +199,7 @@ public final class BarGauge extends Div {
         line.addClassName("flex items-center gap-3");
 
         Div label = new Div(row.label());
-        label.addClassName("shrink-0 truncate text-right text-xs text-base-content/70");
+        label.addClassName("shrink-0 truncate text-right " + TextStyle.CAPTION.getClassNames());
         label.setStyle("width", labelWidth);
         label.getElement().setAttribute("title", row.label());
 
@@ -229,7 +230,7 @@ public final class BarGauge extends Div {
         fill(track, row.value(), true);
 
         Div label = new Div(row.label());
-        label.addClassName("w-full truncate text-center text-xs text-base-content/70");
+        label.addClassName("w-full truncate text-center " + TextStyle.CAPTION.getClassNames());
         label.getElement().setAttribute("title", row.label());
 
         column.add(value, track, label);

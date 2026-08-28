@@ -1,13 +1,14 @@
 # Examples
 
-Ten runnable applications under `zerozstack-examples/`. Each isolates one part of the framework, and CI
+Eleven runnable applications under `zerozstack-examples/`. Each isolates one part of the framework, and CI
 builds all of them on every push — so the code in them is always current, which is not true of every
 page in this documentation.
 
 ## Running any of them
 
-Build once from the repository root, then start one example. Most bind port 8080, so run one at a
-time unless the table below says otherwise.
+Build once from the repository root, then start an example. **Every example has a port of its own**
+(0.8.0+), so you can leave several running at the same time. None of them uses 8080: on a working
+machine that number is usually taken by something else already.
 
 ```bash
 mvn clean install -DskipTests
@@ -29,18 +30,40 @@ mvn clean install -DskipTests
 
     Use `:` as the classpath separator on Linux and macOS.
 
-The seven original examples share the main class `com.zeroz4j.example.server.ExampleServer` and bind
-port 8080. The four added in 0.6.0 have their own, and three of them use a different port so they can
-run alongside another:
+The seven original examples share the main class `com.zeroz4j.example.server.ExampleServer`. The four
+added in 0.6.0 have their own:
 
 | Example | Main class | Port |
 |---|---|---|
-| `routing-tour` | `com.zeroz4j.example.routing.server.RoutingTourServer` | 8080 |
+| `routing-tour` | `com.zeroz4j.example.routing.server.RoutingTourServer` | 8091 |
 | `oidc-login` | `com.zeroz4j.example.oidclogin.server.OidcLoginServer` | 8081 |
 | `scoped-signals` | `com.zeroz4j.example.scopedsignals.server.ScopedSignalsServer` | 8082 |
 | `pwa-install` | `com.zeroz4j.example.pwa.server.PwaInstallServer` | 8083 |
+| `todo-signals` | `com.zeroz4j.example.server.ExampleServer` | 8084 |
+| `chat-events` | `com.zeroz4j.example.server.ExampleServer` | 8085 |
+| `chat-livesync` | `com.zeroz4j.example.server.ExampleServer` | 8086 |
+| `job-monitor` | `com.zeroz4j.example.server.ExampleServer` | 8087 |
+| `form-signup` | `com.zeroz4j.example.server.ExampleServer` | 8088 |
+| `inventory-crud` | `com.zeroz4j.example.server.ExampleServer` | 8089 |
+| `components-showcase` | `com.zeroz4j.example.server.ExampleServer` | 8090 |
 
-Each of those also builds a runnable jar, so `java -jar <example>-server/target/<example>-server-0.7.0.jar`
+### Moving one somewhere else
+
+If a number is already taken on your machine, say so on the command line. Every example understands
+the same two ways of being told:
+
+```bash
+java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer --port 9000
+java -Dzeroz.port=9000 -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer
+```
+
+The `run.bat` scripts take the port as their first argument, and print the address they are using:
+
+```bat
+run.bat 9000
+```
+
+Each of those also builds a runnable jar, so `java -jar <example>-server/target/<example>-server-0.8.0-SNAPSHOT.jar`
 works without a classpath.
 
 Six examples need a sign-in, and the only accounts they have are the framework's development ones.
@@ -51,7 +74,7 @@ present a `Login` component; `routing-tour` and `scoped-signals` take credential
 (`?user=admin&password=admin`), which is how you open two of them side by side as different users.
 `todo-signals`, `form-signup`, `inventory-crud` and `pwa-install` connect anonymously.
 
-`oidc-login` is the exception: it needs a running Keycloak and binds port 8081. Its
+`oidc-login` is the exception: it needs a running Keycloak. Its
 [README](https://github.com/ZeroZ4j/zerozstack/tree/main/zerozstack-examples/oidc-login) has the
 setup commands.
 

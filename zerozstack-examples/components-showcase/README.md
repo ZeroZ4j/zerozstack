@@ -34,8 +34,8 @@ showcases, plus a data-binding view, a role-gated admin view and an HTML-templat
 
 ## Run it
 
-Build once from the repository root, then start this example. It binds port 8080, so stop any other
-example first.
+Build once from the repository root, then start this example. It binds port 8090, which no other
+example uses, so it can run beside them. Add `--port 9000` (or `run.bat 9000`) to move it.
 
 ```bash
 mvn clean install -DskipTests
@@ -58,7 +58,7 @@ java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer
 Use `:` as the classpath separator on Linux and macOS. There is no executable jar, so `java -jar` does
 not work.
 
-Then open <http://localhost:8080> and sign in:
+Then open <http://localhost:8090> and sign in:
 
 | Username | Password | Roles | Sees the Admin view |
 |---|---|---|---|

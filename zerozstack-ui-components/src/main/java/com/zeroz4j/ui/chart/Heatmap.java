@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.dom.xml.Element;
 
 /**
@@ -244,10 +245,10 @@ public final class Heatmap extends CartesianChart {
         Div content = new Div();
         content.addClassName("flex flex-col gap-0.5");
         Div when = new Div(Scales.timestamp(columnTimes[column]));
-        when.addClassName("font-mono text-[10px] text-base-content/50");
+        when.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         Div band = new Div(yFormat().format(bucketEdges[bucket])
             + " to " + yFormat().format(bucketEdges[bucket + 1]));
-        band.addClassName("text-base-content/70");
+        band.addClassName(TextStyle.CAPTION.getClassNames());
         Div count = new Div(Scales.fixed(counts[column][bucket], 0) + " samples");
         count.addClassName("font-mono font-semibold");
         content.add(when, band, count);

@@ -24,6 +24,7 @@ import com.zeroz4j.ui.component.HasText;
 import com.zeroz4j.ui.component.Sparkline;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -280,7 +281,7 @@ public final class MetricTable<T> extends Div {
         for (int c = 0; c < columns.size(); c++) {
             Column<T> column = columns.get(c);
             El cell = new El("th", alignClass(column.align)
-                + " text-xs font-medium text-base-content/60"
+                + " font-medium " + TextStyle.CAPTION.getClassNames()
                 + (sortable && column.comparator != null ? " cursor-pointer select-none" : ""));
             if (column.widthCss != null) {
                 cell.setStyle("width", column.widthCss);
@@ -301,7 +302,7 @@ public final class MetricTable<T> extends Div {
         List<T> ordered = sorted();
         if (ordered.isEmpty()) {
             El emptyRow = new El("tr", null);
-            El emptyCell = new El("td", "py-6 text-center text-xs text-base-content/40");
+            El emptyCell = new El("td", "py-6 text-center " + TextStyle.SECONDARY.getClassNames());
             emptyCell.getElement().setAttribute("colspan", String.valueOf(Math.max(1, columns.size())));
             emptyCell.setText(emptyText);
             emptyRow.add(emptyCell);

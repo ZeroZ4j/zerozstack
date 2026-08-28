@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -246,14 +247,14 @@ public final class BarChart extends CartesianChart {
         Div content = new Div();
         content.addClassName("flex flex-col gap-0.5");
         Div category = new Div(categories.get(hit.categoryIndex()));
-        category.addClassName("text-[10px] text-base-content/50");
+        category.addClassName(TextStyle.CAPTION.getClassNames());
         Div row = new Div();
         row.addClassName("flex items-center gap-2");
         Div swatch = new Div();
         swatch.addClassName("h-2 w-2 shrink-0 rounded-sm");
         swatch.setStyle("background-color", item.colorOr(hit.seriesIndex()));
         Div name = new Div(item.name());
-        name.addClassName("text-base-content/70");
+        name.addClassName(TextStyle.CAPTION.getClassNames());
         Div value = new Div(yFormat().format(item.valueAt(hit.categoryIndex())));
         value.addClassName("ml-auto pl-3 font-mono font-semibold");
         row.add(swatch, name, value);

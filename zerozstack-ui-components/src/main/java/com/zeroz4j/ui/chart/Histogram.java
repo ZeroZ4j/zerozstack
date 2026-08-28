@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.dom.xml.Element;
 
 /**
@@ -167,7 +168,7 @@ public final class Histogram extends CartesianChart {
                 Div content = new Div();
                 content.addClassName("flex flex-col gap-0.5");
                 Div band = new Div(xFormat.format(edges[b]) + " to " + xFormat.format(edges[b + 1]));
-                band.addClassName("text-base-content/70");
+                band.addClassName(TextStyle.CAPTION.getClassNames());
                 Div count = new Div(Scales.fixed(counts[b], 0) + " samples");
                 count.addClassName("font-mono font-semibold");
                 content.add(band, count);

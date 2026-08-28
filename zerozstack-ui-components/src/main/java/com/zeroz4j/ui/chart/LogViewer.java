@@ -23,6 +23,7 @@ import com.zeroz4j.ui.component.TextField;
 import com.zeroz4j.ui.component.VirtualScroller;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -173,7 +174,7 @@ public final class LogViewer extends Div {
         levelBar.addClassName("flex items-center gap-1");
         renderLevelBar();
 
-        counter.addClassName("ml-auto font-mono text-[10px] text-base-content/50");
+        counter.addClassName("ml-auto font-mono " + TextStyle.CAPTION.getClassNames());
 
         followButton.addClassName("btn-xs");
         followButton.addClickListener(event -> setFollowTail(!following));
@@ -269,7 +270,7 @@ public final class LogViewer extends Div {
         row.addClassName("flex items-center gap-2 px-2 leading-[22px] hover:bg-base-content/5");
 
         Span time = new Span(Scales.clock(line.time(), 0));
-        time.addClassName("shrink-0 text-base-content/40");
+        time.addClassName("shrink-0 " + TextStyle.CAPTION.getClassNames());
         row.add(time);
 
         if (line.level() != null) {
@@ -280,7 +281,7 @@ public final class LogViewer extends Div {
         }
         if (showSource && line.source() != null) {
             Span source = new Span(line.source());
-            source.addClassName("shrink-0 text-base-content/50");
+            source.addClassName("shrink-0 " + TextStyle.CAPTION.getClassNames());
             row.add(source);
         }
 

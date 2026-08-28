@@ -24,4 +24,4 @@ cd zerozstack-examples/todo-signals/todo-signals-server
 mvn exec:java -Dexec.mainClass="com.zeroz4j.example.server.ExampleServer"
 ```
 
-Open `http://localhost:8080`, add and complete tasks, and switch filters — every visible change flows from a signal.
+Open `http://localhost:8084`, add and complete tasks, and switch filters — every visible change flows from a signal.

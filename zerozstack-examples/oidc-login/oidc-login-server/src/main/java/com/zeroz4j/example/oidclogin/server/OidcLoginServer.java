@@ -30,13 +30,22 @@ import com.zeroz4j.server.Zeroz4jServer;
  */
 public final class OidcLoginServer {
 
+    /**
+     * The port this example serves on when nothing says otherwise.
+     *
+     * <p>Every example has a number of its own, so two of them started at the same time do not
+     * fight over one address. Move this one somewhere else without editing the file: put
+     * {@code --port 8091} on the command line, or start the JVM with {@code -Dzeroz.port=8091}.</p>
+     */
+    private static final int DEFAULT_PORT = 8081;
+
     public static void main(String[] args) {
         setDefault("zeroz.oidc.issuer", "http://localhost:18081/realms/zeroz-tour");
         setDefault("zeroz.oidc.clientId", "zeroz-app");
         // Keycloak puts the tenant wherever a mapper says; this realm maps a user attribute.
         setDefault("zeroz.oidc.tenantClaim", "tenant");
         // The page and the socket are the same origin here, so the default same-origin check applies.
-        Zeroz4jServer.start(8081, "zeroz4j OIDC Login").join();
+        Zeroz4jServer.start(port(args), "zeroz4j OIDC Login").join();
     }
 
     /** Lets a caller override any of these from the command line without editing the example. */
@@ -44,5 +53,26 @@ public final class OidcLoginServer {
         if (System.getProperty(key) == null) {
             System.setProperty(key, value);
         }
+    }
+
+    /**
+     * Works out which port to listen on.
+     *
+     * <p>In order: {@code --port <number>} on the command line, then the {@code zeroz.port} system
+     * property, then {@link #DEFAULT_PORT}.</p>
+     *
+     * @param args the command line this server was started with
+     * @return the port to bind
+     */
+    private static int port(String[] args) {
+        if (args != null) {
+            for (int i = 0; i + 1 < args.length; i++) {
+                if ("--port".equals(args[i])) {
+                    return Integer.parseInt(args[i + 1].trim());
+                }
+            }
+        }
+        String configured = System.getProperty("zeroz.port", "").trim();
+        return configured.isEmpty() ? DEFAULT_PORT : Integer.parseInt(configured);
     }
 }

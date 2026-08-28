@@ -20,6 +20,7 @@ package com.zeroz4j.ui.chart;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * The chrome around a dashboard panel: title, subtitle, header actions, footer — and the
@@ -75,8 +76,8 @@ public final class PanelFrame extends Div {
 
         header.addClassName("flex items-start gap-3 border-b border-base-300/70 px-4 py-2.5");
         titleBox.addClassName("flex min-w-0 flex-col");
-        title.addClassName("truncate text-sm font-semibold text-base-content");
-        subtitle.addClassName("truncate text-xs text-base-content/50");
+        title.addClassName("truncate " + TextStyle.SECTION_TITLE.getClassNames());
+        subtitle.addClassName("truncate " + TextStyle.CAPTION.getClassNames());
         subtitle.addClassName("hidden");
         titleBox.add(title, subtitle);
         actions.addClassName("ml-auto flex shrink-0 items-center gap-1.5");
@@ -87,7 +88,7 @@ public final class PanelFrame extends Div {
             + "gap-2 rounded-b-xl bg-base-100/80 px-4 text-center backdrop-blur-[1px]");
         body.add(overlay);
 
-        footer.addClassName("hidden border-t border-base-300/70 px-4 py-1.5 text-xs text-base-content/50");
+        footer.addClassName("hidden border-t border-base-300/70 px-4 py-1.5 " + TextStyle.CAPTION.getClassNames());
 
         add(header, body, footer);
         setTitle(titleText);
@@ -204,19 +205,19 @@ public final class PanelFrame extends Div {
                 Div spinner = new Div();
                 spinner.addClassName("loading loading-spinner loading-md text-primary");
                 Div caption = new Div("Loading");
-                caption.addClassName("text-xs text-base-content/50");
+                caption.addClassName(TextStyle.CAPTION.getClassNames());
                 overlay.add(spinner, caption);
             }
             case ERROR -> {
                 Div badge = new Div("Error");
                 badge.addClassName("badge badge-error badge-sm");
                 Div message = new Div(errorText);
-                message.addClassName("max-w-md text-xs text-base-content/70");
+                message.addClassName("max-w-md " + TextStyle.SECONDARY.getClassNames());
                 overlay.add(badge, message);
             }
             case NO_DATA -> {
                 Div message = new Div(noDataText);
-                message.addClassName("text-xs text-base-content/40");
+                message.addClassName(TextStyle.SECONDARY.getClassNames());
                 overlay.add(message);
             }
             default -> {

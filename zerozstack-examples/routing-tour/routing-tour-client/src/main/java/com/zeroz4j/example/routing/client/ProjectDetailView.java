@@ -27,6 +27,7 @@ import com.zeroz4j.example.routing.model.Task;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.List;
 
 /**
@@ -74,9 +75,9 @@ public class ProjectDetailView implements RouteView<ProjectDetailView.Data> {
 
         return Ui.box("flex flex-col gap-4 max-w-3xl",
                 Ui.routerLink("/projects", "← All projects"),
-                Ui.text(data.project.getName(), "text-2xl font-bold"),
-                Ui.text(data.project.getSummary(), "opacity-80"),
-                Ui.text("Tasks", "font-semibold pt-2"),
+                Ui.text(data.project.getName(), TextStyle.PAGE_TITLE.getClassNames()),
+                Ui.text(data.project.getSummary(), TextStyle.SECONDARY.getClassNames()),
+                Ui.text("Tasks", TextStyle.SECTION_TITLE.getClassNames() + " pt-2"),
                 taskRows);
     }
 }

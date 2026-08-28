@@ -19,6 +19,7 @@ package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.component.SvgCanvas;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -255,7 +256,7 @@ public final class DonutChart extends ChartBase {
         name.addClassName("font-semibold");
         Div value = new Div(format.format(slice.value())
             + "  ·  " + Scales.fixed(slice.value() / total() * 100, 1) + "%");
-        value.addClassName("font-mono text-base-content/70");
+        value.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         content.add(name, value);
         showTooltip(x, y, content);
     }

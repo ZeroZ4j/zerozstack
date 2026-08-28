@@ -53,7 +53,10 @@ Start with `todo-signals` — it is the smallest, and it demonstrates the reacti
 
     Use `:` instead of `;` as the classpath separator on Linux and macOS.
 
-Run one example at a time — they all bind port 8080.
+Every example has a port of its own, so you can leave several running side by side.
+`todo-signals` is on **8084**; the full list is in [Examples](../examples/index.md). To put one
+somewhere else, add `--port 9000` to the command, or pass the number to `run.bat`:
+`run.bat 9000`.
 
 !!! note
     There is no executable jar. `java -jar …-server.jar` and `mvn exec:java` do not work: the build
@@ -65,7 +68,7 @@ The console stays open; stop it with `Ctrl+C`.
 
 ## 3. Open it
 
-Go to **<http://localhost:8080>**.
+Go to **<http://localhost:8084>**.
 
 `todo-signals` connects anonymously, so you land straight in the application. Add a task, toggle it,
 filter the list. Everything you see is Java compiled for the browser — the visible list and the
@@ -85,7 +88,7 @@ The accounts those six use are the framework's built-in development ones, and **
 does not switch them on.** Ask for them with `--dev-login`:
 
 ```bash
-java -jar scoped-signals-server/target/scoped-signals-server-0.7.0.jar --dev-login
+java -jar scoped-signals-server/target/scoped-signals-server-0.8.0-SNAPSHOT.jar --dev-login
 ```
 
 The `run.bat` scripts pass the flag already. A server running this way prints a warning saying so.
