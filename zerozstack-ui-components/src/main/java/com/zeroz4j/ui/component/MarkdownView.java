@@ -26,8 +26,8 @@ import java.util.List;
 import org.teavm.jso.dom.xml.Text;
 
 /**
- * Renders LLM markdown: headings, bold/italic, inline code, fenced code (ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ CodeBlock),
- * lists, blockquotes, tables, links, rules. Everything is built from text nodes ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â model
+ * Renders LLM markdown: headings, bold/italic, inline code, fenced code (→ CodeBlock),
+ * lists, blockquotes, tables, links, rules. Everything is built from text nodes — model
  * output is untrusted and no HTML ever passes through. Small by design; if the model
  * emits something exotic it degrades to readable plain text.
  */

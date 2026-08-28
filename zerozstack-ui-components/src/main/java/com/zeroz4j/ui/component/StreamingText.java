@@ -29,7 +29,7 @@ import com.zeroz4j.signals.Signal;
 public final class StreamingText extends Div {
 
     private final Span text = new Span();
-    private final Span caret = new Span("ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â");
+    private final Span caret = new Span("▍");
 
     public StreamingText() {
         addClassName("whitespace-pre-wrap break-words");

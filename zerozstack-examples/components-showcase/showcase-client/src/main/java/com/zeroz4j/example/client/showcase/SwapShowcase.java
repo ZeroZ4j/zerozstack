@@ -33,11 +33,11 @@ public class SwapShowcase extends ComponentShowcase {
         
         Div onText = new Div();
         onText.addClassName("swap-on");
-        onText.getElement().setTextContent("VOLUME ON Ã°Å¸â€Å ");
+        onText.getElement().setTextContent("VOLUME ON 🔊");
 
         Div offText = new Div();
         offText.addClassName("swap-off");
-        offText.getElement().setTextContent("VOLUME OFF Ã°Å¸â€â€¡");
+        offText.getElement().setTextContent("VOLUME OFF 🔇");
 
         textSwap.getElement().appendChild(onText.getElement());
         textSwap.getElement().appendChild(offText.getElement());
@@ -49,11 +49,11 @@ public class SwapShowcase extends ComponentShowcase {
 
         Div onEmoji = new Div();
         onEmoji.addClassName("swap-on");
-        onEmoji.getElement().setTextContent("Ã°Å¸ËœË†");
+        onEmoji.getElement().setTextContent("😈");
 
         Div offEmoji = new Div();
         offEmoji.addClassName("swap-off");
-        offEmoji.getElement().setTextContent("Ã°Å¸Ëœâ€¡");
+        offEmoji.getElement().setTextContent("😇");
 
         emojiSwap.getElement().appendChild(onEmoji.getElement());
         emojiSwap.getElement().appendChild(offEmoji.getElement());

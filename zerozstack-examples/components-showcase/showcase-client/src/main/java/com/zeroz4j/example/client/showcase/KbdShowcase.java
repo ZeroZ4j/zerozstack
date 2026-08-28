@@ -30,10 +30,10 @@ public class KbdShowcase extends ComponentShowcase {
         addDescription("Kbd is used to display keyboard keys or key combinations.");
 
         // Section 1: Standard Keys
-        Kbd kbdCmd = new Kbd("Ã¢Å’Ëœ");
-        Kbd kbdShift = new Kbd("Ã¢â€¡Â§");
-        Kbd kbdOption = new Kbd("Ã¢Å’Â¥");
-        Kbd kbdControl = new Kbd("Ã¢Å’Æ’");
+        Kbd kbdCmd = new Kbd("⌘");
+        Kbd kbdShift = new Kbd("⇧");
+        Kbd kbdOption = new Kbd("⌥");
+        Kbd kbdControl = new Kbd("⌃");
         Kbd kbdA = new Kbd("A");
         Kbd kbdEsc = new Kbd("esc");
 
