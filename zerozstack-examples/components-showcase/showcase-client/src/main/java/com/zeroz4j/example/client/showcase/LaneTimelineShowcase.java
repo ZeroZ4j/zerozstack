@@ -38,11 +38,11 @@ public class LaneTimelineShowcase extends ComponentShowcase {
         DemoData data = new DemoData(1717L);
 
         List<LaneTimeline.Lane> lanes = new ArrayList<>();
-        lanes.add(lane("worker-01", "COMPLETED", start, start + 5 * 60_000L, data, 6));
-        lanes.add(lane("worker-02", "RUNNING", start + 60_000L, 0, data, 4));
-        lanes.add(lane("worker-03", "FAILED", start + 30_000L, start + 3 * 60_000L, data, 3));
-        lanes.add(lane("worker-04", "KILLED", start + 2 * 60_000L, start + 4 * 60_000L, data, 2));
-        lanes.add(lane("worker-05", "COMPLETED", start, start + 7 * 60_000L, data, 8));
+        lanes.add(lane("worker-0 qwen36-27b", "COMPLETED", start, start + 5 * 60_000L, data, 6));
+        lanes.add(lane("worker-1 sonnet-4-6", "RUNNING", start + 60_000L, 0, data, 4));
+        lanes.add(lane("worker-2 gpt-oss-120b", "FAILED", start + 30_000L, start + 3 * 60_000L, data, 3));
+        lanes.add(lane("worker-3", "KILLED", start + 2 * 60_000L, start + 4 * 60_000L, data, 2));
+        lanes.add(lane("worker-4 devstral-small-2508", "COMPLETED", start, start + 7 * 60_000L, data, 8));
 
         LaneTimeline timeline = new LaneTimeline();
         timeline.setLanes(lanes);
@@ -50,7 +50,18 @@ public class LaneTimelineShowcase extends ComponentShowcase {
         Div host = new Div();
         host.addClassName("w-full");
         host.add(timeline);
-        addSection("Five worker sessions - drag the cursor or press play", host);
+        addSection("Five worker sessions - drag the cursor or press play. The name column is as "
+            + "wide as the longest name needs; hover a name to see it whole.", host);
+
+        List<LaneTimeline.Lane> narrow = new ArrayList<>(lanes);
+        LaneTimeline fixed = new LaneTimeline();
+        fixed.setLabelWidth(110);
+        fixed.setLanes(narrow);
+        Div fixedHost = new Div();
+        fixedHost.addClassName("w-full");
+        fixedHost.add(fixed);
+        addSection("The same lanes with the name column pinned to 110 pixels - names too long for "
+            + "it are shortened, and hovering still shows them whole", fixedHost);
     }
 
     private static LaneTimeline.Lane lane(String label, String outcome, long openedAt, long closedAt,
