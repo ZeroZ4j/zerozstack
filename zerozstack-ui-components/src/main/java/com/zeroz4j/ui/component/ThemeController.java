@@ -58,6 +58,21 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
         getElement().appendChild(moonWrapper.getFirstChild());
     }
 
+    /**
+     * A swap is a {@code <label>} wrapping a hidden checkbox, so a caption has to name the
+     * checkbox: pointing it at the outer {@code <label>} would name nothing and focus nothing.
+     */
+    @Override
+    protected org.teavm.jso.dom.html.HTMLElement getLabelTarget() {
+        return checkbox;
+    }
+
+    /** The caption sits beside the swap, the way a checkbox's does, not above it. */
+    @Override
+    protected boolean labelFollowsControl() {
+        return true;
+    }
+
     @Override
     protected void setPresentationValue(Boolean value) {
         boolean b = value != null && value;

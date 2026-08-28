@@ -57,6 +57,16 @@ public class Rating extends AbstractField<Rating, Integer> implements
         }
     }
 
+    /**
+     * A rating is a {@code <div>} holding five radio buttons, so there is no single control for a
+     * {@code <label for>} to point at - a caption written that way is words next to a field rather
+     * than the field's name, and clicking it does nothing. The caption names the group instead.
+     */
+    @Override
+    protected boolean labelTargetsControl() {
+        return false;
+    }
+
     @Override
     protected void setPresentationValue(Integer value) {
         int v = value != null ? value : 0;
