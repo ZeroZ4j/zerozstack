@@ -594,6 +594,129 @@ framework's own classes may be.
   nothing needs changing; the new ones are how one server applies a limit the process as a whole does
   not have.
 
+### Breaking
+
+- **`Drawer` is now a working drawer, and it owns its own parts.** It used to be an empty box with a
+  stylesheet class on it. To get a drawer out of it, an application had to build the hidden checkbox
+  that opens it, the page area, the sliding panel, the dim beside it and the stacking number, and
+  then add all five to the drawer itself. Every application did it slightly differently, and every
+  one of them picked its own stacking number.
+
+    The drawer now builds all of that. As a result **`add` no longer puts things on the drawer
+    itself: it puts them in the sliding panel**, and `addToPage` puts them on the page the panel
+    slides over. Old assembly code still compiles, so nothing will tell you — it will simply put
+    your checkbox and your hand-built panel inside the real panel, and the drawer will look wrong.
+
+    **If you assembled a drawer by hand, delete the assembly and keep only the contents:**
+
+    ```java
+    Drawer nav = new Drawer("Main menu");         // the heading, and the name a screen reader reads
+    nav.addToPage(new Button("Menu", e -> nav.open()));   // the page the panel slides over
+    nav.add(new Link("Home", "/"), new Link("Settings", "/settings"));   // the panel itself
+    ```
+
+    Escape now closes a drawer, a click on the dim beside it closes it, and while it is open the
+    keyboard is held inside it. **If your drawer holds half-written input**, refuse the two exits
+    with `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)`, and leave a button. **If you
+    were using a drawer as a sidebar that lives beside the page** rather than over it, call
+    `setModal(false)`: that turns off the dim and the hold, and leaves the page live.
+
+- **A tooltip's words now go on the tip.** `setText` used to set the text of the wrapper the tooltip
+  puts around your button, which put the words on the page next to the button, permanently and in
+  the wrong place, while the tip itself stayed empty. They now go where the stylesheet reads the tip
+  from, so the tip actually says something.
+
+    **Nothing to change if you were using it as intended** — `new Tooltip("Deletes the file")`
+    around a button now works instead of printing the words beside it. **If you were relying on
+    `getText()` returning the wrapper's text**, it returns the tip's words now.
+
+### Added
+
+- **Overlays are put on a named layer instead of a number.** A stacking number is a bid, and the
+  higher number wins — which works until two parts of one application each pick their own. In the
+  application this came from, somebody picked a large number and an overlay still came out
+  underneath something it should have covered.
+
+    ```java
+    import com.zeroz4j.ui.theme.Layer;
+
+    Toast saved = new Toast("Saved");
+    saved.setLayer(Layer.TOAST);
+    ```
+
+    You will rarely write even that: every overlay in the library puts itself on the right layer
+    when you create it. The one exception is a tooltip, which rises to its layer only while the tip
+    is showing — it wraps your control, and floating that control over every drawer on the page
+    would be worse than the problem being solved. The layers, from the bottom up, are `PAGE`, `STICKY`, `DROPDOWN`, `OVERLAY`,
+    `TOAST` and `TOOLTIP`. They are a hundred apart, so an application with a tier of its own has
+    room to slot it in between two of them.
+
+    **One thing beats all of them, and no number can reach it.** The browser keeps a place of its
+    own above the whole page, called the top layer. An open modal `Dialog` is in it, so it is above
+    everything else whatever the numbers say. If something has to cover a dialog, it has to be a
+    dialog too. That is the whole reason the earlier hand-picked numbers lost. See
+    [Stacking overlays](docs/guides/ui-layering.md).
+
+- **A dialog can be given a title, and is announced by it.** Without one a screen reader announces
+  nothing but the word "dialog".
+
+    ```java
+    Dialog dialog = new Dialog("Delete the account?");
+    ```
+
+    The title becomes a heading at the top of the panel and the name the dialog is announced by.
+    `setAriaLabel` names a dialog that has no room for a visible heading.
+
+- **Opening an overlay moves the keyboard into it, and closing puts it back.** A dialog and a drawer
+  both do this, so pressing Escape leaves you exactly where you were. A drawer also **holds** the
+  keyboard while it is open: Tab goes round the panel and never reaches the dimmed page behind it. A
+  dialog gets that from the browser; a drawer could not, so the library does it.
+
+- **Escape closes every overlay that covers something.** A dialog, a drawer, a dropdown menu, a
+  right-click menu and a message all answer to it. A tooltip hides until the pointer leaves and
+  comes back. Anything with a reason to stay put can refuse — `setCloseOnEsc(false)`.
+
+- **`Drawer` gained `open`, `close`, `isOpened`, `addCloseListener`, `setTitle`, `setModal`,
+  `setCloseOnEsc`, `setCloseOnOutsideClick`, `setSlideFromEnd`, `add` and `addToPage`.**
+
+- **`Dropdown` gained `open`, `close`, `isOpened`, `setCloseOnEsc` and `setLabel`,** and now shuts
+  when you click anywhere else on the page.
+
+- **A right-click menu can be used from the keyboard.** Opening it moves the keyboard onto the first
+  entry, entries can be walked with Tab and chosen with Enter or Space, and Escape shuts it and puts
+  the keyboard back on the row that was right-clicked.
+
+- **A message is announced when it appears.** `Toast` is read out politely — it waits for whatever is
+  being read to finish rather than interrupting. `setUrgent(true)` makes it interrupt, for the rare
+  message that cannot wait. It never takes the keyboard, deliberately: a message arriving while
+  somebody is typing must not move them out of the box they are typing in. `close()` takes it away,
+  and so does Escape.
+
+- **A browser proof for the overlays, in `tools/overlay-proof`.** It compiles the real component
+  library to JavaScript, drives a real headless Chrome against it, and checks the things a rendering
+  test cannot answer: where the keyboard is, whether Tab ever reaches the page behind an open
+  dialog, what Escape does, and which of two overlapping overlays is really on top. It takes a
+  screenshot of every state. Run it with `bash tools/overlay-proof/build.sh` then
+  `node tools/overlay-proof/drive.mjs`. It found five faults that the gallery, which draws all these
+  components correctly, showed no sign of.
+
+### Fixed
+
+- **A dialog given a width hung off both edges of a narrow window.** `setWidth` capped the panel at
+  100% of its parent, but the panel's parent is a box sized by the panel — so the cap was the
+  panel's own width and capped nothing. A panel asked to be 56rem stayed 56rem in a 380-pixel
+  window. It is now capped against the window itself, and keeps a small margin. `setHeight` had the
+  same fault and the same fix.
+
+- **A drawer's stacking number was written by hand in every application that used one,** because the
+  component supplied none. The panel is now on `Layer.OVERLAY`.
+
+- **A dropdown's panel sat one step above the page**, which lost to almost everything. It is now on
+  `Layer.DROPDOWN`, above a sticky header — which is where dropdowns are usually opened from.
+
+- **A right-click menu carried a hand-written 1000,** which is exactly the guess the layer scale
+  replaces, and which lost to an open dialog anyway. It is now on `Layer.DROPDOWN`.
+
 
 ## [0.7.0] — 2026-08-20
 
