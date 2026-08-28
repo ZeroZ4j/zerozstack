@@ -18,8 +18,11 @@
 package com.zeroz4j.api;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -46,6 +49,18 @@ public class BinaryRegistry {
     /** Instrumented (mutation-tracking) suppliers for @ClientWritable models. */
     private static final Map<String, Supplier<Object>> liveSuppliers = new ConcurrentHashMap<>();
     private static volatile boolean preferLiveInstances = false;
+
+    /**
+     * Read/write pairs for {@code record} models, keyed by FQCN. Separate from {@code delegates}
+     * because a record is constructed from its components rather than filled in afterwards.
+     */
+    private static final Map<String, BinaryRecordDelegate<?>> recordDelegates = new ConcurrentHashMap<>();
+
+    /** For each sealed base FQCN, the class names it permits. Nothing else may be read for it. */
+    private static final Map<String, Set<String>> sealedPermitted = new ConcurrentHashMap<>();
+
+    /** Reverse of {@link #sealedPermitted}: the sealed base a permitted class belongs to. */
+    private static final Map<String, String> sealedBases = new ConcurrentHashMap<>();
 
     /** Tier-specific handling of EclipseStore {@code Lazy} fields; null when the tier has none. */
     private static volatile LazyAdapter lazyAdapter;
@@ -207,6 +222,101 @@ public class BinaryRegistry {
                 + ". Make sure it is registered via BinaryRegistry.registerEnum(...).");
         }
         return resolver.apply(name);
+    }
+
+    /**
+     * Registers the generated read/write pair for a {@code record} model. Called by generated
+     * registrars.
+     *
+     * @param <T>       the record type
+     * @param className the canonical FQCN of the record
+     * @param delegate  the compile-time generated record delegate
+     *
+     * <p><b>Under the hood:</b> Puts {@code delegate} into the {@code recordDelegates} map. A record
+     * has no entry in {@code suppliers}: there is no empty instance to supply, because every
+     * component is set by the canonical constructor.</p>
+     */
+    public static <T> void registerRecord(String className, BinaryRecordDelegate<T> delegate) {
+        recordDelegates.put(className, delegate);
+    }
+
+    /**
+     * Retrieves the generated read/write pair for a record model.
+     *
+     * @param <T>       the record type
+     * @param className the canonical FQCN of the record
+     * @return the registered {@link BinaryRecordDelegate}, or {@code null} if the class is not a
+     *         registered record model
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> BinaryRecordDelegate<T> getRecordDelegate(String className) {
+        return (BinaryRecordDelegate<T>) recordDelegates.get(className);
+    }
+
+    /**
+     * Registers the complete permitted set of a sealed {@link DataModel} base — a sealed interface
+     * or sealed abstract class — so the reader can accept those types and nothing else.
+     *
+     * @param baseClassName the FQCN of the sealed interface or sealed abstract class
+     * @param permitted     the FQCNs of every class it permits
+     * @throws IllegalStateException if a permitted class already belongs to a different sealed base;
+     *         the wire names a base and the reader resolves the type within it, so one class cannot
+     *         answer to two
+     *
+     * <p><b>Under the hood:</b> Stores the permitted set under the base name and the base name under
+     * each permitted class. The set is fixed at compile time — {@code sealed} means the compiler
+     * knows every member — which is what lets the reader refuse an unknown name outright rather than
+     * instantiating it and finding out later.</p>
+     */
+    public static void registerSealed(String baseClassName, String[] permitted) {
+        Set<String> members = new LinkedHashSet<>(Arrays.asList(permitted));
+        sealedPermitted.put(baseClassName, members);
+        for (String member : members) {
+            String existing = sealedBases.put(member, baseClassName);
+            if (existing != null && !existing.equals(baseClassName)) {
+                throw new IllegalStateException(member + " is permitted by two sealed wire types, "
+                        + existing + " and " + baseClassName
+                        + ". A value on the wire names one base, so a class can belong to only one.");
+            }
+        }
+    }
+
+    /**
+     * @param className a concrete model class name
+     * @return the sealed base it was registered under, or {@code null} if it belongs to none
+     */
+    public static String sealedBaseOf(String className) {
+        return sealedBases.get(className);
+    }
+
+    /**
+     * @param baseClassName the FQCN of a sealed base
+     * @return the classes that base permits, or {@code null} if the base is not registered
+     */
+    public static Set<String> permittedFor(String baseClassName) {
+        return sealedPermitted.get(baseClassName);
+    }
+
+    /**
+     * Refuses a class name the wire has offered for a sealed base unless that base permits it.
+     * Called before anything is instantiated, so a payload naming an unpermitted type never
+     * reaches a constructor.
+     *
+     * @param baseClassName the sealed base named by the payload
+     * @param className     the concrete class name the payload wants built
+     * @throws IllegalStateException if the base is unknown, or does not permit that class
+     */
+    public static void checkPermitted(String baseClassName, String className) {
+        Set<String> members = sealedPermitted.get(baseClassName);
+        if (members == null) {
+            throw new IllegalStateException("Unknown sealed wire type: " + baseClassName
+                    + ". Annotate the sealed interface or sealed abstract class with @DataModel so "
+                    + "its permitted set is registered.");
+        }
+        if (!members.contains(className)) {
+            throw new IllegalStateException("Refusing to build " + className + ": " + baseClassName
+                    + " does not permit it. Permitted: " + members + ".");
+        }
     }
 
     /**

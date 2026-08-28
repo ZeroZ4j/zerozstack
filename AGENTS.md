@@ -64,8 +64,14 @@ implementations).
 
 ## Non-negotiable rules
 
-1. **Every type crossing the wire is `@DataModel`** with a public no-arg constructor plus getters and
-   setters. Without it, serialization throws at runtime.
+1. **Every type crossing the wire is `@DataModel`.** Three shapes qualify, and nothing else:
+   a **class** with a public no-arg constructor plus getters and setters; a **record** (0.8.0+),
+   which needs none of that ceremony; and a **sealed interface or sealed abstract class** (0.8.0+),
+   which declares "one of these types" and carries no fields of its own unless it is an abstract
+   class. Without the annotation, serialization throws at runtime. A record may not be `@LiveSync`
+   or `@ClientWritable` — those edit an object in place and a record never changes — and a record
+   may not be part of a reference cycle; the send is refused with an explanation, so use a class
+   where the loop closes. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
 2. **Do not wrap client event handlers in your own thread.** `Component.addDomEventListener` already
    wraps every DOM listener via `Component.threaded(...)`, so a handler body runs on a suspendable
    TeaVM green thread — which is why a suspending RMI call works directly inside it. An extra thread is
@@ -483,8 +489,15 @@ is built. See [docs/PWA.md](docs/PWA.md).
 - No serialization support for object arrays (`String[]`, `MyModel[]` — use a `List`), or for
   `ZonedDateTime`, `OffsetDateTime`, `ZoneId`, `Period`, `java.util.Date`. Primitives, `String`,
   `UUID`, enums, `BigDecimal`, `BigInteger`, `Instant`, `LocalDate`, `LocalTime`, `LocalDateTime`,
-  `Duration`, `Optional`, `List`, `Set`, `Map`, all primitive arrays and EclipseStore `Lazy<T>`
-  **are** supported.
+  `Duration`, `Optional`, `List`, `Set`, `Map`, all primitive arrays, EclipseStore `Lazy<T>`,
+  **records** and **sealed hierarchies** (both 0.8.0+) **are** supported.
+- **A record cannot be part of a reference cycle**, and it cannot be a persistence root. Sending a
+  looped record is refused when it is sent, naming the record; use a class for the type that closes
+  the loop. The persistence rule is separate and unchanged: EclipseStore reaches fields directly and
+  the JVM refuses that for records.
+- **A sealed hierarchy must be one level deep**, every class it permits must be `final` and
+  `@DataModel`, and a sealed *class* base must be `abstract`. All four are compile errors, each
+  because the receiving side could not otherwise tell an allowed type from any other.
 - A `Lazy<T>` field travels as a session-scoped handle, never its contents. The client resolves it
   with a suspending RMI round trip on first `get()`. Lazy references originate on the server; a client
   cannot create one and send it up.
