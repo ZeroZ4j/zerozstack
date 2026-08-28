@@ -210,6 +210,54 @@ first published, and repairs to the two components whose labels an application c
 
 ### Changed
 
+- **Text now has two questions, not one: how big, and how loud.** The five named sizes each carried
+  a strength welded on - the two small ones were quiet, the three large ones were not - so there was
+  no way to write something small that was *not* quiet. A measurement in a dense table, a reading in
+  a chart, the sentence on an error line: all small, none of them supporting text. Seven places in
+  this library had to go on describing their own styling because the scale had no name for what they
+  were.
+
+  Strength is now a separate answer, and every size takes either:
+
+  ```java
+  add(TextStyle.CAPTION.span("of 40 seats"));                    // small and quiet, the usual case
+  add(TextStyle.CAPTION.span("96 %", Emphasis.FULL));            // small, but a measurement
+  add(TextStyle.BODY.span("Not saved yet", Emphasis.QUIET));     // ordinary size, kept back
+  ```
+
+  **Nothing you have already written needs changing.** Leaving the strength out still means "whatever
+  this size usually is", which is what every existing call already said. `span`, `paragraph`,
+  `applyTo` and `getClassNames` each gained a version that takes an `Emphasis`; the old ones are
+  untouched.
+
+  **There is now exactly one quiet in the whole library.** The two supporting sizes used to fade by
+  different amounts - one to 70 percent, the other to 60. They both fade to 70 now, so the smallest
+  size is very slightly stronger than it was, and two pieces of quiet text that were meant to match
+  can no longer drift apart. The charts fade by the same number, read from the same place.
+
+- **The words a chart draws inside its own picture have names now too.** A chart is a drawing, and
+  text in a drawing carries its size and its fade as numbers on the element rather than as style
+  names - so the named sizes could not reach it, and the drawings drifted exactly as everything else
+  had. Twenty-four labels across the chart set were written at two sizes and **seven** different
+  degrees of fade, none of them agreeing with the fade used by the legend sitting directly
+  underneath.
+
+  There are four names for them, in `com.zeroz4j.ui.chart.PlotText`, and they are deliberately the
+  same idea as the text sizes so that knowing one tells you the other: `FIGURE` (the one big number
+  in the middle of a dial or a ring), `LABEL` (the words that name a position - ticks, categories,
+  axis titles, row names), `CAPTION` (a number printed inside the plot beside the mark it measures)
+  and `MESSAGE` (the sentence a panel shows when it has nothing to draw). "How loud" is the same
+  question with the same two answers, so an axis label and the legend under it are now quiet by one
+  number kept in one place.
+
+  What you will see: labels around a plot are **easier to read**. Most of them were faded to between
+  40 and 65 percent and are now at 70, and the numbers at the ends of a dial or a colour bar, which
+  were the faintest of the lot, are legible for the first time.
+
+  **You only need any of this if you draw your own chart** on top of `ChartBase`. If you do, the old
+  way of asking - passing a size and a fade to `text` and `monoText` - still compiles and still
+  works, but it is marked as out of date and a role is what you want instead.
+
 - **Every example now has a web address of its own, so you can leave several running.** Seven of
   them all answered on `localhost:8080`, which meant starting a second one killed the first with an
   error about the address being in use. Two people lost an afternoon to that in one week; one of
@@ -280,6 +328,25 @@ first published, and repairs to the two components whose labels an application c
     light one and a tinted panel without anybody choosing per surface.
 
 ### Fixed
+
+- **A brand-new project came up unstyled.** Generating an application from the Maven archetype gave
+  you a page with no stylesheet on it at all, so the first thing anybody ever saw of this framework
+  was black text on white, unspaced, looking broken. Every example loads a stylesheet, and everybody
+  who works on the framework runs the examples, which is exactly why nobody had noticed.
+
+  A generated project now brings in the same pinned, warning-free stylesheet the examples use, and
+  its first screen is built out of real components instead of a line of raw HTML - so it starts
+  looking like an application, and the file you are about to edit shows you how to ask for a text
+  size rather than describing one. There is a comment in the generated page saying what those two
+  lines are, why they are pinned, and what to do instead when you ship.
+
+- **Every example carried two copies of its page, and only one of them was ever served.** The seven
+  original examples each kept an `index.html` in their client module as well as the one in their
+  server module. Only the server's copy is reachable - the server serves pages from one place on the
+  classpath and the client copy is not in it - so the other had been quietly rotting: several were
+  still on an old dark-mode setting the running page had not used for months. The dead copies are
+  gone. Nothing referenced them; the file names appear nowhere in the build, the code or the
+  documentation.
 
 - **The "connection lost" bar was invisible behind an open dialog.** The bar that appears when the
   connection to the server drops carried the largest stacking number a browser accepts — and still

@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
@@ -190,7 +191,8 @@ public final class Treemap extends ChartBase {
         }
         double textX = tile.x() + padding / 2 + 5;
         double textY = tile.y() + padding / 2 + 10;
-        Element label = text(textX, textY, caption, "start", 10, 1);
+        // Full strength: the caption sits on the tile's own colour, not on the plot.
+        Element label = text(PlotText.LABEL, Emphasis.FULL, textX, textY, caption, "start");
         label.setAttribute("fill", Palette.BASE_CONTENT);
         label.setAttribute("font-weight", tile.depth() == 1 ? "600" : "400");
         add(label);
@@ -198,7 +200,7 @@ public final class Treemap extends ChartBase {
         // A parent's own value line would sit in the strip its children occupy. The caption alone
         // is enough there; the figure is one hover away.
         if (innerHeight > 30 && !tile.hasDrawnChildren()) {
-            add(monoText(textX, textY + 13, format.format(tile.node().weight()), "start", 9, 0.6));
+            add(monoText(PlotText.CAPTION, textX, textY + 13, format.format(tile.node().weight()), "start"));
         }
     }
 

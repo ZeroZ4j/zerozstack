@@ -164,7 +164,7 @@ public final class BarChart extends CartesianChart {
                 }
                 emit(x, y, Math.max(1, barWidth - 1.5), barHeight, item.colorOr(s), s, c);
                 if (valueLabels && barHeight > 12) {
-                    add(monoText(x + barWidth / 2, y - 7, yFormat().format(value), "middle", 9, 0.65));
+                    add(monoText(PlotText.CAPTION, x + barWidth / 2, y - 7, yFormat().format(value), "middle"));
                 }
             }
         }
@@ -187,7 +187,7 @@ public final class BarChart extends CartesianChart {
 
         for (int c = 0; c < categories.size(); c++) {
             double bandTop = plotTop() + c * bandHeight + (bandHeight - barArea) / 2;
-            add(text(marginLeft - 8, bandTop + barArea / 2, categories.get(c), "end", 10, 0.6));
+            add(text(PlotText.LABEL, marginLeft - 8, bandTop + barArea / 2, categories.get(c), "end"));
 
             double stackLeft = zeroX;
             for (int s = 0; s < series.size(); s++) {
@@ -213,8 +213,8 @@ public final class BarChart extends CartesianChart {
                 }
                 emit(x, y, barWidth, Math.max(1, barHeight - 1.5), item.colorOr(s), s, c);
                 if (valueLabels && barWidth > 24) {
-                    add(monoText(x + barWidth + 5, y + barHeight / 2,
-                        yFormat().format(value), "start", 9, 0.65));
+                    add(monoText(PlotText.CAPTION, x + barWidth + 5, y + barHeight / 2,
+                        yFormat().format(value), "start"));
                 }
             }
         }

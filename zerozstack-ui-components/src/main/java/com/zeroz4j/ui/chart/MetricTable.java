@@ -24,6 +24,7 @@ import com.zeroz4j.ui.component.HasText;
 import com.zeroz4j.ui.component.Sparkline;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -188,7 +189,7 @@ public final class MetricTable<T> extends Div {
             track.add(bar);
             Span caption = new Span(Double.isNaN(number)
                 ? "-" : (format == null ? ValueFormat.AUTO : format).format(number));
-            caption.addClassName("shrink-0 font-mono text-xs");
+            caption.addClassName("shrink-0 font-mono " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
             host.add(track, caption);
             return host;
         };
@@ -207,7 +208,7 @@ public final class MetricTable<T> extends Div {
         column.renderer = item -> {
             String value = state.apply(item);
             Div pill = new Div();
-            pill.addClassName("inline-flex items-center gap-1.5 text-xs");
+            pill.addClassName("inline-flex items-center gap-1.5 " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
             Div dot = new Div();
             dot.addClassName("h-2 w-2 shrink-0 rounded-full");
             dot.setStyle("background-color", colors.colorFor(value));

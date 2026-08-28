@@ -161,10 +161,10 @@ public final class ScatterChart extends CartesianChart {
         drawValueAxis(xBounds[0], xBounds[1], xFormat);
 
         if (yLabel != null) {
-            add(text(plotLeft(), plotTop() - 10, yLabel, "start", 10, 0.5));
+            add(text(PlotText.LABEL, plotLeft(), plotTop() - 10, yLabel, "start"));
         }
         if (xLabel != null) {
-            add(text(plotRight(), plotBottom() + 24, xLabel, "end", 10, 0.5));
+            add(text(PlotText.LABEL, plotRight(), plotBottom() + 24, xLabel, "end"));
         }
 
         pixelX = new double[points.size()];

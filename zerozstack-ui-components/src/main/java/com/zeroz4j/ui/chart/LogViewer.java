@@ -23,6 +23,7 @@ import com.zeroz4j.ui.component.TextField;
 import com.zeroz4j.ui.component.VirtualScroller;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -76,7 +77,7 @@ public final class LogViewer extends Div {
     public LogViewer() {
         addClassName("flex min-h-0 w-full flex-col rounded-lg border border-base-300 bg-base-200/40");
         scroller = new VirtualScroller<>(ROW_HEIGHT, this::renderLine);
-        scroller.addClassName("font-mono text-xs");
+        scroller.addClassName("font-mono " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
         add(toolbar(), scroller);
         scroller.followTail();
         applyFilter();

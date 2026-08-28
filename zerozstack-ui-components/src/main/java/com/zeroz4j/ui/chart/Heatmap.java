@@ -200,8 +200,8 @@ public final class Heatmap extends CartesianChart {
             swatch.setAttribute("shape-rendering", "crispEdges");
             add(swatch);
         }
-        add(monoText(barLeft + barWidth + 4, plotTop() + 4, Scales.compact(peak), "start", 9, 0.5));
-        add(monoText(barLeft + barWidth + 4, plotBottom() - 4, "0", "start", 9, 0.5));
+        add(monoText(PlotText.CAPTION, barLeft + barWidth + 4, plotTop() + 4, Scales.compact(peak), "start"));
+        add(monoText(PlotText.CAPTION, barLeft + barWidth + 4, plotBottom() - 4, "0", "start"));
     }
 
     private long columnEnd() {

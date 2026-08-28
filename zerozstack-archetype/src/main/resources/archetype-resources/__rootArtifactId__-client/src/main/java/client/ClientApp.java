@@ -19,6 +19,8 @@ package ${package}.client;
 
 import com.zeroz4j.client.Zeroz4jClient;
 import com.zeroz4j.api.RmiSecurityContext;
+import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
 
@@ -35,8 +37,24 @@ public class ClientApp {
             // This callback runs on a stack that began in native JavaScript, where a suspending call
             // cannot start.
             RmiSecurityContext.onResolved(() -> {
+                // Everything on this page is built out of Java objects, never HTML strings.
+                // The class names come from Tailwind and daisyUI, which index.html loads:
+                // this framework ships no stylesheet of its own.
+                Div card = new Div();
+                card.addClassName("card bg-base-200 shadow-xl mx-auto mt-24 w-96");
+
+                // Ask for a text size by name instead of describing one. There are five, in
+                // com.zeroz4j.ui.theme.TextStyle, and asking keeps every screen agreeing.
+                Div body = new Div(
+                    TextStyle.PAGE_TITLE.span("It works"),
+                    TextStyle.SECONDARY.paragraph("This page is Java, compiled for the browser, "
+                        + "and already talking to the server over one socket."));
+                body.addClassName("card-body items-center gap-2 text-center");
+                card.add(body);
+
                 HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
-                appRoot.setInnerHTML("<h1>Zeroz4j App is running!</h1>");
+                appRoot.setInnerHTML("");
+                appRoot.appendChild(card.getElement());
             });
         });
     }
