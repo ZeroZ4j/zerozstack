@@ -498,6 +498,15 @@ is built. See [docs/PWA.md](docs/PWA.md).
 - **A sealed hierarchy must be one level deep**, every class it permits must be `final` and
   `@DataModel`, and a sealed *class* base must be `abstract`. All four are compile errors, each
   because the receiving side could not otherwise tell an allowed type from any other.
+- **A model may extend another model and the base's fields travel too** (0.8.0+; before that they
+  were silently dropped). An abstract model gets no serializer and no registry entry — it exists to
+  hand its fields down. Two shapes are now compile errors, both formerly silent data loss: extending
+  a class that is not a `@DataModel` and declares instance fields, and redeclaring a field name a
+  base class already uses.
+- **Object identity holds within one top-level value, not between two.** The same instance in two
+  fields of one model arrives once; the same instance as two elements of a top-level `List` arrives
+  twice. Never use `==` across a call boundary to decide whether two things are the same — compare by
+  id or `equals`.
 - A `Lazy<T>` field travels as a session-scoped handle, never its contents. The client resolves it
   with a suspending RMI round trip on first `get()`. Lazy references originate on the server; a client
   cannot create one and send it up.

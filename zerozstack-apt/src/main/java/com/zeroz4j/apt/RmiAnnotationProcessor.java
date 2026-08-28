@@ -199,8 +199,15 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
 
             {
                 String fqcn = typeElement.getQualifiedName().toString();
-                binaryModels.add(fqcn);
+                checkInheritance(typeElement, typeUtils);
                 checkFieldTypes(typeElement, typeUtils);
+                if (typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
+                    // An abstract model is never a value of its own — nothing can construct one, so
+                    // it gets no serializer and no entry in the registry. It exists to hand its
+                    // fields down, and getFields collects those into every concrete model below it.
+                    continue;
+                }
+                binaryModels.add(fqcn);
                 try {
                     generateSerializer(typeElement, typeUtils);
                 } catch (IOException e) {
@@ -511,22 +518,21 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         } else if (isEnum(field.type)) {
             // TeaVM-safe scalar enum: write the constant name, no reflection, no registry tag.
             writer.write("        BinarySerializer.writeString(buffer, " + readExpr + " == null ? null : " + readExpr + ".name());\n");
-        } else if (isSealedBase(field.type) || isRecordModel(field.type)) {
-            // Both go out through the tagged path. For a sealed type because the concrete class is
-            // only known at run time and the tag carries the base name the reader checks against.
-            // For a record because the tagged path is the one that tracks which values are already
-            // being written, and so is the one that can say plainly that a record cannot be part of
-            // a loop — writing it in place would instead recurse until the stack ran out.
-            writer.write("        BinarySerializer.writeValue(buffer, " + readExpr + ", mapper);\n");
-        } else if (isDataModel(field.type)) {
-            writer.write("        if (" + readExpr + " == null) {\n");
-            writer.write("            buffer.put((byte) 0);\n");
-            writer.write("        } else {\n");
-            writer.write("            buffer.put((byte) 1);\n");
-            writer.write("            " + serializerFqcnFor(field.type) + ".write(" + readExpr + ", buffer, mapper);\n");
-            writer.write("        }\n");
         } else {
-            // Fallback
+            // Everything else goes out through the tagged path, models included.
+            //
+            // A model-typed field used to be written straight into the buffer instead, which was
+            // smaller by a few bytes and wrong in three ways. Nothing recorded what was already
+            // being written, so two models referring to each other recursed until the stack ran
+            // out. The same instance in two fields arrived as two objects. And the reader built the
+            // nested value with a plain constructor, so a model nested inside a live-synced one
+            // never became a tracked instance. The tagged path has always handled all three, which
+            // is why a model reached through a List or an Object-typed field behaved correctly
+            // while the same model in a declared field did not.
+            //
+            // What it costs is an id and a class name per nested model. Collections were already
+            // paying that, so this is bounded by the number of model-typed fields, not by how much
+            // data there is.
             writer.write("        BinarySerializer.writeValue(buffer, " + readExpr + ", mapper);\n");
         }
     }
@@ -576,20 +582,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             // else before it reaches a constructor.
             writer.write("        " + writeTarget + "(" + typeStr + ") BinarySerializer.readSealed(buffer, mapper, \""
                     + sealedBaseNameOf(field.type) + "\")" + suffix + ";\n");
-        } else if (isRecordModel(field.type)) {
-            // Matches the tagged write above; the tag is what carries the record's identity, which
-            // is what lets a repeated record arrive as one value and a looped one be refused.
-            writer.write("        " + writeTarget + "(" + typeStr + ") BinarySerializer.readValue(buffer, mapper)" + suffix + ";\n");
-        } else if (isDataModel(field.type)) {
-            writer.write("        if (buffer.get() != 0) {\n");
-            writer.write("            " + typeStr + " nested = new " + typeStr + "();\n");
-            writer.write("            " + serializerFqcnFor(field.type) + ".read(nested, buffer, mapper);\n");
-            writer.write("            " + writeTarget + "nested" + suffix + ";\n");
-            writer.write("        } else {\n");
-            writer.write("            " + writeTarget + "null" + suffix + ";\n");
-            writer.write("        }\n");
         } else {
-            // Fallback
+            // Matches the tagged write above. The tag is what carries a value's identity, so a
+            // loop closes on the same instance and a model sent twice arrives once.
             writer.write("        " + writeTarget + "(" + typeStr + ") BinarySerializer.readValue(buffer, mapper)" + suffix + ";\n");
         }
     }
@@ -1267,6 +1262,78 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
      * @param typeElement the model being processed
      * @param typeUtils   type utilities
      */
+    /**
+     * Refuses the two inheritance shapes whose fields cannot be carried honestly.
+     *
+     * <p>Both used to compile and lose data with no word said anywhere. The first is a base class
+     * that is not itself a {@code @DataModel}: there is no way to know its fields belong on the
+     * wire, so they were dropped. The second is a subclass redeclaring a field name the base
+     * already uses: both would be written, and both read back through whichever accessor won.</p>
+     */
+    private void checkInheritance(TypeElement typeElement, Types typeUtils) {
+        TypeElement base = superclassOf(typeElement);
+        if (base != null && base.getAnnotation(DataModel.class) == null) {
+            List<String> lost = new ArrayList<>();
+            for (Element enclosed : base.getEnclosedElements()) {
+                if (enclosed.getKind() != ElementKind.FIELD) {
+                    continue;
+                }
+                Set<Modifier> mods = enclosed.getModifiers();
+                if (!mods.contains(Modifier.STATIC) && !mods.contains(Modifier.TRANSIENT)) {
+                    lost.add(enclosed.getSimpleName().toString());
+                }
+            }
+            if (!lost.isEmpty()) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    typeElement.getQualifiedName() + " extends "
+                    + base.getQualifiedName() + ", which is not a @DataModel, so its fields "
+                    + lost + " cannot be carried and would go missing with nothing to explain it. "
+                    + "Annotate " + base.getSimpleName() + " with @DataModel, or move those fields "
+                    + "down into the subclass. A base class with no fields needs no annotation.",
+                    typeElement);
+            }
+            return;
+        }
+        if (base == null) {
+            return;
+        }
+        Map<String, String> seenNames = new LinkedHashMap<>();
+        for (TypeElement level = base; level != null; level = superclassOf(level)) {
+            if (level.getAnnotation(DataModel.class) == null) {
+                break;
+            }
+            for (Element enclosed : level.getEnclosedElements()) {
+                if (enclosed.getKind() != ElementKind.FIELD) {
+                    continue;
+                }
+                Set<Modifier> mods = enclosed.getModifiers();
+                if (mods.contains(Modifier.STATIC) || mods.contains(Modifier.TRANSIENT)) {
+                    continue;
+                }
+                seenNames.put(enclosed.getSimpleName().toString(),
+                        level.getQualifiedName().toString());
+            }
+        }
+        for (Element enclosed : typeElement.getEnclosedElements()) {
+            if (enclosed.getKind() != ElementKind.FIELD) {
+                continue;
+            }
+            Set<Modifier> mods = enclosed.getModifiers();
+            if (mods.contains(Modifier.STATIC) || mods.contains(Modifier.TRANSIENT)) {
+                continue;
+            }
+            String name = enclosed.getSimpleName().toString();
+            String declaredBy = seenNames.get(name);
+            if (declaredBy != null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    typeElement.getQualifiedName() + " declares a field '" + name
+                    + "' that " + declaredBy + " already declares. Both would be written, and both "
+                    + "read back through the same accessor, so one would overwrite the other. "
+                    + "Rename one of them.", typeElement);
+            }
+        }
+    }
+
     private void checkFieldTypes(TypeElement typeElement, Types typeUtils) {
         for (FieldInfo field : getFields(typeElement, typeUtils)) {
             TypeMirror type = field.type;
@@ -1294,13 +1361,20 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Every field this model puts on the wire: the ones it inherits from a {@code @DataModel} base
+     * first, in base-to-subclass order, then its own.
+     *
+     * <p>Inherited fields used to be left out entirely, which meant the most ordinary refactor in
+     * Java — moving what several models share up into a base class — silently stopped that data
+     * arriving. A base class has no serializer of its own; what it declares is written as part of
+     * each concrete model below it.</p>
+     */
     private List<FieldInfo> getFields(TypeElement typeElement, Types typeUtils) {
         List<FieldInfo> fields = new ArrayList<>();
-        // A sealed abstract base usually holds what every member of the family has in common, and
-        // those fields belong to each member's own bytes — the base has no serializer of its own.
-        TypeMirror superclass = typeElement.getSuperclass();
-        if (superclass instanceof DeclaredType && isSealedBase(superclass)) {
-            fields.addAll(getFields((TypeElement) ((DeclaredType) superclass).asElement(), typeUtils));
+        TypeElement base = superclassOf(typeElement);
+        if (base != null && base.getAnnotation(DataModel.class) != null) {
+            fields.addAll(getFields(base, typeUtils));
         }
         for (Element enclosed : typeElement.getEnclosedElements()) {
             if (enclosed.getKind() == ElementKind.FIELD) {

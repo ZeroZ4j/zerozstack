@@ -259,9 +259,43 @@ breaking change, what to do about it.
 
 ### Fixed
 
+- **A model that extended another model silently lost the base class's fields.** Moving what several
+  models share up into a base class is the most ordinary refactor in Java. The generated code only
+  ever looked at the fields a class declared itself, so everything on the base stopped arriving —
+  no error when you compiled, no error on the wire, just missing data, and nothing pointing at
+  inheritance as the cause. Base fields now travel with the model.
+
+    An abstract model now gets no serializer and no registry entry: nothing can construct one, so it
+    exists only to hand its fields down. Declaring a field as an abstract model type still works.
+
+    Two shapes are refused when you compile, rather than losing data quietly. Extending a class that
+    is not a `@DataModel` and that has fields of its own — annotate the base, or move the fields
+    down; a base class with no fields is fine as it is. And declaring a field with a name a base
+    class already uses, where one value would overwrite the other.
+
+- **Two models that referred to each other crashed with a stack overflow.** `A` holds a `B`, `B`
+  holds an `A`, and the generated code never stopped. The same models reached through a list always
+  worked, which is why this survived: only a field declared as a model type took the broken path.
+  Such fields are now written the same way as everything else, so a loop closes on the same object it
+  started from, and the same object in two fields arrives once instead of twice.
+
+    A model nested inside a `@LiveSync` one was also being rebuilt as a plain object, so edits to it
+    were invisible. Same cause, fixed by the same change.
+
+    This makes a nested model a few bytes larger — it now carries an identifier and its type name.
+    Lists were already paying that, so the cost is set by how many model-typed fields you have, not
+    by how much data you send.
+
 - **A model class nested inside another class got a serializer that did not compile.** The generated
   code referred to it by the wrong name. Nesting is the natural way to write a sealed family, so this
   surfaced immediately once sealed types were supported.
+
+### Documentation
+
+- **How far object identity reaches is now written down.** The same object in two fields of one model
+  arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is
+  not a safe way to ask whether two things that came off the wire are the same one — compare by
+  identifier, or with `equals`. This was true before and stated nowhere.
 
 
 ## [0.7.0] — 2026-08-20

@@ -211,6 +211,68 @@ ZeroZ Stack serializes data dynamically using `BinarySerializer`. Each serialize
 Note the tag space (`0x00`–`0x23`) is independent of the frame opcode space; a tag byte never appears
 where an opcode is expected.
 
+## Object identity, and how far it reaches
+
+Every model value is written with an object id. The second time the same instance is met, only that
+id goes out, as `0x0E`. That is what lets a graph contain loops and shared parts and arrive with its
+shape intact rather than as a tree of copies.
+
+**The rule is: identity holds within one top-level value, and not between two.**
+
+The set of "already written" instances is emptied whenever a value is written that was not reached
+from inside another one. So:
+
+```java
+Order order = new Order();
+order.setBilling(address);
+order.setShipping(address);          // the same Address instance
+send(order);                          // arrives as ONE address, in both fields
+
+send(List.of(address, address));      // arrives as TWO addresses
+```
+
+In the first case the two fields are reached from inside `order`, so the second is a reference. In
+the second case each element of the list *is* a top-level value, so each is written in full.
+
+Two consequences worth knowing before relying on either:
+
+- **Do not use `==` across a call boundary to decide whether two things are the same.** Compare by
+  id, or by `equals`. This is the one that costs an afternoon.
+- A model reached through a `List`, `Set`, `Map` or a field declared as a model type all behave
+  the same way. There is no longer a path that writes a model in place without recording it.
+
+## Nested models are written by reference, not in place
+
+Before 0.8.0, a field whose declared type was a model class was written straight into the buffer
+with nothing recorded about it. It saved a few bytes and cost three things:
+
+- two models referring to each other recursed until the stack ran out;
+- the same instance in two fields arrived as two objects;
+- a model nested inside a `@LiveSync` one was rebuilt with a plain constructor, so it never became a
+  tracked instance and edits to it were invisible.
+
+A model reached through a collection never had any of those problems, because collections always
+took the tagged path. Now every model-typed field takes it too. The cost is an id and a class name
+per nested model — bounded by how many model-typed fields a model has, not by how much data there
+is, since collections were already paying it.
+
+## Inheritance
+
+A model may extend another model, and **the base class's fields travel with it**. The base has no
+serializer of its own; what it declares is written as part of each concrete model below it, base
+fields first, then the subclass's own.
+
+An abstract model is never a value in its own right. It gets no serializer and no entry in the
+registry — it exists to hand its fields down. A field declared as an abstract model type still works:
+the tagged path dispatches on the runtime type.
+
+Two shapes are refused at compile time, both because they used to lose data silently:
+
+| Refused | Why |
+|---|---|
+| A model extending a class that is **not** a `@DataModel` and that declares instance fields | there is no way to know those fields belong on the wire, so they were dropped without a word. Annotate the base, or move the fields down. A base class with no fields needs no annotation. |
+| A model declaring a field name a base class already declares | both would be written, and both read back through the same accessor, so one would overwrite the other |
+
 ## Records
 
 A `record` annotated `@DataModel` travels as `0x22`. The bytes look like an ordinary object; what
