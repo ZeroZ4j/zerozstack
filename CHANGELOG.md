@@ -156,6 +156,21 @@ first published, and repairs to the two components whose labels an application c
     Windows-1252 and read back as UTF-8, naming the file, the line and the characters that were
     meant.
 
+    A second test now guards the release itself. It opens every jar the build has produced and
+    reads the text inside them — the words baked into compiled classes, the resource files, and the
+    files the build generates — and stops the build if any of it is damaged in that way. The two
+    checks together cover both ends: one watches what a developer types, the other watches what
+    leaves the building. Checked against the 0.7.0 jar that was actually published, the new test
+    finds every damaged string in it; checked against this release it reads about three thousand
+    files and reports nothing.
+
+- **Six example applications had their logging setting saved in the wrong kind of file, so it did
+  nothing.** The file said to log in full detail. It had been written by a Windows shell, which
+  saves text in a form Java's settings reader does not understand, so the reader saw nonsense,
+  ignored it, and the examples logged at their normal level instead. The files are now saved
+  normally and the setting takes effect. Only the examples were affected; nothing in the framework
+  itself read these files.
+
 - **A dialog taken out of the page while it was open** used to leave the browser believing it was
   still open, so it could not be shown again. It is now closed properly when it is removed, its
   close listeners are told, and a leftover open marker is repaired before it is shown again.
