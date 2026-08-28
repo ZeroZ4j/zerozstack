@@ -80,6 +80,7 @@ nav:
       - Anti-patterns: decide/antipatterns.md
 
   - Guides:
+      - Declaring the types that cross the wire: guides/data-models.md
       - Saving data: guides/persistence.md
       - Store modes — embedded or hosted: store-modes.md
       - Authentication and authorization: guides/security-auth.md

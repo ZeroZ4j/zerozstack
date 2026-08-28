@@ -62,7 +62,7 @@ because *"virtual threads have none, and @RequestScoped beans (e.g. the per-tena
 EmbeddedStorageManager producer) must resolve inside service calls"* (`:670-676`).
 
 There is **no `ReentrantReadWriteLock`, `ReentrantLock` or `StampedLock` anywhere in the project.**
-`synchronized` appears only on `ObjectMapper`'s handle maps and for WebSocket write serialisation.
+`synchronized` appears only on `ObjectMapper`'s handle maps and for WebSocket write serialization.
 
 The one real lock is advisory and application-level: `LiveMutexManager.java:37-96` keeps a fair
 1-permit `Semaphore` per object handle with a 30s `tryAcquire`, owner recorded as the session, and
@@ -76,7 +76,7 @@ mutating live state for ~15s outside any request context.
 
 `reference/limitations.md:19`:
 
-> Versioned mutations, acknowledgement and conflict rejection | Reserved in the protocol. The
+> Versioned mutations, acknowledgment and conflict rejection | Reserved in the protocol. The
 > implemented sync path has no version field, no ACK and no conflict detection.
 
 and `:26-27`:
@@ -175,7 +175,7 @@ whole layer exists to prevent.
 ### 4.2 Scoped per storage manager
 
 Constructed alongside `TenantStorageProvider`'s map, never a singleton. Two tenants must not
-serialise against each other. A transaction captures which tenant's store it belongs to; cross-tenant
+serialize against each other. A transaction captures which tenant's store it belongs to; cross-tenant
 transactions are meaningless in ZeroZ Stack and should be rejected outright rather than half-supported.
 
 ### 4.3 A programmatic API first, interception second
@@ -311,7 +311,7 @@ and enlistment is directly reachable.
 | B. **`XAResource` + LRCO** | + Narayana's last-resource marker | real, if we are the only non-XA resource | zero |
 | C. Full `XAResource` | durable prepared-xid journal + `recover()` | full 2PC | high |
 
-**Choose B.** Helidon MP *is* Narayana, so the Last Resource Commit Optimisation is free.
+**Choose B.** Helidon MP *is* Narayana, so the Last Resource Commit Optimization is free.
 
 Option A is what Hibernate does — its entire `JtaPlatform` SPI has no `XAResource` method anywhere; it
 registers a `Synchronization`, flushes in `beforeCompletion`, and gets atomicity from the container's
@@ -337,12 +337,12 @@ Option C is the only design with no window, and it requires EclipseStore to dura
   `Synchronization` — interposed callbacks run after everything registered directly with the
   transaction but before 2PC starts, which is where a resource-manager-level participant belongs.
 - `afterCompletion(int)` runs in an undefined context, permits no transactional work, and **may arrive
-  on a different thread** than the one that registered the synchronisation. Hibernate ships
+  on a different thread** than the one that registered the synchronization. Hibernate ships
   `SynchronizationCallbackCoordinatorTrackingImpl` precisely for this. Do not touch thread-bound state
   there.
 - If `beforeCompletion()` throws, Narayana defers the throwable and calls `preventCommit()`, so the
   transaction does roll back. A rollback-only transaction skips `beforeCompletion` entirely, because
-  `CoordinatorEnvironmentBean.beforeCompletionWhenRollbackOnly` defaults to `false`. Both behaviours
+  `CoordinatorEnvironmentBean.beforeCompletionWhenRollbackOnly` defaults to `false`. Both behaviors
   are Narayana defaults, not spec guarantees — depend on them knowingly.
 - Use **`@TransactionScoped`**, not `@RequestScoped`, for the per-transaction accumulator: it follows
   the transaction rather than the thread, survives suspend/resume, and dies exactly when the

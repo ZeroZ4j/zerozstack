@@ -6,6 +6,13 @@ seconds, in one process, and fail when something is wrong.
 By the end you will be able to start a server inside a test, open connections to it, drive it, and
 start a second server beside the first without the two getting in each other's way.
 
+## When to use this
+
+Use this harness for anything that needs a real server: an RMI service, a server event, a shared
+signal, a LiveSync push, a refusal, a limit. It is not a unit-test replacement — a class with no
+server in it needs no server. It is also not a browser: it tells you what bytes the server sent, not
+what a page looked like.
+
 Everything here needs one extra dependency, with **test scope**:
 
 ```xml

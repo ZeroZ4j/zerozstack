@@ -72,5 +72,66 @@ Two habits prevent it entirely:
 - Never create a file in this repository with a PowerShell redirect (`echo ... > file`). PowerShell
   writes UTF-16, which is how six logging settings ended up in a form Java silently ignored.
 
+## The documentation is written in American English
+
+`color`, not `colour`. `behavior`, not `behaviour`. Also `catalog`, `gray`, `canceled`, `organize`,
+`license`, `center`.
+
+`DocumentationSpellingTest` enforces it on every build. It reads every Markdown file in the checkout
+plus `llms.txt` and `context7.json`, and fails naming the file, the line, the word you wrote and the
+word to use. The rule was in the style guide from the beginning and every page ever written broke it,
+which is what a rule with nothing behind it is worth.
+
+Three things it deliberately does not touch:
+
+- **Anything inside backticks**, and every fenced code block. API names, file names, command lines
+  and settings keys are code, and the documentation must spell them the way the code spells them.
+- **`Flavour` with a capital F.** TeaVM Flavour is a product and `FlavourWrapper` is a class here.
+- **The source code.** Comments, javadoc and user-facing strings in `.java` files are still British in
+  places. Converting them is a separate decision with test-assertion risk, so the check does not look
+  at them and neither should you as a side errand.
+
+The word list is explicit, not a pattern, and that is the point: "-ise becomes -ize" would fire on
+*advertise*, *exercise*, *surprise* and *promise*, which are spelled that way everywhere. If you hit
+a British word the list does not know, add the word — do not reach for a rule.
+
+## Write the changelog entry for the person upgrading
+
+[`CHANGELOG.md`](CHANGELOG.md) is the most-read page in this repository, and it is read by exactly
+one kind of person: somebody who has an application on the previous version and is deciding whether
+to move it. Write for them. It is also, in practice, how an AI coding agent with no training data on
+this framework learns what changed — several of the features in 0.8.0 were built by people and
+agents who had read nothing else.
+
+Four rules. They are not style preferences; each one exists because dropping it made an entry
+useless.
+
+1. **Prose, not commit subjects.** A bullet is a short paragraph in plain English, not a
+   line copied off a branch. "Fix Dialog modality" tells a reader nothing. Say what was wrong, what
+   it cost somebody, and what happens now.
+
+2. **Every breaking change names the fix.** A **Breaking** bullet is not finished until it says what
+   to write instead, in a sentence beginning "If you…". Show the two or three lines of code where
+   code is the answer. An upgrader who reads a breaking change and still does not know what to type
+   has been told nothing useful.
+
+3. **Say the concrete thing.** Numbers, real names, real symptoms. "One long word pushed the whole
+   page sideways — 2,773 pixels of it, in a window the width of a telephone" is worth ten lines of
+   "improved responsive behavior". Where a fault had no symptom at all, say that too: silence is the
+   most expensive property a bug can have and the reader needs warning.
+
+4. **Ordinary words.** Write for somebody who does not already know this codebase. Not "payload
+   exceeds configured maximum" but "that file is bigger than the 25 MB limit". Not "focus
+   management" but "where the keyboard goes".
+
+**Sections, in this order:** `Breaking`, `Added`, `Changed`, `Fixed`, then `Documentation` if there
+is anything to say. Skip any that are empty. Open the release with two short paragraphs: what this
+release is about, and which breaking changes will catch the most applications.
+
+**One release, one entry.** When several branches land in the same release, the entries get merged
+into a single set of sections before the release is cut — never left as one block per branch. Merge
+duplicates; never drop a change because it reads like another one; and never flatten a breaking
+change's "what to do instead" out of existence while tidying.
+
 ## License
 By contributing, you agree that your contributions will be licensed under its Apache 2.0 License.

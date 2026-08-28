@@ -5,8 +5,8 @@ your network layer is a binary RPC protocol over a persistent WebSocket, and you
 object graph on disk. You write no JavaScript, no JSON, no REST routes and no SQL.
 
 !!! warning "Experimental"
-    ZeroZ Stack is an experimental proof-of-concept at version **0.7.0**. It is a working demonstration,
-    not an industrialised production framework. Known gaps are listed in
+    ZeroZ Stack is an experimental proof-of-concept at version **0.8.0**. It is a working demonstration,
+    not an industrialized production framework. Known gaps are listed in
     [Limitations](reference/limitations.md), and every page states its own limits where the feature is
     taught.
 
@@ -85,6 +85,57 @@ public class ChatServiceImpl implements ChatService {
 ChatService chat = new ChatService_Stub();
 sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text)));
 ```
+
+## New in 0.8.0
+
+<div class="grid cards" markdown>
+
+- **Every control works without a mouse**
+
+    Tabs, menus, links, copy buttons, splitters and drop boxes are all reachable with Tab and
+    pressed with Enter, and every one of them says what it is. A build check fails when a new
+    component forgets.
+
+    [What a control owes a person with no mouse →](guides/ui-keyboard-and-naming.md)
+
+- **A field can say what it is, and why it refused**
+
+    `new TextField().withLabel("Email address")` puts a real caption on the field. A failed check
+    now writes its sentence under the field instead of turning the box red and saying nothing.
+
+    [Forms and binding →](guides/ui-forms-and-validation.md)
+
+- **Overlays that behave like overlays**
+
+    A dialog takes over the page and Escape closes it. A drawer holds the keyboard while it is
+    open. What sits above what is a named layer — `PAGE` to `TOOLTIP` — instead of a number
+    somebody guessed.
+
+    [Stacking overlays →](guides/ui-layering.md)
+
+- **A record can cross the wire**
+
+    `public record Money(long amount, String currency) { }` replaces ten lines of constructor,
+    getters and setters. A `sealed` interface travels as itself, so what arrives is the real type
+    and not a cast. Fields inherited from a base class stop vanishing.
+
+    [Declaring the types that cross the wire →](guides/data-models.md)
+
+- **A server inside a test, in a tenth of a second**
+
+    Start one in the same process, open connections to it, and count what the browser was sent.
+    Two servers can run side by side without sharing anything.
+
+    [Testing an application →](guides/testing.md)
+
+- **Leaving a screen shuts it down**
+
+    `replaceContents` swaps what is inside a container and tells everything on its way out. Before
+    this, `onDetach` almost never ran, so the screen you had just left kept its timers going.
+
+    [Swapping what is inside something →](UI_COMPONENTS.md#swapping-what-is-inside-something)
+
+</div>
 
 ## New in 0.7.0
 

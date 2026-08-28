@@ -2,7 +2,7 @@
 
 ZeroZ Stack's characteristic failure is *nothing happening*. Several conditions are caught and logged
 rather than thrown, so there is no exception to search for and no stack trace to follow. This page is
-organised by symptom.
+organized by symptom.
 
 Before anything else: **read your build warnings**, and **read the server log**. Two of the most
 common causes report themselves there and nowhere else.
@@ -291,7 +291,7 @@ Read the sentence the component shows; it is what the server sent.
 |---|---|
 | "That file is too big. The largest we can take is 25 MB." | Choose a smaller file, or raise `zeroz.upload.maxBytes`. |
 | "That took too long to start. Please choose the file again." | The permission expired after 60 seconds. Pick the file again. |
-| "That file did not finish sending. Please try again." | The connection dropped part-way, or the upload was cancelled. |
+| "That file did not finish sending. Please try again." | The connection dropped part-way, or the upload was canceled. |
 | "We could not accept that file. Reload the page and try again." | The live connection is gone. A reload gets a new one. |
 
 If nothing happens at all and the browser console shows a 404 for `zeroz4j-upload`, the deployment
@@ -300,6 +300,6 @@ is missing `zerozstack-server-jakarta` (in a WAR) or `zerozstack-server-jaxrs` (
 
 ## When you are stuck
 
-Check the [anti-patterns](../decide/antipatterns.md) list — it is the same material organised by cause
-rather than symptom — and open an issue if the behaviour still does not match the documentation. A doc
+Check the [anti-patterns](../decide/antipatterns.md) list — it is the same material organized by cause
+rather than symptom — and open an issue if the behavior still does not match the documentation. A doc
 that misled you is a bug worth reporting.

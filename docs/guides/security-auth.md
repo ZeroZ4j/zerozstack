@@ -305,7 +305,7 @@ A browser sends your cookies with **any** connection to your address, whichever 
 So the server decides for itself which pages it will accept a connection from, and refuses the rest.
 The `Origin` header names the page; the rule below decides what counts.
 
-| `zeroz.origins` | Behaviour |
+| `zeroz.origins` | Behavior |
 |---|---|
 | unset (default) | Same-origin only: `Origin` must match the `Host` the request was sent to. Correct for the usual deployment. |
 | a comma-separated list | Exactly those origins, e.g. `https://app.example.com,https://admin.example.com`. Needed when the page is served from a different host than the socket. |
@@ -323,7 +323,7 @@ else about the deployment. The full explanation, with the configured values, is 
 `zeroz.hosts` is the second rule, and it asks a different question: not *which page opened this
 connection*, but *which name was it addressed to*.
 
-| `zeroz.hosts` | Behaviour |
+| `zeroz.hosts` | Behavior |
 |---|---|
 | unset (default) | No host check: a handshake addressed to any name at all is accepted. |
 | a comma-separated list | The `Host` header must be one of them, e.g. `app.example.com,app.example.com:8443`. An entry with no port accepts that name on any port. Case does not matter. |

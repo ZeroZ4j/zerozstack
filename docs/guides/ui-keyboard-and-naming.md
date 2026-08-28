@@ -18,7 +18,7 @@ No exceptions, and no "the mouse is the main way to use it".
 
 **A control has a name.**
 Words that say what it does, which a screen reader can read out and voice control can listen for.
-An icon is not a name. A colour is not a name. A tip that only appears under a pointer is not a
+An icon is not a name. A color is not a name. A tip that only appears under a pointer is not a
 name.
 
 That is the whole contract. The rest of this page is how it is enforced and how to satisfy it.
@@ -150,10 +150,10 @@ node tools/ui-proof/drive.mjs
 ## Limits
 
 The gate reads source text. It proves that the wiring is present and that it is on the right
-element; it does not prove the behaviour is sensible. A keydown handler that answers Enter by doing
+element; it does not prove the behavior is sensible. A keydown handler that answers Enter by doing
 nothing passes the gate and fails the browser proof, which is why both exist.
 
-It says nothing about colour contrast, focus rings, motion, or the order controls appear in. Those
+It says nothing about color contrast, focus rings, motion, or the order controls appear in. Those
 are real and they are not checked anywhere yet.
 
 It covers the component library only. An application can still put a click listener on its own

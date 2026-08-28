@@ -113,13 +113,13 @@ shared. No shading anywhere — the container launches the same plain classpath 
 ## Settings a real deployment needs
 
 Whichever shape you ship, set these before anyone outside your machine can reach the application.
-They all default to the behaviour that is convenient during development, which is not the behaviour
+They all default to the behavior that is convenient during development, which is not the behavior
 you want in front of the internet.
 
 | Property | Set it to | What it does |
 |---|---|---|
 | `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | The server accepts a connection only when it was addressed to one of these names. Unset, it accepts any name at all. |
-| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Unset, a new one is made at every startup, so a restart gives everybody a new browser id and other nodes do not recognise this node's ids. |
+| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Unset, a new one is made at every startup, so a restart gives everybody a new browser id and other nodes do not recognize this node's ids. |
 | `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means the page must come from the same address as the socket, which is what you want. |
 | `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two built-in accounts whose passwords are printed in this documentation. |
 | `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | The largest message the server accepts. 4 MB unless you say otherwise; see below. |

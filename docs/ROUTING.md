@@ -214,7 +214,7 @@ The processor refuses, at compile time:
 
 * **No parallel loaders**, as above.
 * **No nested outlets beyond one child per layout.** A layout renders exactly one child; sibling
-  outlets are not modelled.
+  outlets are not modeled.
 * **No wildcard or optional segments.** Patterns are literal segments and `:params` with a fixed
   count; `/files/*path` is not supported.
 * **No route-level transitions or scroll restoration.** The container's contents are replaced

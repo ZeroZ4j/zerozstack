@@ -110,7 +110,7 @@ It exits non-zero if any check fails, and prints one line per check either way.
     the field's name to a screen reader — a `<label for>` where there is one control to point at,
     a named group where there is not.
 23. A field already on the page, given a message and then a caption afterwards, shows both, is
-    marked invalid, and keeps its place among its neighbours.
+    marked invalid, and keeps its place among its neighbors.
 24. A real edit that breaks a rule puts a readable sentence on the screen and takes it back.
 25. The same, through `Binder`, which is how forms are actually written.
 

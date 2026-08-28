@@ -142,7 +142,7 @@ Stated plainly so there are no surprises:
 * **No per-topic subscription filtering.** Within the sessions a publish reaches, every client gets
   the frame and its handlers decide; a client that registered no handler for the topic ignores it.
   Scope decides who receives a frame; registering a topic handler does not.
-* **At most once** — a disconnected client misses events; there is no queueing, acknowledgement, or redelivery.
+* **At most once** — a disconnected client misses events; there is no queueing, acknowledgment, or redelivery.
 * **No replay** — late subscribers do not receive past events.
 * Payloads must be wire-serializable: `@DataModel` classes or types supported by `BinarySerializer`.
 

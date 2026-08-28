@@ -102,7 +102,7 @@ reference pages still compile via a `docs-samples` test module.
 
 ## Part 1 — Information architecture
 
-Organised on **Diátaxis** (tutorial / how-to / reference / explanation), because the audit shows the
+Organized on **Diátaxis** (tutorial / how-to / reference / explanation), because the audit shows the
 current failure mode is exactly the one Diátaxis exists to fix: explanation, instruction and
 reference interleaved in the same file, so a beginner cannot find a path and an expert cannot find a
 fact.
@@ -112,7 +112,7 @@ Two additions beyond vanilla Diátaxis, both justified by this project specifica
 - a **Decision Guides** section, because the framework's hardest problem is *choosing between
   constructs*, and that is neither a how-to nor an explanation;
 - an **AI Agents** section, because "this stack exists so agents can work safely" is the project's
-  thesis, and the docs are where that claim is either honoured or exposed as marketing.
+  thesis, and the docs are where that claim is either honored or exposed as marketing.
 
 ```
 docs/
@@ -158,7 +158,7 @@ docs/
 │  ├─ api-shared.md                  com.zeroz4j.api / .signals / .events
 │  ├─ api-client.md                  Zeroz4jClient, RmiSecurityContext, scheduler
 │  ├─ api-server.md                  Zeroz4jServer, SyncEngine, EventPublisher, listeners
-│  ├─ ui-components.md               Component catalogue: class, constructors, key methods, sample
+│  ├─ ui-components.md               Component catalog: class, constructors, key methods, sample
 │  ├─ wire-protocol.md               Frames, opcodes, type IDs (the current PROTOCOL.md, tightened)
 │  ├─ configuration.md               Every knob: system properties, ports, paths, TeaVM flags
 │  ├─ supported-types.md             Serializable type matrix, incl. what is NOT supported
@@ -203,7 +203,7 @@ The README becomes a **router**, not a thesis. Target ~120 lines:
 3. Install/quickstart in 5 commands.
 4. A short table linking the four doc entry points (Learn / Build / Decide / Look up).
 5. Module table.
-6. Status, licence, author, consulting link — at the bottom, compressed.
+6. Status, license, author, consulting link — at the bottom, compressed.
 
 The current thesis prose moves verbatim to `explain/why-zero-impedance.md`, where it is an asset
 rather than an obstacle between the reader and `mvn`.
@@ -326,7 +326,7 @@ plus why it fails*. This is what transfers, and it is what the current docs lack
 
 Caveat to state honestly in this section: **no example in the repo uses `@ClientWritable`** — the up
 direction is exercised only in `ServerLiveMutationTest`. Either build `collab-editor` to demonstrate
-it (recommended, it also covers `LiveMutex`) or mark it clearly as lightly-travelled. Writing a
+it (recommended, it also covers `LiveMutex`) or mark it clearly as lightly-traveled. Writing a
 tutorial around an undemonstrated code path is how docs acquire their next generation of stale
 claims.
 
@@ -340,7 +340,7 @@ Give each a name so it can be referenced in review comments:
 3. **In-place mutation** — `list.add(x); signal.set(list)`; `equals` swallows it, nothing re-renders.
    → `update()` with a new instance. (Also the LiveSync collection variant:
    `obj.getTags().add(...)` is invisible.)
-4. **Operation-as-edit** — modelling "approve" as a `@ClientWritable` field flip; no name, nowhere
+4. **Operation-as-edit** — modeling "approve" as a `@ClientWritable` field flip; no name, nowhere
    to put `@Secured`, no validation point, no audit. → RMI method.
 5. **Effect never disposed** — `Effect.create` in a view that is removed without disposing; upstream
    signal keeps the view alive. → own a `List<Disposable>`.
@@ -357,7 +357,7 @@ Give each a name so it can be referenced in review comments:
     `broadcastPush("gallery.slider_updated", …)` and no client ever registers a listener for it.
     Fix the example; don't let a shipped example model a dead pattern.
 
-### 2.5 The silent-failure catalogue — the highest-value page in the pack
+### 2.5 The silent-failure catalog — the highest-value page in the pack
 
 This is my strongest recommendation in the whole plan. The framework's characteristic failure is not
 an exception, it is **nothing happening**, and every one of these is verified in the source. A
@@ -436,11 +436,11 @@ required for "beginner friendly":
 
 ---
 
-## Part 4 — Context7 optimisation
+## Part 4 — Context7 optimization
 
 Context7 crawls the **GitHub repo**, parses Markdown/RST/notebooks, extracts code snippets, embeds
 them, and answers queries with reranked snippets. It de-duplicates near-identical snippets and
-prefers a single current version. Optimising for it means: *make each page answer one question, with
+prefers a single current version. Optimizing for it means: *make each page answer one question, with
 one canonical, self-contained snippet.*
 
 ### 4.1 `context7.json` at the repo root
@@ -478,7 +478,7 @@ Notes:
   generated sources and `target/classes/archetype-resources` duplicates get indexed.
 - Including `zerozstack-examples/**` is deliberate: the example READMEs plus real `.java` files give
   Context7 grounded, compiling snippets. This is where Context7's "generate examples from source"
-  behaviour helps rather than hurts.
+  behavior helps rather than hurts.
 - `rules` is the highest-value field and is almost never used well. It is our chance to inject the
   Events/Signals/LiveSync decision procedure directly into every agent that touches the library —
   which is precisely the problem the user reports seeing in downstream projects. `agents/rules.md`
@@ -504,7 +504,7 @@ Enforced by the style guide (Part 5):
   the wrong line itself — a `// WRONG` block extracted out of context becomes advice. Current
   SIGNALS.md does this correctly (`// WRONG —` inside the block); make it a rule.
 - **Stable headings**, because they anchor retrieval; avoid renaming them casually.
-- **No unlabelled tables of nuance** — put the nuance in prose near the snippet, since tables survive
+- **No unlabeled tables of nuance** — put the nuance in prose near the snippet, since tables survive
   extraction poorly.
 
 ### 4.3 `llms.txt`
@@ -576,7 +576,7 @@ command to document:
 |---|---|---|
 | B1 | `zerozstack-archetype/src/main/resources/archetype-resources/pom.xml:11` pins `<zeroz4j.version>1.0.0-SNAPSHOT</zeroz4j.version>` while the project is `0.3.0` — **a generated project does not build** | Filter the version from the archetype build, or set it to `${project.version}` |
 | B2 | No `exec-maven-plugin` anywhere, yet 4 example READMEs say `mvn exec:java` | Add and configure `exec-maven-plugin` in the examples parent, or drop the instruction |
-| B3 | No shade/assembly plugin, yet `GETTING_STARTED.md:38` and `inventory-crud/README.md:54` say `java -jar …-server.jar` | Add `maven-shade-plugin` with `mainClass` (best — it makes the documented command true), or standardise on the classpath launch |
+| B3 | No shade/assembly plugin, yet `GETTING_STARTED.md:38` and `inventory-crud/README.md:54` say `java -jar …-server.jar` | Add `maven-shade-plugin` with `mainClass` (best — it makes the documented command true), or standardize on the classpath launch |
 | B4 | Only `run.bat` exists; no POSIX equivalent | Add `run.sh` per example (or one `run` script at the examples root taking the example name) |
 | B5 | `CONTRIBUTING.md:21` says `mvn clean test`, which cannot work — APT/shared artifacts must be installed first | `mvn install -DskipTests` then `mvn test` |
 
@@ -596,7 +596,7 @@ These are not "nice to have" — several are things a beginner hits in the first
 | **`@RequiresRole`** | zero docs, zero usages; overlaps `@RolesAllowed` with no stated difference | `reference/annotations.md` — document the difference or deprecate one |
 | **`LiveMutex` / `LiveMutexProvider`** | one clause in `LIVESYNC.md:53`, pointing at a non-existent example | `guides/livesync-objects.md` |
 | **`BinaryPackable`, `BinaryRegistrar`, `BinaryRegistry`, `BinarySerializerDelegate`** — the custom wire-type seam | undocumented | `reference/supported-types.md` + an advanced guide |
-| **`Signals.resetForTesting()`** | `Signals.java:194`, undocumented; `SIGNALS.md:74` alludes to test behaviour without naming it | `guides/testing.md` (new) |
+| **`Signals.resetForTesting()`** | `Signals.java:194`, undocumented; `SIGNALS.md:74` alludes to test behavior without naming it | `guides/testing.md` (new) |
 | **`components-showcase` example** | registered in the pom, has `run.bat`, is the only exercise of the ~90-class component library, has **no README and is mentioned in no doc** | `docs/examples/index.md` + linked from `reference/ui-components.md` as the live gallery |
 | **`Binder` vs `bindValue`/`withRule`** | two competing, mutually-unaware binding stories, both real in code; every example uses the latter, `Binder` appears in no example | **Pick one canonical path** (recommend `bindValue`/`withRule`), document the other as advanced/legacy in `guides/ui-forms-and-validation.md`. This is an API decision the docs cannot paper over. |
 
@@ -639,15 +639,15 @@ in the project*:
 | `docs/CONCEPTS.md` | **Delete.** Its job splits cleanly | glossary → `reference/glossary.md`; orientation → `start/index.md` + `explain/architecture.md`. (It is also mistitled: "10 Core Concepts" with 11 sections.) |
 | `docs/GETTING_STARTED.md` | **Delete and rewrite from scratch** — 6 of its ~8 factual claims are wrong (archetype version, `java -jar`, `com.zeroz4j.ui.components.*` packages, `onClick`) | `start/prerequisites.md` + `start/quickstart.md` + `start/first-feature.md` |
 | `docs/CODE_WALKTHROUGH.md` | **Delete.** Steps 1–3 are sound but redundant with the new tutorial; step 4 is wholesale obsolete | `start/first-feature.md` |
-| `docs/ARCHITECTURE.md` | **Split and largely rewrite** — the most stale file | rationale → `explain/why-zero-impedance.md`; pipeline → `explain/how-rmi-works.md`; frame diagrams → **deleted** in favour of `reference/wire-protocol.md`; Loom → `explain/threading-model.md` |
+| `docs/ARCHITECTURE.md` | **Split and largely rewrite** — the most stale file | rationale → `explain/why-zero-impedance.md`; pipeline → `explain/how-rmi-works.md`; frame diagrams → **deleted** in favor of `reference/wire-protocol.md`; Loom → `explain/threading-model.md` |
 | `docs/PROTOCOL.md` | **Keep, tighten, generate the tables** | `reference/wire-protocol.md` |
 | `docs/SIGNALS.md` | **Keep — best-in-class.** Split by scope | local → `guides/signals-local-state.md`; shared → `guides/signals-shared-state.md`; "when to use" → `decide/` |
 | `docs/SERVER_EVENTS.md` | **Keep.** Terminology table is the single best asset in the docs | body → `guides/server-events.md`; terminology → `reference/glossary.md`; decision content → `decide/` |
 | `docs/LIVESYNC.md` | **Keep — best-written file.** Its closing decision table is the seed of `decide/index.md` | `guides/livesync-objects.md` + `decide/` |
 | `docs/VALIDATION.md` | **Keep**, merge with the binding story | `guides/ui-forms-and-validation.md` + `reference/annotations.md` |
-| `docs/UI_COMPONENTS.md` | **Split; catalogue regenerated from source.** Currently a flat 87-name list with no signatures, constructors, or imports — unusable as reference, and the "87" is wrong (90 classes in `ui/component/` alone) | how-to → `guides/ui-building-views.md`; catalogue → **generated** `reference/ui-components.md`; drop the hard count, or generate it |
+| `docs/UI_COMPONENTS.md` | **Split; catalog regenerated from source.** Currently a flat 87-name list with no signatures, constructors, or imports — unusable as reference, and the "87" is wrong (90 classes in `ui/component/` alone) | how-to → `guides/ui-building-views.md`; catalog → **generated** `reference/ui-components.md`; drop the hard count, or generate it |
 | `docs/AGENT_PROMPTS.md` | **Split.** Its "Framework rules" (`:48-104`) is the most current API cheat-sheet in the repo — promote it | rules → `agents/rules.md` (→ `context7.json` `rules`); prompts → `agents/prompts.md`, with references to non-existent examples removed and the `new Thread` contradiction fixed; DX harness → `contribute/` |
-| 6 example READMEs | Normalise to one template; fix run commands | `chat-events/README.md` is the model to copy |
+| 6 example READMEs | Normalize to one template; fix run commands | `chat-events/README.md` is the model to copy |
 | `components-showcase` | **Write a README** | + `docs/examples/index.md` |
 
 ### 6.6 Javadoc and protocol-constant fixes (docs work that lives in `.java` files)
@@ -684,7 +684,7 @@ first. Phases 0–2 are the ones that change the downstream-project problem the 
 - `context7.json`, `AGENTS.md`, `llms.txt`, `mkdocs.yml`, Pages workflow, CNAME.
 - `docs/contribute/docs-style-guide.md`.
 - Verify: the site builds and deploys; Context7 reindexes; nav renders.
-- *Ship immediately — this alone improves agent behaviour before a single page is rewritten.*
+- *Ship immediately — this alone improves agent behavior before a single page is rewritten.*
 
 ### Phase 1 — The decision pack (`decide/`) + glossary
 The highest-value content, and independent of everything else. Write `decide/index.md`,
@@ -697,8 +697,8 @@ machine (and in CI) before merge. Rewrite the README as a router at the end of t
 
 ### Phase 3 — Reference
 `annotations`, `api-*`, `ui-components`, `supported-types`, `configuration`, `limitations`,
-`wire-protocol`. Mostly reorganisation plus gap-filling against the actual source; the tedious but
-mechanical phase. Generate the component catalogue from source where possible.
+`wire-protocol`. Mostly reorganization plus gap-filling against the actual source; the tedious but
+mechanical phase. Generate the component catalog from source where possible.
 
 ### Phase 4 — How-to guides
 Convert the existing SIGNALS/SERVER_EVENTS/LIVESYNC/VALIDATION/UI_COMPONENTS bodies into task-shaped

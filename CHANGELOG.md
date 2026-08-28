@@ -10,9 +10,19 @@ upgrading.
 
 ## [0.8.0] — unreleased
 
-Form fields can be given a caption at last. Plus two faults in `Dialog`, both found in an
-application built on 0.7.0, one round of text that had been stored wrong since the library was
-first published, and repairs to the two components whose labels an application could not control.
+Every control in the library can now be worked from a keyboard and says what it is; a build check
+fails if a new one cannot. Overlays behave like overlays — a dialog takes over the page, Escape
+closes things, and what sits above what is a named layer instead of a number somebody guessed. A
+form field can be given a caption at last, and a refused value now says why in words the person can
+read. On the wire, a `record` and a sealed family of types are both allowed, and fields inherited
+from a base class stop vanishing. A server can be started inside a test in about a tenth of a
+second. Leaving a screen now shuts the old screen down.
+
+**Read the Breaking section before upgrading.** The three that catch most applications: a dialog now
+takes the whole page and Escape closes it; `Drawer`, `Tooltip` and `Toast` are working components
+rather than boxes you assembled yourself, so hand-written assembly around them now produces the
+wrong result; and `onDetach` runs for the first time, so code you wrote and watched do nothing is
+about to execute.
 
 ### Breaking
 
@@ -25,7 +35,7 @@ first published, and repairs to the two components whose labels an application c
   the dim have always needed.
 
     **If your application relied on the page behind a dialog staying usable**, or on Escape doing
-    nothing, two calls before opening give you the old behaviour back:
+    nothing, two calls before opening give you the old behavior back:
 
     ```java
     dialog.setModal(false);              // the browser does not own it
@@ -35,7 +45,7 @@ first published, and repairs to the two components whose labels an application c
     Both are needed. The first is about what the browser does; a click outside the panel is drawn
     and handled by the component itself, so it survives the first call on its own.
 
-    **If you only want to stop the user walking away from a question**, keep the new behaviour and
+    **If you only want to stop the user walking away from a question**, keep the new behavior and
     take the exits away one at a time with `setCloseOnEsc(false)` and
     `setCloseOnOutsideClick(false)`. Whenever you do, leave a button on the dialog: it becomes the
     only way out.
@@ -45,12 +55,81 @@ first published, and repairs to the two components whose labels an application c
   reached past the API for the first child element and set a width on it yourself, that code is now
   redundant and should be deleted before the two fight each other.
 
+- **`Drawer` is now a working drawer, and it owns its own parts.** It used to be an empty box with a
+  stylesheet class on it. To get a drawer out of it, an application had to build the hidden checkbox
+  that opens it, the page area, the sliding panel, the dim beside it and the stacking number, and
+  then add all five to the drawer itself. Every application did it slightly differently, and every
+  one of them picked its own stacking number.
+
+    The drawer now builds all of that. As a result **`add` no longer puts things on the drawer
+    itself: it puts them in the sliding panel**, and `addToPage` puts them on the page the panel
+    slides over. Old assembly code still compiles, so nothing will tell you — it will simply put
+    your checkbox and your hand-built panel inside the real panel, and the drawer will look wrong.
+
+    **If you assembled a drawer by hand, delete the assembly and keep only the contents:**
+
+    ```java
+    Drawer nav = new Drawer("Main menu");         // the heading, and the name a screen reader reads
+    nav.addToPage(new Button("Menu", e -> nav.open()));   // the page the panel slides over
+    nav.add(new Link("Home", "/"), new Link("Settings", "/settings"));   // the panel itself
+    ```
+
+    Escape now closes a drawer, a click on the dim beside it closes it, and while it is open the
+    keyboard is held inside it. **If your drawer holds half-written input**, refuse the two exits
+    with `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)`, and leave a button. **If you
+    were using a drawer as a sidebar that lives beside the page** rather than over it, call
+    `setModal(false)`: that turns off the dim and the hold, and leaves the page live.
+
+- **A message is put on the page with `show()`.** `Toast` had no way to appear, so every caller
+  appended the element itself — which meant the component was never started, and so Escape never
+  closed a message, including in this library's own gallery. **Replace
+  `body.appendChild(toast.getElement())` with `toast.show()`.**
+
+- **A tooltip's words now go on the tip.** `setText` used to set the text of the wrapper the tooltip
+  puts around your button, which put the words on the page next to the button, permanently and in
+  the wrong place, while the tip itself stayed empty. They now go where the stylesheet reads the tip
+  from, so the tip actually says something.
+
+    **Nothing to change if you were using it as intended** — `new Tooltip("Deletes the file")`
+    around a button now works instead of printing the words beside it. **If you were relying on
+    `getText()` returning the wrapper's text**, it returns the tip's words now.
+
+- **Taking something off the page now tells it.** Until now, `onDetach` almost never ran. Emptying a
+  container by hand — `getElement().setInnerHTML("")` — is how every screen in every example was
+  swapped for the next one, and it takes the old screen off the page without a word to it. So the
+  screen you had just left kept working: its timer kept firing, its effect kept running, and both
+  kept rebuilding a list nobody was looking at. In this library's own gallery that threw the
+  keyboard back to the top of the page every second and a half, and every visit to that page added
+  another timer that never stopped. Nothing errored and nothing was logged.
+
+    There is now one way to swap what is inside something, and it runs `onDetach` on everything
+    leaving, however deeply nested:
+
+    ```java
+    contentArea.replaceContents(nextScreen);                    // a container component
+    Component.replaceContents(appRootElement, nextScreen);      // a plain element
+    ```
+
+    `removeAll()` and `remove(...)` on a container now do the same telling, and `add(...)` runs
+    `onAttach` on everything it puts in rather than only the outermost part.
+
+    **If you wrote `onDetach` and found it never ran, it runs now.** Read it again before you
+    upgrade: code that was quietly dead is about to execute. **If you empty a container by hand
+    anywhere, change it to `replaceContents` or `removeAll`** — a test now reads every Java file in
+    the checkout on every build and fails it if anything writes an empty string into an element's
+    HTML or takes every child out in a loop of its own.
+
+- **A keyed list must be disposed.** `KeyedList` watches a signal for as long as it exists, and it
+  never handed you anything to stop it with, so every one ever built is still watching. It now
+  implements `Disposable`. **Keep the object you get back from `new KeyedList<>(...)` and call
+  `dispose()` on it when the screen leaves**, normally from `onDetach`.
+
 - **A tab is now a real button.** `Tab` was an `<a>` with nowhere to go. The browser leaves those
   out of the tab order entirely, so a row of tabs could not be reached by keyboard at all — not
   reached with difficulty, not reached in the wrong order: not reached. It is now a `<button>`, and
   it says which tab is showing.
 
-    **If you styled tabs with a rule written as `a.tab`, change it to `.tab`.** If you coloured the
+    **If you styled tabs with a rule written as `a.tab`, change it to `.tab`.** If you colored the
     selected tab by adding `tab-active` yourself, use `setSelected(true)` instead: it adds the same
     class and tells a screen reader the same thing, so the two cannot drift apart.
 
@@ -72,9 +151,13 @@ first published, and repairs to the two components whose labels an application c
   built on this library was blue text the keyboard could not reach. `setHref`, `withHref` and a
   `Link(text, href)` constructor were added.
 
+    **Go through your links and give each one a destination.** A `Link` with nothing to go to is not
+    a link — if it does something, it is a `Button`, and `btn-link` makes a button look exactly like
+    one.
+
 - **Copying a value in a property grid is a button now, not a click on the text.** `PropertyGrid`
   copied a value when you clicked the value itself, and its only hint was a hover tip reading "click
-  to copy" - an instruction somebody using a keyboard cannot follow. There is now a small copy
+  to copy" — an instruction somebody using a keyboard cannot follow. There is now a small copy
   button beside each value, named "Copy" plus the row's name, and the value is ordinary selectable
   text again.
 
@@ -87,683 +170,10 @@ first published, and repairs to the two components whose labels an application c
   is now announced as well as shown. **A stylesheet rule that named the old `div` will not match a
   `button`.**
 
-    **Go through your links and give each one a destination.** A `Link` with nothing to go to is not
-  a link — if it does something, it is a `Button`, and `btn-link` makes a button look exactly like
-  one.
-
-### Added
-
-- **A form field can be given a caption.** Until now the only text a field could carry was the
-  placeholder — the grey words inside the box — because `new TextField("Primary folder path")` sets
-  a placeholder and there was nothing else to set. So every form written on this library named its
-  fields with placeholders, which stop saying what the field is the moment somebody types in it,
-  and leave a screen reader with nothing to announce at all. One application had grown two private
-  helpers doing the same thing in two different styles before it settled on a third.
-
-    ```java
-    TextField folder = new TextField().withLabel("Primary folder path");
-    TextField email  = new TextField("you@example.com").withLabel("Email address");
-    ```
-
-    The caption is a real label tied to the control, so clicking the words puts the cursor in the
-    field — and ticks the box, for a checkbox — and assistive technology reads the two together.
-    The identifier that ties them is generated, so nothing has to be invented per page; giving the
-    field your own id afterwards moves the caption with it.
-
-    A caption also gives the field somewhere to put the other three things a field needs to say:
-
-    ```java
-    field.setHelperText("An absolute path. It is created if it does not exist yet.");
-    field.setRequiredIndicatorVisible(true);      // the asterisk after the caption
-    field.setErrorMessage("A port is a number between 1 and 65535.");
-    ```
-
-    `withLabel` and `withHelperText` return the field, so they read inside the expression that
-    creates it; `setLabel`, `setHelperText`, `setRequiredIndicatorVisible` and `setErrorMessage` are
-    there for changing one later. They work on every input in the library, since they live on the
-    class all of them extend: text fields, text areas, selects, checkboxes, toggles, ranges,
-    ratings, radio groups and file pickers. A checkbox and a toggle put their caption on the right
-    of the control, on the same line; everything else puts it above.
-
-    **A caption works anywhere, not only inside a `FormLayout`.** That is deliberate, and it is why
-    there is no "form item" to wrap a field in: most fields are not in a form layout, and a field
-    that can only be named in one container is not much use. A field with a caption is inserted
-    into its parent as a small group — caption, control, explanation, message — rather than as the
-    bare control. A field with no caption is inserted exactly as it was before, so a page that does
-    not use captions is unchanged, to the character.
-
-    A method taking a stylesheet class for the caption, and one handing the caption out as a
-    component to be styled, were both turned down for the reason `Dialog.setWidth` gave: they put
-    stylesheet class names back into application code, which is the one thing this framework exists
-    to keep out.
-
-- **A dialog can be given a width.** A dialog is two boxes: a full-window overlay, and the panel
-  you actually see. Everything worth changing lives on the panel, and until now the component
-  handed out no way to reach it, so applications took the overlay's first child element and pushed
-  stylesheet classes onto it — six separate hand-written copies of the same workaround across
-  eleven places in one application, each written by somebody who could not find the previous one.
-
-    ```java
-    Dialog dialog = new Dialog();
-    dialog.setWidth("56rem");
-    ```
-
-    The panel is never wider than the window, so a width chosen for a desktop still fits a phone.
-
-    A method that adds a stylesheet class to the panel, or one that hands the panel out as a
-    component, would have removed the same workaround. Both were turned down. They make the
-    dialog's internal shape part of its public contract, so it could never be rebuilt; and they put
-    stylesheet class names back into application code, which is the one thing this framework exists
-    to keep out. A width is a width — the same `setWidth` every other sizeable component already
-    has, taking a length rather than the name of a rule in somebody's stylesheet.
-
-- **`addCloseListener`** — called once every time a dialog closes, however it closed: Escape, a
-  click outside, or `close()` in your own code. `isFromClient()` on the event is false only when
-  your code closed it. Use it to release whatever the dialog was holding, rather than trusting that
-  your Close button is the only way out — it no longer is.
-
-- **`setCloseOnEsc`, `setCloseOnOutsideClick`, `setModal`, `isOpened`** — see the Breaking section
-  above for when you want each of them.
-
-- **`setPlaceholder` and `getPlaceholder` on a text field and a text area.** The placeholder could
-  only be set in the constructor, which is part of why it was doing the caption's job. Nothing has
-  changed about what `new TextField("x")` does: it still sets the placeholder, and always will.
-
-- **A status dot can be coloured by one word and read as another.** `StatusDot` took a single
-  string and used it for both the colour and the hover text, so an application that has to colour a
-  dot by an internal state was forced to show that state to the reader — every dot in one console
-  hovered as `DISPATCHED`. The two are now separate, and the reader's words are announced by a
-  screen reader as well, which a dot with no text in it previously had no way to be.
-
-    ```java
-    new StatusDot("DISPATCHED", "Sent to a worker");
-    dot.setState("FAILED", "Could not finish");
-    dot.setLabel("Waiting for a slot");        // change only the words
-    ```
-
-    Passing one string still works and still means both.
-
-- **`LaneTimeline.setLabelWidth`** — pins the width of the name column, for lining several
-  timelines up with each other. Leave it alone, or pass 0, and the column measures itself.
-
-- **A notice can say what kind of thing it is, and carry a heading and a button.** `Alert` could
-  only be a line of text in a coloured box, and the colour had to be spelled out as a stylesheet
-  class name — `new Alert(msg, "alert-error")`, or `setThemeColor(ThemeColor.ERROR)`. So an
-  application that needed a warning with a title above it, or a "Try again" button beside it, built
-  its own. One built the same tinted box twice, in two files, neither knowing about the other.
-
-    ```java
-    add(Alert.caution("The disk is nearly full."));
-
-    add(Alert.danger("Nothing was saved.")
-             .withHeading("The upload failed")
-             .withAction("Try again", e -> upload()));
-    ```
-
-    The four tones are named for what you are saying rather than for a colour: `info`, `success`,
-    `caution`, `danger`. Each notice carries a small mark showing its tone, so the four are still
-    told apart by somebody who cannot separate the colours — `setIconVisible(false)` takes it away.
-    A notice now tells a screen reader that it is a notice, and a failure interrupts where the
-    other three wait their turn. Long text wraps instead of running off the side.
-
-    `setThemeColor` and `new Alert(text, "alert-info")` still work and are now marked as things not
-    to use. They put a stylesheet class name into application code, where nothing checks the
-    spelling and no reader understands it.
-
-- **Five sizes of text, by name.** Every screen has text and no component owns it, so text is what
-  applications describe over and over instead of asking for. One application wrote out its own idea
-  of "quiet supporting text" a dozen times and finished with three sizes and four degrees of grey,
-  on pages sitting next to each other. This library had done the same to itself: its own components
-  spell out quiet text thirteen different ways, in five degrees of fade, across fifty-six places.
-
-    ```java
-    add(TextStyle.PAGE_TITLE.span("Deliveries"));
-    add(TextStyle.SECONDARY.paragraph("Nineteen stops left, updated a moment ago"));
-
-    TextStyle.CAPTION.applyTo(somethingYouAlreadyBuilt);
-    ```
-
-    The five are `PAGE_TITLE` (the name of the screen), `SECTION_TITLE` (the heading over a group),
-    `BODY` (ordinary prose), `SECONDARY` (supporting words, a step quieter) and `CAPTION` (the
-    smallest label there is). There is one definition of each and no way to say "nearly that".
-
-    **Quiet is a fade, not a colour.** The two quiet sizes fade whatever colour they inherit rather
-    than naming one, so the same words are right on a page, on a tinted notice, on a coloured card
-    and on a dark background — and two greys that were meant to match cannot drift apart.
-
-    Five is deliberate. A scale nobody can hold in their head gets ignored and typed out again,
-    which is the problem it exists to end.
-
-- **A timeline can be given its events, instead of being handed hand-built list items.** `Timeline`
-  was an empty container: it drew the line but knew nothing about what went on it, so every
-  application wrote its own forty lines of markup to make one step, and the component gallery did
-  too.
-
-    ```java
-    Timeline history = new Timeline().vertical();
-    history.addEvent("09:14", "Order placed", "Paid by card, delivered to the office address.");
-    history.addEvent("Tomorrow", "Expected");
-    ```
-
-    The line joining one event to the next is drawn and redrawn as events are added, so nothing has
-    to be told which one is first or last. An event's words are never shortened: a long description
-    wraps inside its box, the box stops growing at about 20rem — `setEventWidth` changes that — and
-    a timeline laid out in a row scrolls sideways rather than pushing the page out of shape. A step
-    built by hand is still welcome, and `add` still takes one.
-
-- **`LaneTimeline.setLabelWrap`** — lets a lane name too long for its column run onto more lines,
-  growing that lane to fit. Off by default, because lanes of one height are easier to scan.
-
-### Changed
-
-- **Every example now has a web address of its own, so you can leave several running.** Seven of
-  them all answered on `localhost:8080`, which meant starting a second one killed the first with an
-  error about the address being in use. Two people lost an afternoon to that in one week; one of
-  them ended up writing a throwaway program just to see two examples at the same time.
-
-    **If you have a bookmark to an example, it has moved.** The new numbers — and note that no
-    example uses 8080 any more, because on a working developer's machine that is the number
-    something else has already taken:
-
-    | Example | Address | Example | Address |
-    |---|---|---|---|
-    | `routing-tour` | `localhost:8091` | `job-monitor` | `localhost:8087` |
-    | `oidc-login` | `localhost:8081` | `form-signup` | `localhost:8088` |
-    | `scoped-signals` | `localhost:8082` | `inventory-crud` | `localhost:8089` |
-    | `pwa-install` | `localhost:8083` | `components-showcase` | `localhost:8090` |
-    | `todo-signals` | `localhost:8084` | | |
-    | `chat-events` | `localhost:8085` | | |
-    | `chat-livesync` | `localhost:8086` | | |
-
-    **If a number is already taken on your machine, say so when you start the example.** Every one
-    of them understands the same three ways of being told, and each prints the address it settled
-    on:
-
-    ```bash
-    run.bat 9000                                       # Windows, the seven with a script
-    java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer --port 9000
-    java -Dzeroz.port=9000 -cp "..." com.zeroz4j.example.server.ExampleServer
-    ```
-
-    Each example's own number is a constant at the top of its server file, so somebody copying an
-    example as the start of an application can see it and change it.
-
-- **The examples no longer load a stylesheet that warns about itself.** Every example page pulled
-  Tailwind CSS from `cdn.tailwindcss.com`, and that address prints "should not be used in
-  production" into the browser console on every single page load. In a framework whose examples are
-  what people copy into their own projects, shipping a line that warns against itself — with no
-  word anywhere about what to do instead — is not good enough.
-
-    The examples now load Tailwind's own browser build from a pinned address instead. It does the
-    same job, prints nothing, and is a published, versioned package rather than a preview service.
-    Nothing looks different; this was checked page by page, light and dark.
-
-    **What to do in your own application:** neither line belongs in something you ship. Both of
-    these compile your styles in the visitor's browser, every time the page opens. A real
-    application installs Tailwind once, builds one finished stylesheet, and serves that. There is a
-    new section, "Where the styles come from", in `docs/UI_COMPONENTS.md` saying so, and every
-    example page now carries the same note in a comment at the top.
-
-    Both addresses are also now pinned to an exact version. They were not before, so the day the
-    style library changed was the day the examples changed, with nothing in the repository having
-    moved.
-
-- **The library's own components stopped describing their text and started naming it.** Version
-  0.8.0 introduced five names for the five sizes of text an application has. The library was not
-  using them: its dashboard and sign-in components wrote out their own idea of "quiet supporting
-  text" thirteen different ways, in five different degrees of fade, across fifty-six places — the
-  exact habit the five names exist to end.
-
-    Eighty of those places now ask for a size by name: thirty-five in the library itself — the
-    whole chart and dashboard set, and the sign-in card — and forty-five across seven of the
-    example applications. Three examples had gone a step further and grown a private helper of
-    their own for making a piece of text with a list of style names attached; those three helpers
-    are deleted.
-
-    What you may see: a handful of labels that were 10 pixels are now 12, because the smallest
-    named size is 12 and 10 was below what anybody should be asked to read. Quiet text is now a
-    fade of the colour around it rather than a named grey, so it stays correct on a dark page, a
-    light one and a tinted panel without anybody choosing per surface.
-
-### Fixed
-
-- **The "connection lost" bar was invisible behind an open dialog.** The bar that appears when the
-  connection to the server drops carried the largest stacking number a browser accepts — and still
-  lost to a dialog, because a dialog is drawn in a place of the browser's own that sits above the
-  whole page and that no number can reach. So the one moment a person most needs telling that their
-  work is not being saved — halfway through filling in a dialog — was the one moment they were told
-  nothing at all.
-
-    The bar is now put in that same place, as a popover rather than a dialog of its own. It appears
-    over everything, and it takes nothing: the keyboard stays where it was, half-typed text is
-    untouched, and the page behind carries on. Nothing to change in your application.
-
-    Two limits worth knowing. A dialog **opened after** the bar appears is drawn over it, because
-    inside that top place things stack in the order they arrived. And a browser older than Chrome
-    114, Safari 17 or Firefox 125 has nowhere to put it, so there the bar behaves exactly as it did
-    before — visible everywhere except under a dialog.
-
-- **Every component can be given a name for anybody who cannot see it.** `setAriaLabel` and
-  `getAriaLabel` are on `Component`, so they are on all of them. Most controls name themselves out
-  of the words inside them — a button that says "Save" is announced as "Save" — and this is for the
-  ones that cannot: an icon on its own, a splitter, a canvas, a spinner. Passing `null` takes the
-  name away again.
-
-- **A button made of nothing but a picture can now be given words.**
-
-    ```java
-    new Button(Icon.of("trash"), "Delete this row");
-    ```
-
-    The old one-argument `new Button(icon)` still works and is now deprecated. A button with no
-    words is announced as "button" and nothing else, and somebody using voice control has nothing to
-    say to press it.
-
-- **A keyboard and naming contract the build enforces.** `KeyboardAndNamingContractTest` reads the
-  source of every component on every build and fails it when something can be clicked and cannot be
-  used from a keyboard, when a control has no name, when a surface can only be moved by dragging it,
-  or when a link has nowhere to go.
-
-    It works out which element each listener was put on and what tag that element is, rather than
-  searching for the word "aria" — a test that searched for a word would pass while a component
-  stayed unusable, which is the fault it exists to stop. Which components count as controls is
-  derived from the code, so a new one takes on the obligation the moment it is written, and there is
-  no list to forget to update. The whole rule is written out in
-  [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md).
-
-- **One browser test harness instead of two.** Two arrived in the same week, written by two people
-  who did not know about each other. `tools/ui-proof` is the survivor: it drives a real browser with
-  real key presses, which is the only way to find out where the keyboard actually goes. It now
-  covers the form fields the other one covered, every overlay, and every control in the library.
-
-    It stays outside the Maven build on purpose — it compiles the library to JavaScript, which takes
-  about a minute, and nobody building or releasing ZeroZ Stack should pay for that. **Building
-  `zerozstack-ui-components` is faster as a result**: the retired harness compiled itself on every
-  build unless you passed `-DskipDomProof`, and that flag no longer exists because there is nothing
-  left to skip.
-
-    ```bash
-    bash tools/ui-proof/build.sh
-    node tools/ui-proof/drive.mjs
-    ```
-
-- **Four things that could only be dragged can now be worked from the keyboard.** A resize handle, a
-  splitter, a drawing you pan and zoom, and the strip you drag to replay a run at a chosen moment.
-  All four are reachable with Tab and moved with the arrow keys - a small step on its own, a large
-  step with Shift, and Home and End for the two ends. The drawing also zooms with `+` and `-` and
-  goes back to the start with `0`. Each says where it currently sits, so somebody who cannot see it
-  still knows how far it has moved, and each takes a name of its own with `setAriaLabel`, which
-  matters as soon as a page has two splitters on it.
-
-    Dragging behaves exactly as it did. The keyboard writes the new position through the same code
-    the mouse uses, so the two cannot drift apart.
-
-- **The box you drop files onto is a control.** Tab reaches it, Enter and Space open the file
-  picker, and it announces itself using the words `setTitle` and `setSubtitle` were given. Before
-  this the only way to choose a file was to click the box.
-
-- **Things that draw now say what they are.** A spinner announces itself as "Loading" and
-  `withAriaLabel("Loading your orders")` says what is loading. A percentage ring and a budget meter
-  announce their number as it changes. The trail of links at the top of a page, and the main bar
-  across it, announce themselves as navigation, so a screen reader can jump straight to either.
-  A failed sign-in is now spoken, not only shown.
-
-- **And things that are only decoration now keep quiet.** The grey blocks standing in for content
-  that has not arrived, the sun and moon on the light/dark switch, the blinking cursor in a
-  streaming answer, and the tiny trend charts beside a number are all skipped by screen readers
-  instead of being read out as noise. A trend chart that stands alone can still be named with
-  `setAriaLabel`, which brings it back.
-
-- **A long list can be scrolled without a mouse.** `VirtualScroller` was not in the tab order, so
-  Page Down and the arrow keys did nothing to it. It is now.
-
-- **Text arriving a word at a time is read as it arrives.** `StreamingText` - a language model's
-  answer, most often - is announced as it grows rather than sitting there silently.
-
-### Fixed
-
-- **Copying something threw the keyboard away.** Both Copy buttons - the one on a code block and
-  the one beside a row of properties - copy by making an invisible text box, selecting it and
-  deleting it again. Selecting it took the keyboard off the button, and deleting it left the
-  keyboard on nothing, so anybody who pressed Copy without a mouse was dumped to the top of the
-  page and had to Tab all the way back down. The keyboard now goes back where it was. The browser
-  proof found this; no amount of looking at the screen would have.
-
-- **The five stars of a rating announced nothing.** Each star is a radio button drawn by the
-  stylesheet, so there was nothing inside it to read and a screen reader said "radio button" five
-  times. They now say "1 star", "2 stars", and so on.
-
-- **A drawer put a control in the tab order that nobody should ever reach.** The hidden checkbox
-  the stylesheet watches to decide whether the panel is in or out is plumbing, not a control, but
-  a checkbox is in the tab order by default. The keyboard stopped on it and a screen reader
-  announced nothing at all. It is now skipped.
-
-- **A budget meter kept showing a percentage after the budget was taken away.** `TokenMeter` set
-  its hover text on the branch that has a cap and returned early on the branch that does not, so
-  switching to "no limit" left the old sentence in place claiming a percentage that was no longer
-  true.
-
-- **A menu entry never let go of its listener.** `MenuItem.addClickListener` handed back something
-  that looked like a way to unregister and removed nothing: it built a second wrapper around the
-  listener and asked the browser to remove that one instead of the one it had added. A screen that
-  rebuilt its menu leaked a listener every time.
-
-- **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
-  library.** Eight strings were stored that way, three rounds of it deep, so an application using
-  them rendered `ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â` where a dash belonged. The affected components are
-  `LaneTimeline` (its play, speed and pause labels, and the ellipsis it uses to shorten a label),
-  `DiffView` (the minus sign in front of a deleted-line count), `PropertyGrid` (the dash it shows
-  for a missing value) and `StreamingText` (the block cursor). The component gallery had the same
-  fault on its keyboard, pagination, stat and swap pages.
-
-    The build was never at fault and nothing could have caught this: the corruption was in the
-    committed source, so every build reproduced it exactly, without a warning. A new test now reads
-    every Java file in the checkout and fails on any text that survives being written as
-    Windows-1252 and read back as UTF-8, naming the file, the line and the characters that were
-    meant.
-
-    A second test now guards the release itself. It reads the text of everything this project
-    publishes — the words baked into the compiled program files, the resource files, the files the
-    build generates, and the starter project the framework hands to anyone creating a new
-    application — and stops the build if any of it is damaged in that way. The two checks together
-    cover both ends: one watches what a developer types, the other watches what leaves the building.
-    Checked against the 0.7.0 file that was actually published, the new test finds every damaged
-    piece of text in it; checked against this release it reads several thousand files and reports
-    nothing.
-
-    It also refuses to pass quietly on a partial job. It works out for itself which parts of the
-    project get published, by reading the build files rather than from a list that could go stale,
-    and it fails and names the part it could not read. A check that silently looks at less than it
-    claims to is the same kind of fault it was written to catch.
-
-- **Six example applications had their logging setting saved in the wrong kind of file, so it did
-  nothing.** The file said to log in full detail. It had been written by a Windows shell, which
-  saves text in a form Java's settings reader does not understand, so the reader saw nonsense,
-  ignored it, and the examples logged at their normal level instead. The files are now saved
-  normally and the setting takes effect. Only the examples were affected; nothing in the framework
-  itself read these files.
-
-- **A dialog taken out of the page while it was open** used to leave the browser believing it was
-  still open, so it could not be shown again. It is now closed properly when it is removed, its
-  close listeners are told, and a leftover open marker is repaired before it is shown again.
-
-- **A validation message had nowhere to appear.** `Binder` put the text of a failed check into a
-  stylesheet variable on the field and stopped there, so unless the application had written a rule
-  to display that variable — and none did — the field simply turned red and the person was left to
-  guess what was wrong. The message now appears under the field, in words, and the field is marked
-  invalid for assistive technology. `asRequired` puts the asterisk on the caption for you at the
-  same time. A rule attached directly with `withRule` behaves the same way once the field has been
-  typed in.
-
-    Nothing about this needs code changes; forms that already validate simply start saying why. The
-    stylesheet variable is still set, so an application that did write a rule for it keeps working —
-    if you had one, delete it now, or the message will be shown twice.
-
-- **The old stylesheet variable held on to a message after the value was corrected.** `Binder` set
-  `--error-message` when a check failed and never emptied it again, so an application that did
-  display it kept showing the old complaint about a value the person had already fixed. It is now
-  emptied when the field goes back to being valid.
-
-- **A rating, a swap and a theme switch could be given a caption that named nothing.** All three are
-  built from several parts — five stars, or a hidden checkbox inside a decorative wrapper — and the
-  caption was tied to the wrapper rather than to anything a browser treats as a control. The words
-  appeared, and that was all: clicking them did nothing, and a screen reader read the field as
-  having no name at all, which is the fault the caption was added to fix. A rating is now announced
-  as a named group, like a radio group; a swap and a theme switch name the checkbox inside them, so
-  clicking the caption focuses and flips it. Nothing changes in your code.
-
-- **Every field is now checked in a real browser on every build.** Nine kinds of check, for eleven
-  kinds of field, and each one ends at the same question: would a person reading the screen see
-  this? The caption, the explanation under the field, the asterisk on a required field, and above
-  all the sentence explaining why a value was refused — each has to be part of the visible text of
-  the page, tied to the right control, and gone again once the value is corrected.
-
-    This exists because the fault above could not have been caught any other way. The message was a
-    perfectly good sentence held on a perfectly good object; a test asking the field what its
-    message was would have passed for the whole life of 0.7.0 while every user saw a red box and no
-    words. So the page is built by the library, opened in headless Chrome, and asked what it
-    actually says. Re-introducing the 0.7.0 behaviour on purpose fails 24 of those checks; making
-    the caption group real but never putting it on the page fails 77.
-
-    It adds roughly ten seconds to this one module's build and needs a Chrome or an Edge on the
-    machine. Without one it reports itself as skipped rather than failing, and `-DskipDomProof`
-    leaves it out entirely.
-
-- **A lane in `LaneTimeline` could only be named in twelve characters.** The name column was 90
-  pixels wide and could not be changed, and anything longer was silently cut — `worker-0
-  qwen36-27b` arrived as a stub. The column is now measured from the longest name, between 90 and
-  260 pixels, hovering a name always shows it whole, and `setLabelWidth` pins the column where a
-  fixed one is wanted.
-
-- **A lane name was still being cut down to a shorter string before it was drawn.** Widening the
-  column moved the line where the cut happened; it did not stop the cutting. A name too long for
-  whatever width the column ended up with was chopped in Java and the short copy was drawn, so the
-  characters past the cut existed nowhere on the page: they could not be selected, could not be
-  found by the browser's search, and were never read out. A shortened name also looks exactly like
-  a short one, which is why nobody noticed.
-
-    The whole name now goes into the page and the browser decides what to do when it does not fit —
-    it fades the end away, and hovering still shows the lot. `setLabelWrap(true)` runs it onto more
-    lines instead. Either way nothing is thrown away, and a test now fails if this component ever
-    starts cutting text again.
-
-- **A status dot given only a state hovered as that state.** `new StatusDot("DESIGN_REVIEW")` put
-  `DESIGN_REVIEW` under the mouse and read `DESIGN_REVIEW` out to a screen reader, so a console
-  full of dots shouted the code's own vocabulary at people who do not work on the code. A state on
-  its own is now reworded into ordinary language — "Design review" — before it is shown.
-
-    This is a fallback, not a substitute for saying what you mean: it can only reword the name it
-    was given, so `new StatusDot("FSM_7", "Waiting for a slot")` is still the right way to write it.
-    Words that already read like a sentence are left exactly as they were.
-
-    **If you were relying on the hover text being the constant** — a diagnostic console, say — pass
-    it twice: `new StatusDot("DESIGN_REVIEW", "DESIGN_REVIEW")`.
-
-- **Setting the text on a notice replaced everything inside it.** `Alert` kept its words in a box of
-  its own, but `setText` wrote over the notice's whole contents and threw that box away. Nothing
-  visible broke, because a notice held nothing but its words — but now that one can hold a heading
-  and a button, changing the message would have thrown those away too. `setText` now changes the
-  message and leaves the rest of the notice alone.
-
-<!-- Entries below are still to be folded into the sections above. -->
-
-Work in progress. This section is filled as features land; each entry says what changes and, for a
-breaking change, what to do about it.
-
-### Added
-
-- **A record can now be a wire type.** Until now every type that crossed the wire had to be a class
-  with a public no-argument constructor, a getter for each field and a setter for each field. That
-  is a lot of typing for something whose only job is to carry three values from one side to the
-  other, and it was never a design choice — it was a consequence of how the sending and receiving
-  code was written. The receiving code made an empty object and then filled it in, which needs an
-  empty constructor and needs setters.
-
-    A record cannot work that way, so the generated code was changed. It now reads all the values
-    first and builds the record last, in one go. Ten lines become one:
-
-    ```java
-    // Before
-    @DataModel
-    public class Money {
-        private long amount;
-        private String currency;
-        public Money() { }
-        public Money(long amount, String currency) {
-            this.amount = amount;
-            this.currency = currency;
-        }
-        public long getAmount() { return amount; }
-        public void setAmount(long amount) { this.amount = amount; }
-        public String getCurrency() { return currency; }
-        public void setCurrency(String currency) { this.currency = currency; }
-    }
-
-    // Now
-    @DataModel
-    public record Money(long amount, String currency) { }
-    ```
-
-    Everything a class could carry, a record can carry: text, numbers, dates, lists, sets, maps,
-    other records, and ordinary classes. Validation annotations work the same way. It runs in the
-    browser too — the browser compiler turns a record into ordinary JavaScript, including the
-    equality and hashing it writes for you.
-
-    Two things a record cannot do. It cannot be marked `@LiveSync` or `@ClientWritable`, because
-    those are about editing an object after it exists and a record never changes — use a class.
-    And a record cannot be part of a loop: if A holds B and B holds A, one of the two has to be a
-    class. Sending a loop of records is refused with a message that says so, rather than failing
-    somewhere far away. The reason is the same one that made records possible at all: the receiver
-    cannot build a record until it has read every value inside it, and a loop needs the record to
-    exist before that has finished.
-
-- **A type can now be declared as "one of a known set".** Applications fake this today by adding a
-  kind field and casting on the other side, which the compiler cannot check and which quietly goes
-  wrong when somebody adds a new kind. Java already has the right tool — a `sealed` interface, which
-  lists every type allowed to implement it — and the framework now understands it:
-
-    ```java
-    @DataModel
-    public sealed interface Message permits Text, Ping, Attachment { }
-
-    @DataModel public record Text(String author, String body) implements Message { }
-    @DataModel public record Ping(long sentAt) implements Message { }
-    @DataModel public final class Attachment implements Message { /* ... */ }
-    ```
-
-    A field, a list, a call argument or a return value can now be a `Message`, and what comes out
-    the other end is a `Text`, a `Ping` or an `Attachment` — the real type, not a cast. A sealed
-    abstract class works the same way, and anything the base class declares travels with each
-    member.
-
-    It is also safer than the kind-field version it replaces. Because the list of allowed types is
-    fixed when the code is compiled, the receiving side knows it, and a message naming anything else
-    is turned away before that type is created at all. The refusal says which type was named and
-    which ones were allowed.
-
-- **Two new type markers on the wire**, `0x22` for a record and `0x23` for a value of a sealed type.
-  Applications never see these; they are listed in `docs/PROTOCOL.md` for anyone reading the bytes.
-
-### Fixed
-
-- **A model that extended another model silently lost the base class's fields.** Moving what several
-  models share up into a base class is the most ordinary refactor in Java. The generated code only
-  ever looked at the fields a class declared itself, so everything on the base stopped arriving —
-  no error when you compiled, no error on the wire, just missing data, and nothing pointing at
-  inheritance as the cause. Base fields now travel with the model.
-
-    An abstract model now gets no serializer and no registry entry: nothing can construct one, so it
-    exists only to hand its fields down. Declaring a field as an abstract model type still works.
-
-    Two shapes are refused when you compile, rather than losing data quietly. Extending a class that
-    is not a `@DataModel` and that has fields of its own — annotate the base, or move the fields
-    down; a base class with no fields is fine as it is. And declaring a field with a name a base
-    class already uses, where one value would overwrite the other.
-
-- **Two models that referred to each other crashed with a stack overflow.** `A` holds a `B`, `B`
-  holds an `A`, and the generated code never stopped. The same models reached through a list always
-  worked, which is why this survived: only a field declared as a model type took the broken path.
-  Such fields are now written the same way as everything else, so a loop closes on the same object it
-  started from, and the same object in two fields arrives once instead of twice.
-
-    A model nested inside a `@LiveSync` one was also being rebuilt as a plain object, so edits to it
-    were invisible. Same cause, fixed by the same change.
-
-    This makes a nested model a few bytes larger — it now carries an identifier and its type name.
-    Lists were already paying that, so the cost is set by how many model-typed fields you have, not
-    by how much data you send.
-
-- **A model class nested inside another class got a serializer that did not compile.** The generated
-  code referred to it by the wrong name. Nesting is the natural way to write a sealed family, so this
-  surfaced immediately once sealed types were supported.
-
-### Documentation
-
-- **How far object identity reaches is now written down.** The same object in two fields of one model
-  arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is
-  not a safe way to ask whether two things that came off the wire are the same one — compare by
-  identifier, or with `equals`. This was true before and stated nowhere.
-
-- **A server can now be started inside a test, in the same process, in about a tenth of a second.**
-  Take the new `zerozstack-server-test` artifact with **test scope** and start one:
-
-    ```java
-    try (TestServer server = TestServer.builder()
-                 .named("orders")
-                 .beans(OrderServiceImpl.class)
-                 .start();
-         TestConnection browser = server.connect("alice", "admin")) {
-
-        server.bean(OrderService.class).approve(17L);
-
-        assertEquals(1, browser.pushCount());
-    }
-    ```
-
-    `connect(...)` gives back something the server treats as a real browser connection; the bytes
-    land in a list the test can count and read instead of on a network. Every read waits for the
-    server's writer to catch up first, so there is no sleep to guess at.
-
-    The new module is separate because it starts a bean container, and a bean container has no
-    business on an application's production classpath.
-
-    Full instructions: [Testing an application](docs/guides/testing.md).
-
-- **A server can be given settings of its own, so two servers in one process can be configured
-  differently.** Settings are still system properties by default and nothing about an existing
-  deployment changes. What is new is that a server may be handed its own:
-
-    ```java
-    TestServer small = TestServer.builder()
-            .ignoringSystemProperties()
-            .set(ServerSettings.MAX_BINARY_MESSAGE_BYTES, 1024)
-            .start();
-    ```
-
-    A setting a server is not given still comes from the system property. `ignoringSystemProperties()`
-    cuts even that, which is what a test asserting on a limit wants: the answer then depends only on
-    what the test set, not on which `-D` flags the build happened to run with.
-
-    Every setting the framework reads is now named by a constant in `com.zeroz4j.server.ServerSettings`,
-    in one place, with what it means and what it defaults to.
-
-### Fixed
-
-- **Two servers started in one Java process used to share the list of open connections, and several
-  other things besides.** An event published on the second server arrived at the first server's
-  browsers. The record of which objects had been sent to which browser was one record, so an object
-  one server sent could be read back — or locked — through the other. Deferred-data names, the
-  keepalive budget and the shared-signal delivery path were shared the same way.
-
-    The worst of it was not that the answers were wrong, it was that they looked right. An
-    application that hit this had two of its three browser tests passing while asserting nothing at
-    all: they were watching a connection somebody really was writing to, just not the server under
-    test. Its only way out was one test per process.
-
-    All of that state now belongs to one server. A new `ServerRuntime` object owns it, one per
-    server, and every connection carries a reference to the server it was opened on, so code holding
-    only a connection reaches the right one.
-
-- **The framework looked its own beans up in whichever bean container had started first.** Several
-  places asked `CDI.current()`, which picks a container by thread context class loader — so with two
-  servers in one process, the second server's engine could resolve the first server's services, and
-  a connection closing on one could fire its event into the other. The engine now uses the container
-  it was itself built by.
-
-- **Silent failure is now loud.** Four cases that used to succeed quietly while doing nothing now
-  throw, with a sentence saying what is wrong:
-
-    - handing one server's connection to another server, which names both servers;
-    - writing to a connection that was never opened on any running server;
-    - driving a server that has already been shut down;
-    - a WebSocket endpoint that reached no server at all, which used to surface as a
-      `NullPointerException` on the first connection.
-
-### Breaking
-
-Everything in this section is framework-internal. An application that writes `@RmiService`,
-`@DataModel`, `@LiveSync` and signals is not affected; an application or test that reaches into the
-framework's own classes may be.
+**The rest of this section is framework-internal.** An application that writes `@RmiService`,
+`@DataModel`, `@LiveSync` and signals is not affected. An application or test that reaches into the
+framework's own classes may be — all of it follows from one change: the state a server keeps now
+belongs to that server rather than to the whole Java process, so two servers can run side by side.
 
 - **`Disclosures` — the record of what was sent to which browser — is no longer one record for the
   whole process.** Each server has its own, and the record is reached through that server.
@@ -832,122 +242,96 @@ framework's own classes may be.
   nothing needs changing; the new ones are how one server applies a limit the process as a whole does
   not have.
 
-### Breaking
-
-- **`Drawer` is now a working drawer, and it owns its own parts.** It used to be an empty box with a
-  stylesheet class on it. To get a drawer out of it, an application had to build the hidden checkbox
-  that opens it, the page area, the sliding panel, the dim beside it and the stacking number, and
-  then add all five to the drawer itself. Every application did it slightly differently, and every
-  one of them picked its own stacking number.
-
-    The drawer now builds all of that. As a result **`add` no longer puts things on the drawer
-    itself: it puts them in the sliding panel**, and `addToPage` puts them on the page the panel
-    slides over. Old assembly code still compiles, so nothing will tell you — it will simply put
-    your checkbox and your hand-built panel inside the real panel, and the drawer will look wrong.
-
-    **If you assembled a drawer by hand, delete the assembly and keep only the contents:**
-
-    ```java
-    Drawer nav = new Drawer("Main menu");         // the heading, and the name a screen reader reads
-    nav.addToPage(new Button("Menu", e -> nav.open()));   // the page the panel slides over
-    nav.add(new Link("Home", "/"), new Link("Settings", "/settings"));   // the panel itself
-    ```
-
-    Escape now closes a drawer, a click on the dim beside it closes it, and while it is open the
-    keyboard is held inside it. **If your drawer holds half-written input**, refuse the two exits
-    with `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)`, and leave a button. **If you
-    were using a drawer as a sidebar that lives beside the page** rather than over it, call
-    `setModal(false)`: that turns off the dim and the hold, and leaves the page live.
-
-- **A tooltip's words now go on the tip.** `setText` used to set the text of the wrapper the tooltip
-  puts around your button, which put the words on the page next to the button, permanently and in
-  the wrong place, while the tip itself stayed empty. They now go where the stylesheet reads the tip
-  from, so the tip actually says something.
-
-    **Nothing to change if you were using it as intended** — `new Tooltip("Deletes the file")`
-    around a button now works instead of printing the words beside it. **If you were relying on
-    `getText()` returning the wrapper's text**, it returns the tip's words now.
-
-- **Taking something off the page now tells it.** Until now, `onDetach` almost never ran. Emptying a
-  container by hand — `getElement().setInnerHTML("")` — is how every screen in every example was
-  swapped for the next one, and it takes the old screen off the page without a word to it. So the
-  screen you had just left kept working: its timer kept firing, its effect kept running, and both
-  kept rebuilding a list nobody was looking at. In this library's own gallery that threw the
-  keyboard back to the top of the page every second and a half, and every visit to that page added
-  another timer that never stopped. Nothing errored and nothing was logged.
-
-    There is now one way to swap what is inside something, and it runs `onDetach` on everything
-    leaving, however deeply nested:
-
-    ```java
-    contentArea.replaceContents(nextScreen);                    // a container component
-    Component.replaceContents(appRootElement, nextScreen);      // a plain element
-    ```
-
-    `removeAll()` and `remove(...)` on a container now do the same telling, and `add(...)` runs
-    `onAttach` on everything it puts in rather than only the outermost part.
-
-    **If you wrote `onDetach` and found it never ran, it runs now.** Read it again before you
-    upgrade: code that was quietly dead is about to execute. **If you empty a container by hand
-    anywhere, change it to `replaceContents` or `removeAll`** — a test now reads every Java file in
-    the checkout on every build and fails it if anything writes an empty string into an element's
-    HTML or takes every child out in a loop of its own.
-
-- **A keyed list must be disposed.** `KeyedList` watches a signal for as long as it exists, and it
-  never handed you anything to stop it with, so every one ever built is still watching. It now
-  implements `Disposable`. **Keep the object you get back from `new KeyedList<>(...)` and call
-  `dispose()` on it when the screen leaves**, normally from `onDetach`.
-
-- **A message is put on the page with `show()`.** `Toast` had no way to appear, so every caller
-  appended the element itself — which meant the component was never started, and so Escape never
-  closed a message, including in this library's own gallery. **Replace
-  `body.appendChild(toast.getElement())` with `toast.show()`.**
-
 ### Added
 
-- **Overlays are put on a named layer instead of a number.** A stacking number is a bid, and the
-  higher number wins — which works until two parts of one application each pick their own. In the
-  application this came from, somebody picked a large number and an overlay still came out
-  underneath something it should have covered.
+- **A form field can be given a caption.** Until now the only text a field could carry was the
+  placeholder — the gray words inside the box — because `new TextField("Primary folder path")` sets
+  a placeholder and there was nothing else to set. So every form written on this library named its
+  fields with placeholders, which stop saying what the field is the moment somebody types in it,
+  and leave a screen reader with nothing to announce at all. One application had grown two private
+  helpers doing the same thing in two different styles before it settled on a third.
 
     ```java
-    import com.zeroz4j.ui.theme.Layer;
-
-    Toast saved = new Toast("Saved");
-    saved.setLayer(Layer.TOAST);
+    TextField folder = new TextField().withLabel("Primary folder path");
+    TextField email  = new TextField("you@example.com").withLabel("Email address");
     ```
 
-    You will rarely write even that: every overlay in the library puts itself on the right layer
-    when you create it. The one exception is a tooltip, which rises to its layer only while the tip
-    is showing — it wraps your control, and floating that control over every drawer on the page
-    would be worse than the problem being solved. The layers, from the bottom up, are `PAGE`, `STICKY`, `DROPDOWN`, `OVERLAY`,
-    `TOAST` and `TOOLTIP`. They are a hundred apart, so an application with a tier of its own has
-    room to slot it in between two of them.
+    The caption is a real label tied to the control, so clicking the words puts the cursor in the
+    field — and ticks the box, for a checkbox — and assistive technology reads the two together.
+    The identifier that ties them is generated, so nothing has to be invented per page; giving the
+    field your own id afterwards moves the caption with it.
 
-    **One thing beats all of them, and no number can reach it.** The browser keeps a place of its
-    own above the whole page, called the top layer. An open modal `Dialog` is in it, so it is above
-    everything else whatever the numbers say. If something has to cover a dialog, it has to be a
-    dialog too. That is the whole reason the earlier hand-picked numbers lost. See
-    [Stacking overlays](docs/guides/ui-layering.md).
+    A caption also gives the field somewhere to put the other three things a field needs to say:
 
-- **A dialog can be given a title, and is announced by it.** Without one a screen reader announces
-  nothing but the word "dialog".
+    ```java
+    field.setHelperText("An absolute path. It is created if it does not exist yet.");
+    field.setRequiredIndicatorVisible(true);      // the asterisk after the caption
+    field.setErrorMessage("A port is a number between 1 and 65535.");
+    ```
+
+    `withLabel` and `withHelperText` return the field, so they read inside the expression that
+    creates it; `setLabel`, `setHelperText`, `setRequiredIndicatorVisible` and `setErrorMessage` are
+    there for changing one later. They work on every input in the library, since they live on the
+    class all of them extend: text fields, text areas, selects, checkboxes, toggles, ranges,
+    ratings, radio groups and file pickers. A checkbox and a toggle put their caption on the right
+    of the control, on the same line; everything else puts it above.
+
+    **A caption works anywhere, not only inside a `FormLayout`.** That is deliberate, and it is why
+    there is no "form item" to wrap a field in: most fields are not in a form layout, and a field
+    that can only be named in one container is not much use. A field with a caption is inserted
+    into its parent as a small group — caption, control, explanation, message — rather than as the
+    bare control. A field with no caption is inserted exactly as it was before, so a page that does
+    not use captions is unchanged, to the character.
+
+    A method taking a stylesheet class for the caption, and one handing the caption out as a
+    component to be styled, were both turned down for the reason `Dialog.setWidth` gave: they put
+    stylesheet class names back into application code, which is the one thing this framework exists
+    to keep out.
+
+- **`setPlaceholder` and `getPlaceholder` on a text field and a text area.** The placeholder could
+  only be set in the constructor, which is part of why it was doing the caption's job. Nothing has
+  changed about what `new TextField("x")` does: it still sets the placeholder, and always will.
+
+- **A dialog can be given a width, and a title.** A dialog is two boxes: a full-window overlay, and
+  the panel you actually see. Everything worth changing lives on the panel, and until now the
+  component handed out no way to reach it, so applications took the overlay's first child element
+  and pushed stylesheet classes onto it — six separate hand-written copies of the same workaround
+  across eleven places in one application, each written by somebody who could not find the previous
+  one.
 
     ```java
     Dialog dialog = new Dialog("Delete the account?");
+    dialog.setWidth("56rem");
     ```
 
-    The title becomes a heading at the top of the panel and the name the dialog is announced by.
-    `setAriaLabel` names a dialog that has no room for a visible heading.
+    The panel is never wider than the window, so a width chosen for a desktop still fits a phone.
+    The title becomes a heading at the top of the panel and the name the dialog is announced by;
+    without one a screen reader announces nothing but the word "dialog". `setAriaLabel` names a
+    dialog that has no room for a visible heading.
+
+    A method that adds a stylesheet class to the panel, or one that hands the panel out as a
+    component, would have removed the same workaround. Both were turned down. They make the
+    dialog's internal shape part of its public contract, so it could never be rebuilt; and they put
+    stylesheet class names back into application code, which is the one thing this framework exists
+    to keep out. A width is a width — the same `setWidth` every other sizeable component already
+    has, taking a length rather than the name of a rule in somebody's stylesheet.
+
+- **`addCloseListener`** — called once every time a dialog closes, however it closed: Escape, a
+  click outside, or `close()` in your own code. `isFromClient()` on the event is false only when
+  your code closed it. Use it to release whatever the dialog was holding, rather than trusting that
+  your Close button is the only way out — it no longer is.
+
+- **`setCloseOnEsc`, `setCloseOnOutsideClick`, `setModal`, `isOpened`** — see the Breaking section
+  above for when you want each of them.
+
+- **Escape closes every overlay that covers something.** A dialog, a drawer, a dropdown menu, a
+  right-click menu and a message all answer to it. A tooltip hides until the pointer leaves and
+  comes back. Anything with a reason to stay put can refuse — `setCloseOnEsc(false)`.
 
 - **Opening an overlay moves the keyboard into it, and closing puts it back.** A dialog and a drawer
   both do this, so pressing Escape leaves you exactly where you were. A drawer also **holds** the
   keyboard while it is open: Tab goes round the panel and never reaches the dimmed page behind it. A
   dialog gets that from the browser; a drawer could not, so the library does it.
-
-- **Escape closes every overlay that covers something.** A dialog, a drawer, a dropdown menu, a
-  right-click menu and a message all answer to it. A tooltip hides until the pointer leaves and
-  comes back. Anything with a reason to stay put can refuse — `setCloseOnEsc(false)`.
 
 - **`Drawer` gained `open`, `close`, `isOpened`, `addCloseListener`, `setTitle`, `setModal`,
   `setCloseOnEsc`, `setCloseOnOutsideClick`, `setSlideFromEnd`, `add` and `addToPage`.**
@@ -965,24 +349,171 @@ framework's own classes may be.
   somebody is typing must not move them out of the box they are typing in. `close()` takes it away,
   and so does Escape.
 
-- **A browser proof for the overlays, in `tools/ui-proof`.** It compiles the real component
-  library to JavaScript, drives a real headless Chrome against it, and checks the things a rendering
-  test cannot answer: where the keyboard is, whether Tab ever reaches the page behind an open
-  dialog, what Escape does, and which of two overlapping overlays is really on top. It takes a
-  screenshot of every state. Run it with `bash tools/ui-proof/build.sh` then
-  `node tools/ui-proof/drive.mjs`. It found five faults that the gallery, which draws all these
-  components correctly, showed no sign of.
+- **Overlays are put on a named layer instead of a number.** A stacking number is a bid, and the
+  higher number wins — which works until two parts of one application each pick their own. In the
+  application this came from, somebody picked a large number and an overlay still came out
+  underneath something it should have covered.
 
-- **Text can now be small without being quiet.** How big a piece of text is and how loud it is were
-  answered by one name, so "small" and "faded" always arrived together. That left nowhere to put
-  small text that must be fully present — an error line under a field, a value in a dense table —
-  and the library went on writing those out by hand. There is now a second axis,
-  `com.zeroz4j.ui.theme.Emphasis`, with three steps: `FULL` (as present as the words around it),
-  `QUIET` (a step back) and `FAINT` (as far back as text goes and still be text).
+    ```java
+    import com.zeroz4j.ui.theme.Layer;
 
-    Each of the five sizes names one of these as its own, so asking for a size alone is unchanged
-    and still right nearly every time. Say a loudness as well only where the text disagrees with
-    its size:
+    Toast saved = new Toast("Saved");
+    saved.setLayer(Layer.TOAST);
+    ```
+
+    You will rarely write even that: every overlay in the library puts itself on the right layer
+    when you create it. The one exception is a tooltip, which rises to its layer only while the tip
+    is showing — it wraps your control, and floating that control over every drawer on the page
+    would be worse than the problem being solved. The layers, from the bottom up, are `PAGE`,
+    `STICKY`, `DROPDOWN`, `OVERLAY`, `TOAST` and `TOOLTIP`. They are a hundred apart, so an
+    application with a tier of its own has room to slot it in between two of them.
+
+    **One thing beats all of them, and no number can reach it.** The browser keeps a place of its
+    own above the whole page, called the top layer. An open modal `Dialog` is in it, so it is above
+    everything else whatever the numbers say. If something has to cover a dialog, it has to be a
+    dialog too. That is the whole reason the earlier hand-picked numbers lost. See
+    [Stacking overlays](docs/guides/ui-layering.md).
+
+- **Every component can be given a name for anybody who cannot see it.** `setAriaLabel` and
+  `getAriaLabel` are on `Component`, so they are on all of them. Most controls name themselves out
+  of the words inside them — a button that says "Save" is announced as "Save" — and this is for the
+  ones that cannot: an icon on its own, a splitter, a canvas, a spinner. Passing `null` takes the
+  name away again.
+
+- **A button made of nothing but a picture can now be given words.**
+
+    ```java
+    new Button(Icon.of("trash"), "Delete this row");
+    ```
+
+    The old one-argument `new Button(icon)` still works and is now deprecated. A button with no
+    words is announced as "button" and nothing else, and somebody using voice control has nothing to
+    say to press it.
+
+- **Four things that could only be dragged can now be worked from the keyboard.** A resize handle, a
+  splitter, a drawing you pan and zoom, and the strip you drag to replay a run at a chosen moment.
+  All four are reachable with Tab and moved with the arrow keys — a small step on its own, a large
+  step with Shift, and Home and End for the two ends. The drawing also zooms with `+` and `-` and
+  goes back to the start with `0`. Each says where it currently sits, so somebody who cannot see it
+  still knows how far it has moved, and each takes a name of its own with `setAriaLabel`, which
+  matters as soon as a page has two splitters on it.
+
+    Dragging behaves exactly as it did. The keyboard writes the new position through the same code
+    the mouse uses, so the two cannot drift apart.
+
+- **The box you drop files onto is a control.** Tab reaches it, Enter and Space open the file
+  picker, and it announces itself using the words `setTitle` and `setSubtitle` were given. Before
+  this the only way to choose a file was to click the box.
+
+- **A long list can be scrolled without a mouse.** `VirtualScroller` was not in the tab order, so
+  Page Down and the arrow keys did nothing to it. It is now.
+
+- **Things that draw now say what they are.** A spinner announces itself as "Loading" and
+  `withAriaLabel("Loading your orders")` says what is loading. A percentage ring and a budget meter
+  announce their number as it changes. The trail of links at the top of a page, and the main bar
+  across it, announce themselves as navigation, so a screen reader can jump straight to either.
+  A failed sign-in is now spoken, not only shown. Text arriving a word at a time — `StreamingText`,
+  most often a language model's answer — is announced as it grows rather than sitting there
+  silently.
+
+- **And things that are only decoration now keep quiet.** The gray blocks standing in for content
+  that has not arrived, the sun and moon on the light/dark switch, the blinking cursor in a
+  streaming answer, and the tiny trend charts beside a number are all skipped by screen readers
+  instead of being read out as noise. A trend chart that stands alone can still be named with
+  `setAriaLabel`, which brings it back.
+
+- **A keyboard and naming contract the build enforces.** `KeyboardAndNamingContractTest` reads the
+  source of every component on every build and fails it when something can be clicked and cannot be
+  used from a keyboard, when a control has no name, when a surface can only be moved by dragging it,
+  or when a link has nowhere to go.
+
+    It works out which element each listener was put on and what tag that element is, rather than
+    searching for the word "aria" — a test that searched for a word would pass while a component
+    stayed unusable, which is the fault it exists to stop. Which components count as controls is
+    derived from the code, so a new one takes on the obligation the moment it is written, and there
+    is no list to forget to update. The whole rule is written out in
+    [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md).
+
+    **It cannot tell you whether a name is a good one**, and it says nothing about color contrast,
+    focus rings, motion, or whether the order controls appear in makes sense. Those need eyes.
+
+- **One browser proof harness, in `tools/ui-proof`.** It compiles the real component library to
+  JavaScript, drives a real headless Chrome against it with real key presses, and asks the questions
+  no rendering test can answer: where the keyboard actually is, whether Tab ever reaches the page
+  behind an open dialog, what Escape does, which of two overlapping overlays is really on top, and —
+  for every form field — whether the caption, the explanation, the asterisk and above all the
+  sentence explaining a refused value are part of the text a person can see. It takes a screenshot
+  of every state.
+
+    ```bash
+    bash tools/ui-proof/build.sh
+    node tools/ui-proof/drive.mjs
+    ```
+
+    It found five faults in the overlays that the component gallery, which draws all of them
+    correctly, showed no sign of. It also caught the field faults listed under Fixed below: a
+    message can be a perfectly good sentence held on a perfectly good object while no user ever sees
+    it, and only a real browser can tell you which.
+
+    Two of these harnesses arrived in the same week, written by two people who did not know about
+    each other. This is the survivor, and it now covers the form fields the other one covered as
+    well as every overlay and every control in the library. It stays **outside the Maven build on
+    purpose** — it compiles the library to JavaScript, which takes about a minute, and nobody
+    building or releasing ZeroZ Stack should pay for that. **Building `zerozstack-ui-components` is
+    faster as a result**: the retired harness compiled itself on every build unless you passed
+    `-DskipDomProof`, and that flag no longer exists because there is nothing left to skip.
+
+- **A notice can say what kind of thing it is, and carry a heading and a button.** `Alert` could
+  only be a line of text in a colored box, and the color had to be spelled out as a stylesheet
+  class name — `new Alert(msg, "alert-error")`, or `setThemeColor(ThemeColor.ERROR)`. So an
+  application that needed a warning with a title above it, or a "Try again" button beside it, built
+  its own. One built the same tinted box twice, in two files, neither knowing about the other.
+
+    ```java
+    add(Alert.caution("The disk is nearly full."));
+
+    add(Alert.danger("Nothing was saved.")
+             .withHeading("The upload failed")
+             .withAction("Try again", e -> upload()));
+    ```
+
+    The four tones are named for what you are saying rather than for a color: `info`, `success`,
+    `caution`, `danger`. Each notice carries a small mark showing its tone, so the four are still
+    told apart by somebody who cannot separate the colors — `setIconVisible(false)` takes it away.
+    A notice now tells a screen reader that it is a notice, and a failure interrupts where the
+    other three wait their turn. Long text wraps instead of running off the side.
+
+    `setThemeColor` and `new Alert(text, "alert-info")` still work and are now marked as things not
+    to use. They put a stylesheet class name into application code, where nothing checks the
+    spelling and no reader understands it.
+
+- **Five sizes of text, by name — and a separate answer to how loud.** Every screen has text and no
+  component owns it, so text is what applications describe over and over instead of asking for. One
+  application wrote out its own idea of "quiet supporting text" a dozen times and finished with
+  three sizes and four degrees of gray, on pages sitting next to each other. This library had done
+  the same to itself: its own components spelled out quiet text thirteen different ways, in five
+  degrees of fade, across fifty-six places.
+
+    ```java
+    add(TextStyle.PAGE_TITLE.span("Deliveries"));
+    add(TextStyle.SECONDARY.paragraph("Nineteen stops left, updated a moment ago"));
+
+    TextStyle.CAPTION.applyTo(somethingYouAlreadyBuilt);
+    ```
+
+    The five are `PAGE_TITLE` (the name of the screen), `SECTION_TITLE` (the heading over a group),
+    `BODY` (ordinary prose), `SECONDARY` (supporting words, a step quieter) and `CAPTION` (the
+    smallest label there is). There is one definition of each and no way to say "nearly that". Five
+    is deliberate: a scale nobody can hold in their head gets ignored and typed out again, which is
+    the problem it exists to end.
+
+    How big a piece of text is and how loud it is were at first answered by that one name, so
+    "small" and "faded" always arrived together. That left nowhere to put small text that must be
+    fully present — an error line under a field, a value in a dense table. There is now a second
+    axis, `com.zeroz4j.ui.theme.Emphasis`, with three steps: `FULL` (as present as the words around
+    it), `QUIET` (a step back) and `FAINT` (as far back as text goes and still be text). Each of the
+    five sizes names one of these as its own, so asking for a size alone is unchanged and still
+    right nearly every time. Say a loudness as well only where the text disagrees with its size:
 
     ```java
     import com.zeroz4j.ui.theme.Emphasis;
@@ -992,26 +523,275 @@ framework's own classes may be.
     TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);      // there, and out of the way
     ```
 
-    Loudness is a fade, never a colour, for the same reason the sizes are: faded text stays right
-    on a page, a tinted notice, a coloured card and a dark background without anybody choosing per
-    surface.
+    **Quiet is a fade, not a color.** Both the quiet sizes and the three loudnesses fade whatever
+    color they inherit rather than naming one, so the same words are right on a page, on a tinted
+    notice, on a colored card and on a dark background — and two grays that were meant to match
+    cannot drift apart.
+
+- **A timeline can be given its events, instead of being handed hand-built list items.** `Timeline`
+  was an empty container: it drew the line but knew nothing about what went on it, so every
+  application wrote its own forty lines of markup to make one step, and the component gallery did
+  too.
+
+    ```java
+    Timeline history = new Timeline().vertical();
+    history.addEvent("09:14", "Order placed", "Paid by card, delivered to the office address.");
+    history.addEvent("Tomorrow", "Expected");
+    ```
+
+    The line joining one event to the next is drawn and redrawn as events are added, so nothing has
+    to be told which one is first or last. An event's words are never shortened: a long description
+    wraps inside its box, the box stops growing at about 20rem — `setEventWidth` changes that — and
+    a timeline laid out in a row scrolls sideways rather than pushing the page out of shape. A step
+    built by hand is still welcome, and `add` still takes one.
+
+- **A status dot can be colored by one word and read as another.** `StatusDot` took a single
+  string and used it for both the color and the hover text, so an application that has to color a
+  dot by an internal state was forced to show that state to the reader — every dot in one console
+  hovered as `DISPATCHED`. The two are now separate, and the reader's words are announced by a
+  screen reader as well, which a dot with no text in it previously had no way to be.
+
+    ```java
+    new StatusDot("DISPATCHED", "Sent to a worker");
+    dot.setState("FAILED", "Could not finish");
+    dot.setLabel("Waiting for a slot");        // change only the words
+    ```
+
+    Passing one string still works and still means both.
+
+- **`LaneTimeline.setLabelWidth` and `LaneTimeline.setLabelWrap`.** The first pins the width of the
+  name column, for lining several timelines up with each other; leave it alone, or pass 0, and the
+  column measures itself. The second lets a lane name too long for its column run onto more lines,
+  growing that lane to fit; it is off by default, because lanes of one height are easier to scan.
+  Both came out of the lane-name fault under Fixed below.
+
+- **A record can now be a wire type.** Until now every type that crossed the wire had to be a class
+  with a public no-argument constructor, a getter for each field and a setter for each field. That
+  is a lot of typing for something whose only job is to carry three values from one side to the
+  other, and it was never a design choice — it was a consequence of how the sending and receiving
+  code was written. The receiving code made an empty object and then filled it in, which needs an
+  empty constructor and needs setters.
+
+    A record cannot work that way, so the generated code was changed. It now reads all the values
+    first and builds the record last, in one go. Ten lines become one:
+
+    ```java
+    // Before
+    @DataModel
+    public class Money {
+        private long amount;
+        private String currency;
+        public Money() { }
+        public Money(long amount, String currency) {
+            this.amount = amount;
+            this.currency = currency;
+        }
+        public long getAmount() { return amount; }
+        public void setAmount(long amount) { this.amount = amount; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+    }
+
+    // Now
+    @DataModel
+    public record Money(long amount, String currency) { }
+    ```
+
+    Everything a class could carry, a record can carry: text, numbers, dates, lists, sets, maps,
+    other records, and ordinary classes. Validation annotations work the same way. It runs in the
+    browser too — the browser compiler turns a record into ordinary JavaScript, including the
+    equality and hashing it writes for you.
+
+    Two things a record cannot do. It cannot be marked `@LiveSync` or `@ClientWritable`, because
+    those are about editing an object after it exists and a record never changes — use a class.
+    And a record cannot be part of a loop: if A holds B and B holds A, one of the two has to be a
+    class. Sending a loop of records is refused with a message that says so, rather than failing
+    somewhere far away. The reason is the same one that made records possible at all: the receiver
+    cannot build a record until it has read every value inside it, and a loop needs the record to
+    exist before that has finished.
+
+    A record also cannot be a persistence root, for an unrelated reason given in
+    [the wire protocol reference](docs/PROTOCOL.md#records).
+
+- **A type can now be declared as "one of a known set".** Applications fake this today by adding a
+  kind field and casting on the other side, which the compiler cannot check and which quietly goes
+  wrong when somebody adds a new kind. Java already has the right tool — a `sealed` interface, which
+  lists every type allowed to implement it — and the framework now understands it:
+
+    ```java
+    @DataModel
+    public sealed interface Message permits Text, Ping, Attachment { }
+
+    @DataModel public record Text(String author, String body) implements Message { }
+    @DataModel public record Ping(long sentAt) implements Message { }
+    @DataModel public final class Attachment implements Message { /* ... */ }
+    ```
+
+    A field, a list, a call argument or a return value can now be a `Message`, and what comes out
+    the other end is a `Text`, a `Ping` or an `Attachment` — the real type, not a cast. A sealed
+    abstract class works the same way, and anything the base class declares travels with each
+    member.
+
+    It is also safer than the kind-field version it replaces. Because the list of allowed types is
+    fixed when the code is compiled, the receiving side knows it, and a message naming anything else
+    is turned away before that type is created at all. The refusal says which type was named and
+    which ones were allowed.
+
+- **Two new type markers on the wire**, `0x22` for a record and `0x23` for a value of a sealed type.
+  Applications never see these; they are listed in
+  [the wire protocol reference](docs/PROTOCOL.md) for anyone reading the bytes.
+
+- **A server can now be started inside a test, in the same process, in about a tenth of a second.**
+  Take the new `zerozstack-server-test` artifact with **test scope** and start one:
+
+    ```java
+    try (TestServer server = TestServer.builder()
+                 .named("orders")
+                 .beans(OrderServiceImpl.class)
+                 .start();
+         TestConnection browser = server.connect("alice", "admin")) {
+
+        server.bean(OrderService.class).approve(17L);
+
+        assertEquals(1, browser.pushCount());
+    }
+    ```
+
+    `connect(...)` gives back something the server treats as a real browser connection; the bytes
+    land in a list the test can count and read instead of on a network. Every read waits for the
+    server's writer to catch up first, so there is no sleep to guess at.
+
+    The new module is separate because it starts a bean container, and a bean container has no
+    business on an application's production classpath.
+
+    Full instructions: [Testing an application](docs/guides/testing.md).
+
+- **A server can be given settings of its own, so two servers in one process can be configured
+  differently.** Settings are still system properties by default and nothing about an existing
+  deployment changes. What is new is that a server may be handed its own:
+
+    ```java
+    TestServer small = TestServer.builder()
+            .ignoringSystemProperties()
+            .set(ServerSettings.MAX_BINARY_MESSAGE_BYTES, 1024)
+            .start();
+    ```
+
+    A setting a server is not given still comes from the system property. `ignoringSystemProperties()`
+    cuts even that, which is what a test asserting on a limit wants: the answer then depends only on
+    what the test set, not on which `-D` flags the build happened to run with.
+
+    Every setting the framework reads is now named by a constant in `com.zeroz4j.server.ServerSettings`,
+    in one place, with what it means and what it defaults to.
+
+### Changed
+
+- **Every example now has a web address of its own, so you can leave several running.** Seven of
+  them all answered on `localhost:8080`, which meant starting a second one killed the first with an
+  error about the address being in use. Two people lost an afternoon to that in one week; one of
+  them ended up writing a throwaway program just to see two examples at the same time.
+
+    **If you have a bookmark to an example, it has moved.** The new numbers — and note that no
+    example uses 8080 any more, because on a working developer's machine that is the number
+    something else has already taken:
+
+    | Example | Address | Example | Address |
+    |---|---|---|---|
+    | `routing-tour` | `localhost:8091` | `job-monitor` | `localhost:8087` |
+    | `oidc-login` | `localhost:8081` | `form-signup` | `localhost:8088` |
+    | `scoped-signals` | `localhost:8082` | `inventory-crud` | `localhost:8089` |
+    | `pwa-install` | `localhost:8083` | `components-showcase` | `localhost:8090` |
+    | `todo-signals` | `localhost:8084` | | |
+    | `chat-events` | `localhost:8085` | | |
+    | `chat-livesync` | `localhost:8086` | | |
+
+    **If a number is already taken on your machine, say so when you start the example.** Every one
+    of them understands the same three ways of being told, and each prints the address it settled
+    on:
+
+    ```bash
+    run.bat 9000                                       # Windows, the seven with a script
+    java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer --port 9000
+    java -Dzeroz.port=9000 -cp "..." com.zeroz4j.example.server.ExampleServer
+    ```
+
+    Each example's own number is a constant at the top of its server file, so somebody copying an
+    example as the start of an application can see it and change it.
+
+- **The examples no longer load a stylesheet that warns about itself.** Every example page pulled
+  Tailwind CSS from `cdn.tailwindcss.com`, and that address prints "should not be used in
+  production" into the browser console on every single page load. In a framework whose examples are
+  what people copy into their own projects, shipping a line that warns against itself — with no
+  word anywhere about what to do instead — is not good enough.
+
+    The examples now load Tailwind's own browser build from a pinned address instead. It does the
+    same job, prints nothing, and is a published, versioned package rather than a preview service.
+    Nothing looks different; this was checked page by page, light and dark.
+
+    **What to do in your own application:** neither line belongs in something you ship. Both of
+    these compile your styles in the visitor's browser, every time the page opens. A real
+    application installs Tailwind once, builds one finished stylesheet, and serves that. There is a
+    new section, "Where the styles come from", in `docs/UI_COMPONENTS.md` saying so, and every
+    example page now carries the same note in a comment at the top.
+
+    Both addresses are also now pinned to an exact version. They were not before, so the day the
+    style library changed was the day the examples changed, with nothing in the repository having
+    moved.
+
+- **The library's own components stopped describing their text and started naming it.** Eighty
+  places now ask for a size by name instead of writing out their own idea of it: thirty-five in the
+  library itself — the whole chart and dashboard set, and the sign-in card — and forty-five across
+  seven of the example applications. Three examples had gone a step further and grown a private
+  helper of their own for making a piece of text with a list of style names attached; those three
+  helpers are deleted.
+
+    What you may see: a handful of labels that were 10 pixels are now 12, because the smallest
+    named size is 12 and 10 was below what anybody should be asked to read. Quiet text is now a
+    fade of the color around it rather than a named gray, so it stays correct on a dark page, a
+    light one and a tinted panel without anybody choosing per surface.
 
 ### Fixed
 
-- **A dialog given a width hung off both edges of a narrow window.** `setWidth` capped the panel at
-  100% of its parent, but the panel's parent is a box sized by the panel — so the cap was the
-  panel's own width and capped nothing. A panel asked to be 56rem stayed 56rem in a 380-pixel
-  window. It is now capped against the window itself, and keeps a small margin. `setHeight` had the
-  same fault and the same fix.
+- **The "connection lost" bar was invisible behind an open dialog.** The bar that appears when the
+  connection to the server drops carried the largest stacking number a browser accepts — and still
+  lost to a dialog, because a dialog is drawn in a place of the browser's own that sits above the
+  whole page and that no number can reach. So the one moment a person most needs telling that their
+  work is not being saved — halfway through filling in a dialog — was the one moment they were told
+  nothing at all.
 
-- **A drawer's stacking number was written by hand in every application that used one,** because the
-  component supplied none. The panel is now on `Layer.OVERLAY`.
+    The bar is now put in that same place, as a popover rather than a dialog of its own. It appears
+    over everything, and it takes nothing: the keyboard stays where it was, half-typed text is
+    untouched, and the page behind carries on. Nothing to change in your application.
 
-- **A dropdown's panel sat one step above the page**, which lost to almost everything. It is now on
-  `Layer.DROPDOWN`, above a sticky header — which is where dropdowns are usually opened from.
+    Two limits worth knowing. A dialog **opened after** the bar appears is drawn over it, because
+    inside that top place things stack in the order they arrived. And a browser older than Chrome
+    114, Safari 17 or Firefox 125 has nowhere to put it, so there the bar behaves exactly as it did
+    before — visible everywhere except under a dialog.
 
-- **A right-click menu carried a hand-written 1000,** which is exactly the guess the layer scale
-  replaces, and which lost to an open dialog anyway. It is now on `Layer.DROPDOWN`.
+- **A validation message had nowhere to appear.** `Binder` put the text of a failed check into a
+  stylesheet variable on the field and stopped there, so unless the application had written a rule
+  to display that variable — and none did — the field simply turned red and the person was left to
+  guess what was wrong. The message now appears under the field, in words, and the field is marked
+  invalid for assistive technology. `asRequired` puts the asterisk on the caption for you at the
+  same time. A rule attached directly with `withRule` behaves the same way once the field has been
+  typed in.
+
+    Nothing about this needs code changes; forms that already validate simply start saying why. The
+    stylesheet variable is still set, so an application that did write a rule for it keeps working —
+    if you had one, delete it now, or the message will be shown twice.
+
+- **The old stylesheet variable held on to a message after the value was corrected.** `Binder` set
+  `--error-message` when a check failed and never emptied it again, so an application that did
+  display it kept showing the old complaint about a value the person had already fixed. It is now
+  emptied when the field goes back to being valid.
+
+- **A rating, a swap and a theme switch could be given a caption that named nothing.** All three are
+  built from several parts — five stars, or a hidden checkbox inside a decorative wrapper — and the
+  caption was tied to the wrapper rather than to anything a browser treats as a control. The words
+  appeared, and that was all: clicking them did nothing, and a screen reader read the field as
+  having no name at all, which is the fault the caption was added to fix. A rating is now announced
+  as a named group, like a radio group; a swap and a theme switch name the checkbox inside them, so
+  clicking the caption focuses and flips it. Nothing changes in your code.
 
 - **The theme switch had no name.** `ThemeController` is a tick box wearing two pictures, and
   pictures say nothing, so a screen reader announced "checkbox" and stopped and voice control had
@@ -1019,6 +799,55 @@ framework's own classes may be.
   library, so that was every page of every one of them. It is now called "Dark theme" by default.
   Give it a caption of your own with `setLabel("...")` and that replaces the built-in name, so the
   two cannot disagree.
+
+- **The five stars of a rating announced nothing.** Each star is a radio button drawn by the
+  stylesheet, so there was nothing inside it to read and a screen reader said "radio button" five
+  times. They now say "1 star", "2 stars", and so on.
+
+- **Copying something threw the keyboard away.** Both Copy buttons — the one on a code block and
+  the one beside a row of properties — copy by making an invisible text box, selecting it and
+  deleting it again. Selecting it took the keyboard off the button, and deleting it left the
+  keyboard on nothing, so anybody who pressed Copy without a mouse was dumped to the top of the
+  page and had to Tab all the way back down. The keyboard now goes back where it was. The browser
+  proof found this; no amount of looking at the screen would have.
+
+- **A drawer put a control in the tab order that nobody should ever reach.** The hidden checkbox
+  the stylesheet watches to decide whether the panel is in or out is plumbing, not a control, but
+  a checkbox is in the tab order by default. The keyboard stopped on it and a screen reader
+  announced nothing at all. It is now skipped.
+
+- **A menu entry never let go of its listener.** `MenuItem.addClickListener` handed back something
+  that looked like a way to unregister and removed nothing: it built a second wrapper around the
+  listener and asked the browser to remove that one instead of the one it had added. A screen that
+  rebuilt its menu leaked a listener every time.
+
+- **A budget meter kept showing a percentage after the budget was taken away.** `TokenMeter` set
+  its hover text on the branch that has a cap and returned early on the branch that does not, so
+  switching to "no limit" left the old sentence in place claiming a percentage that was no longer
+  true.
+
+- **A dialog taken out of the page while it was open** used to leave the browser believing it was
+  still open, so it could not be shown again. It is now closed properly when it is removed, its
+  close listeners are told, and a leftover open marker is repaired before it is shown again.
+
+- **A dialog given a width hung off both edges of a narrow window.** `setWidth` capped the panel at
+  100% of its parent, but the panel's parent is a box sized by the panel — so the cap was the
+  panel's own width and capped nothing. A panel asked to be 56rem stayed 56rem in a 380-pixel
+  window. It is now capped against the window itself, and keeps a small margin. `setHeight` had the
+  same fault and the same fix.
+
+- **Three overlays picked their own stacking number, and one of them lost.** A drawer's number was
+  written by hand in every application that used one, because the component supplied none — its
+  panel is now on `Layer.OVERLAY`. A dropdown's panel sat one step above the page, which lost to
+  almost everything, and is now on `Layer.DROPDOWN`, above a sticky header, which is where dropdowns
+  are usually opened from. A right-click menu carried a hand-written 1000 — exactly the guess the
+  layer scale replaces — and lost to an open dialog anyway; it is now on `Layer.DROPDOWN` too.
+
+- **Setting the text on a notice replaced everything inside it.** `Alert` kept its words in a box of
+  its own, but `setText` wrote over the notice's whole contents and threw that box away. Nothing
+  visible broke, because a notice held nothing but its words — but now that one can hold a heading
+  and a button, changing the message would have thrown those away too. `setText` now changes the
+  message and leaves the rest of the notice alone.
 
 - **One long word pushed the whole page sideways, in five components.** Words in a menu entry, a
   tab heading, a step name, a badge and the name of a metric have nowhere to break, and each
@@ -1040,14 +869,126 @@ framework's own classes may be.
   wide as it is given, down to a name column plus 160 pixels, and scrolls inside itself below that.
   Its row of play-speed buttons wraps onto a second line instead of sticking out.
 
-- **The keyboard walkthrough reported a nested folding section as unreachable, and it was not.** The
-  gallery's walkthrough looked only at the nearest `<details>` above a control when deciding whether
-  it was folded away. Chrome lays out everything inside a shut section and then declines to paint or
-  focus it, so a section nested inside a shut one still has a size — and its handle was reported as
-  a control Tab could not reach, on every run, at all three widths. It now checks every folding
-  section above the control. Nothing in the component library was wrong.
+- **A lane in `LaneTimeline` could only be named in twelve characters.** The name column was 90
+  pixels wide and could not be changed, and anything longer was silently cut — `worker-0
+  qwen36-27b` arrived as a stub. The column is now measured from the longest name, between 90 and
+  260 pixels, hovering a name always shows it whole, and `setLabelWidth` pins the column where a
+  fixed one is wanted.
 
-- **The published-text check called a Spanish name corruption.** It reverses the misreading
+- **A lane name was still being cut down to a shorter string before it was drawn.** Widening the
+  column moved the line where the cut happened; it did not stop the cutting. A name too long for
+  whatever width the column ended up with was chopped in Java and the short copy was drawn, so the
+  characters past the cut existed nowhere on the page: they could not be selected, could not be
+  found by the browser's search, and were never read out. A shortened name also looks exactly like
+  a short one, which is why nobody noticed.
+
+    The whole name now goes into the page and the browser decides what to do when it does not fit —
+    it fades the end away, and hovering still shows the lot. `setLabelWrap(true)` runs it onto more
+    lines instead. Either way nothing is thrown away, and a test now fails if this component ever
+    starts cutting text again.
+
+- **A status dot given only a state hovered as that state.** `new StatusDot("DESIGN_REVIEW")` put
+  `DESIGN_REVIEW` under the mouse and read `DESIGN_REVIEW` out to a screen reader, so a console
+  full of dots shouted the code's own vocabulary at people who do not work on the code. A state on
+  its own is now reworded into ordinary language — "Design review" — before it is shown.
+
+    This is a fallback, not a substitute for saying what you mean: it can only reword the name it
+    was given, so `new StatusDot("FSM_7", "Waiting for a slot")` is still the right way to write it.
+    Words that already read like a sentence are left exactly as they were.
+
+    **If you were relying on the hover text being the constant** — a diagnostic console, say — pass
+    it twice: `new StatusDot("DESIGN_REVIEW", "DESIGN_REVIEW")`.
+
+- **A model that extended another model silently lost the base class's fields.** Moving what several
+  models share up into a base class is the most ordinary refactor in Java. The generated code only
+  ever looked at the fields a class declared itself, so everything on the base stopped arriving —
+  no error when you compiled, no error on the wire, just missing data, and nothing pointing at
+  inheritance as the cause. Base fields now travel with the model.
+
+    An abstract model now gets no serializer and no registry entry: nothing can construct one, so it
+    exists only to hand its fields down. Declaring a field as an abstract model type still works.
+
+    Two shapes are refused when you compile, rather than losing data quietly. Extending a class that
+    is not a `@DataModel` and that has fields of its own — annotate the base, or move the fields
+    down; a base class with no fields is fine as it is. And declaring a field with a name a base
+    class already uses, where one value would overwrite the other.
+
+- **Two models that referred to each other crashed with a stack overflow.** `A` holds a `B`, `B`
+  holds an `A`, and the generated code never stopped. The same models reached through a list always
+  worked, which is why this survived: only a field declared as a model type took the broken path.
+  Such fields are now written the same way as everything else, so a loop closes on the same object it
+  started from, and the same object in two fields arrives once instead of twice.
+
+    A model nested inside a `@LiveSync` one was also being rebuilt as a plain object, so edits to it
+    were invisible. Same cause, fixed by the same change.
+
+    This makes a nested model a few bytes larger — it now carries an identifier and its type name.
+    Lists were already paying that, so the cost is set by how many model-typed fields you have, not
+    by how much data you send.
+
+- **A model class nested inside another class got a serializer that did not compile.** The generated
+  code referred to it by the wrong name. Nesting is the natural way to write a sealed family, so this
+  surfaced immediately once sealed types were supported.
+
+- **Two servers started in one Java process used to share the list of open connections, and several
+  other things besides.** An event published on the second server arrived at the first server's
+  browsers. The record of which objects had been sent to which browser was one record, so an object
+  one server sent could be read back — or locked — through the other. Deferred-data names, the
+  keepalive budget and the shared-signal delivery path were shared the same way.
+
+    The worst of it was not that the answers were wrong, it was that they looked right. An
+    application that hit this had two of its three browser tests passing while asserting nothing at
+    all: they were watching a connection somebody really was writing to, just not the server under
+    test. Its only way out was one test per process.
+
+    All of that state now belongs to one server. A new `ServerRuntime` object owns it, one per
+    server, and every connection carries a reference to the server it was opened on, so code holding
+    only a connection reaches the right one.
+
+- **The framework looked its own beans up in whichever bean container had started first.** Several
+  places asked `CDI.current()`, which picks a container by thread context class loader — so with two
+  servers in one process, the second server's engine could resolve the first server's services, and
+  a connection closing on one could fire its event into the other. The engine now uses the container
+  it was itself built by.
+
+- **Silent failure is now loud.** Four cases that used to succeed quietly while doing nothing now
+  throw, with a sentence saying what is wrong:
+
+    - handing one server's connection to another server, which names both servers;
+    - writing to a connection that was never opened on any running server;
+    - driving a server that has already been shut down;
+    - a WebSocket endpoint that reached no server at all, which used to surface as a
+      `NullPointerException` on the first connection.
+
+- **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
+  library.** Eight strings were stored that way, three rounds of it deep, so an application using
+  them rendered `ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â` where a dash belonged. The affected components are
+  `LaneTimeline` (its play, speed and pause labels, and the ellipsis it uses to shorten a label),
+  `DiffView` (the minus sign in front of a deleted-line count), `PropertyGrid` (the dash it shows
+  for a missing value) and `StreamingText` (the block cursor). The component gallery had the same
+  fault on its keyboard, pagination, stat and swap pages.
+
+    The build was never at fault and nothing could have caught this: the corruption was in the
+    committed source, so every build reproduced it exactly, without a warning. A new test now reads
+    every Java file in the checkout and fails on any text that survives being written as
+    Windows-1252 and read back as UTF-8, naming the file, the line and the characters that were
+    meant.
+
+    A second test now guards the release itself. It reads the text of everything this project
+    publishes — the words baked into the compiled program files, the resource files, the files the
+    build generates, and the starter project the framework hands to anyone creating a new
+    application — and stops the build if any of it is damaged in that way. The two checks together
+    cover both ends: one watches what a developer types, the other watches what leaves the building.
+    Checked against the 0.7.0 file that was actually published, the new test finds every damaged
+    piece of text in it; checked against this release it reads several thousand files and reports
+    nothing.
+
+    It also refuses to pass quietly on a partial job. It works out for itself which parts of the
+    project get published, by reading the build files rather than from a list that could go stale,
+    and it fails and names the part it could not read. A check that silently looks at less than it
+    claims to is the same kind of fault it was written to catch.
+
+- **That published-text check called a Spanish name corruption.** It reverses the misreading
   arithmetically, so any two bytes that happen to form valid UTF-8 come back looking like "the
   original" — and `Íñ`, in a name like `Íñigo`, comes back as a Hebrew accent that attaches to a
   letter and cannot stand on its own. Nobody typed that, so nothing was misread. The check now
@@ -1055,11 +996,68 @@ framework's own classes may be.
   printed form. Every corruption it was written for repaired to ordinary text — dashes, curly
   quotes, umlauts, the play and pause marks — so nothing it was catching stops being caught.
 
+- **The keyboard walkthrough reported a nested folding section as unreachable, and it was not.** The
+  gallery's walkthrough looked only at the nearest `<details>` above a control when deciding whether
+  it was folded away. Chrome lays out everything inside a shut section and then declines to paint or
+  focus it, so a section nested inside a shut one still has a size — and its handle was reported as
+  a control Tab could not reach, on every run, at all three widths. It now checks every folding
+  section above the control. Nothing in the component library was wrong.
+
+- **Six example applications had their logging setting saved in the wrong kind of file, so it did
+  nothing.** The file said to log in full detail. It had been written by a Windows shell, which
+  saves text in a form Java's settings reader does not understand, so the reader saw nonsense,
+  ignored it, and the examples logged at their normal level instead. The files are now saved
+  normally and the setting takes effect. Only the examples were affected; nothing in the framework
+  itself read these files.
+
 - **Seven examples carried a second, dead copy of their page.** Each client module held an
   `index.html` under `src/main/resources/public/`, which is never served: static files are served
   from `META-INF/resources`, and each example's server module already supplies one there. The dead
-  copies had drifted — they still carried the old light-grey body the served page stopped using —
+  copies had drifted — they still carried the old light-gray body the served page stopped using —
   so anyone reading them was reading the wrong file. They are gone.
+
+### Documentation
+
+- **How far object identity reaches is now written down.** The same object in two fields of one model
+  arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is
+  not a safe way to ask whether two things that came off the wire are the same one — compare by
+  identifier, or with `equals`. This was true before and stated nowhere.
+
+- **Four new pages.** [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md) writes out what
+  every control in the library owes a person with no mouse, and what the build check does and does
+  not enforce. [Stacking overlays](docs/guides/ui-layering.md) explains the layer scale and the one
+  thing no number can beat. [Testing an application](docs/guides/testing.md) covers starting a
+  server inside a test. [Declaring the types that cross the
+  wire](docs/guides/data-models.md) says when to write a class, a record or a sealed family, and how
+  to share fields with a base class. `docs/UI_COMPONENTS.md` gained sections on naming a field,
+  naming text sizes, where the styles come from, and swapping what is inside something.
+
+- **The documentation is American English, and a check now says so.** The style guide had asked for
+  American spelling since it was written, and every page ever written was British — `colour`,
+  `behaviour`, `catalogue`, `grey`. One of the two had to give, and the guide won: 110 lines across 25
+  files are converted. `DocumentationSpellingTest` reads every Markdown file in the checkout plus
+  `llms.txt` and `context7.json` on every build and fails naming the file, the line, the word and
+  the replacement.
+
+    Backticks and code fences are exempt, and so is `Flavour` with a capital F, because
+    `FlavourWrapper` is a real class and the documentation has to spell a real name the way the code
+    does. The word list is explicit rather than a "-ise becomes -ize" rule, which would fire on
+    *advertise*, *exercise* and *surprise*.
+
+    **The source code was deliberately left alone.** 388 British spellings remain in comments,
+    javadoc and user-facing strings across 111 Java files — 66 of them inside strings a test could be
+    asserting on. Converting those is a code change and is a separate decision, so for now the
+    documentation is American and the code is not.
+
+- **A changelog entry now has written rules.** What one has to do, and why, is in
+  [CONTRIBUTING.md](CONTRIBUTING.md#write-the-changelog-entry-for-the-person-upgrading): prose rather
+  than commit subjects, every breaking change naming its fix, concrete numbers, ordinary words, and
+  one merged entry per release rather than one block per branch. This entry was assembled from nine
+  branches that had each appended their own, and the format existed only in one person's habit.
+
+- **`docs/UI_COMPONENTS.md` no longer prints a component count.** It said 106 against roughly 115
+  concrete classes, and it had been wrong before in the same direction: written once, then left
+  behind as the library grew. The list is the answer.
 
 
 ## [0.7.0] — 2026-08-20
@@ -1134,7 +1132,7 @@ and the object-locking service.
 - **File upload.** Drop files on a box or pick them, with a progress bar and a cancel button for
   each one. Put `FileUpload` on a screen, write one `@ApplicationScoped` class implementing
   `FileUploadHandler`, and that class is handed each finished file. Files travel over their own HTTP
-  address rather than the live connection, which is what makes progress and cancelling work. The
+  address rather than the live connection, which is what makes progress and canceling work. The
   default limit is 25 MB per file. The WAR module and the standalone module both carry the address
   already, so there is no route to map. See [Accepting file uploads](docs/guides/file-uploads.md).
 - **`zeroz.hosts`** — the host names this deployment answers for, comma-separated, e.g.
@@ -1345,7 +1343,7 @@ gained two bytes.
   same trade for the same reason. The service worker ships inside `zerozstack-server-core` — no
   application copies it — and its cache name carries the build version, so a deployment evicts the
   previous shell instead of serving stale JavaScript against a newer server. `PwaManifest` builds the
-  manifest per request, because in a multi-tenant product the name, icons and colour belong to the
+  manifest per request, because in a multi-tenant product the name, icons and color belong to the
   tenant. See [PWA.md](docs/PWA.md).
 
 - **`EventPublisher.publishToClient(...)`** and `RmiRequestContext.getClientId()`.
@@ -1520,7 +1518,7 @@ gained two bytes.
 
 - **`@Route` changed shape.** It previously declared hash-fragment paths for a router that was never
   implemented; it now takes real paths and an optional `layout`. Nothing could have depended on the
-  old behaviour, since nothing read the annotation.
+  old behavior, since nothing read the annotation.
 - **`ScopedSignal.get()` is now `ScopedSignal.mine()`.** It returns the *signal*, not the value, so
   sharing a name with `ValueSignal.get()` made `BASKET.get().get()` read as a mistake.
   `BASKET.mine().get()` says what it does. Renamed before release rather than lived with.
@@ -1727,8 +1725,8 @@ an end-to-end smoke test so they cannot come back silently.
 ### Added
 
 - **A dashboard chart set** in the new `com.zeroz4j.ui.chart` package, written in Java against SVG
-  and DOM — no JavaScript charting library is wrapped or loaded. Series colours resolve to DaisyUI
-  semantic tokens (`var(--color-primary, …)`), so a theme switch recolours every chart with no
+  and DOM — no JavaScript charting library is wrapped or loaded. Series colors resolve to DaisyUI
+  semantic tokens (`var(--color-primary, …)`), so a theme switch recolors every chart with no
   redraw and no listener; each token carries a literal fallback so charts stay legible in
   applications that do not load DaisyUI.
   - **Charts** — `TimeSeriesChart` (lines, areas, stacks, shared crosshair, live legend),
@@ -1742,13 +1740,13 @@ an end-to-end smoke test so they cannot come back silently.
   - **Supporting types** — `Series`, `Threshold`, `ValueFormat`, `StateColor`, `Scales` (nice ticks,
     local-time tick alignment, TeaVM-safe formatting), `Palette`, `ChartBase`, `CartesianChart`.
 - **`Sparkline` gained modes and annotation** — `AREA` (unchanged default), `LINE` and `BAR`, plus
-  an optional baseline, min/max markers, delta colouring (green when the series ends above where it
-  started, red below) and an explicit colour override. Gaps are honoured: a `NaN` breaks the line
+  an optional baseline, min/max markers, delta coloring (green when the series ends above where it
+  started, red below) and an explicit color override. Gaps are honored: a `NaN` breaks the line
   rather than reading as zero. The zero-argument constructor behaves exactly as before.
 - **`KpiTile` computes its own movement** — `setDelta(current, previous, unit)` renders the absolute
   change, the percentage and a direction arrow. `setDirection` says whether a rise is good news,
-  because that is a judgement and not arithmetic: falling free memory is bad, falling latency is
-  good. Also a separate unit in smaller type, `setValueColor` for threshold colouring, and
+  because that is a judgment and not arithmetic: falling free memory is bad, falling latency is
+  good. Also a separate unit in smaller type, `setValueColor` for threshold coloring, and
   `sparkline()` to configure the trend. The existing `value`/`delta`/`trend` methods are unchanged.
 - **`Js.onResize`** wraps `ResizeObserver`, so a component can redraw when its container resizes.
   A window `resize` listener misses a drawer opening or a split pane being dragged.
@@ -1791,7 +1789,7 @@ to produce *nothing happening*: no exception, no log line, no clue.
   network server. Inject `ZeroZDbNode` and send `DbCommand`/`DbQuery`: everything a command
   enlists commits atomically, and a command that throws persists nothing and restores the objects
   it touched in memory.
-- **`zeroz4j.store.mode` chooses where data lives** — `EMBEDDED` (default, unchanged behaviour),
+- **`zeroz4j.store.mode` chooses where data lives** — `EMBEDDED` (default, unchanged behavior),
   `AUTO_SERVER` (own the store if free, otherwise join whoever has it, take over if they die), or
   `CLIENT` (connect to a ZeroZ DB server, so instances hold no data and can be restarted or scaled
   freely). The same service code runs in all three, so this is a deployment decision rather than an
@@ -1858,7 +1856,7 @@ to produce *nothing happening*: no exception, no log line, no clue.
   constraints declared once on a `@DataModel` be reused in a `Binder` instead of restated.
 - **`zerozstack-bom` manages the TeaVM artifacts**, so a client module cannot drift from the TeaVM the
   framework was built against.
-- **A structured documentation pack** organised on Diátaxis, published as a MkDocs site, with a
+- **A structured documentation pack** organized on Diátaxis, published as a MkDocs site, with a
   `decide/` section for choosing between the five state-propagation mechanisms.
 - **Agent-facing configuration**: `context7.json`, `AGENTS.md` and `llms.txt`.
 

@@ -13,8 +13,11 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    It generates a project from the archetype, builds it, starts it and drives it with a headless
    browser. The three blockers fixed in 0.4.1 all produced a project that compiled, started and
    served pages while not working; only an end-to-end run catches that class of defect.
-3. Update [CHANGELOG.md](CHANGELOG.md). Read the **Breaking** section as a user would; that is what
-   people rely on when upgrading.
+3. Update [CHANGELOG.md](CHANGELOG.md). If several branches landed in this release, merge their
+   entries into **one** set of sections first — a release entry is never one block per branch. The
+   rules for what an entry has to do, and why, are in
+   [CONTRIBUTING.md](CONTRIBUTING.md#write-the-changelog-entry-for-the-person-upgrading). Then read
+   the **Breaking** section as a user would; that is what people rely on when upgrading.
 4. Set the version. This build uses CI-friendly versioning: change `<revision>` in the root
    `pom.xml` and every module follows, with `flatten-maven-plugin` resolving it in the installed
    POMs.
@@ -49,11 +52,12 @@ portal. `autoPublish` is false, so the deployment waits for your approval at
 [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments)
 rather than going straight out — a published version can never be changed or removed.
 
-**Thirteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
+**Fourteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
 `-server-jaxrs`, `-server-jakarta`, `-server-helidon`, `-auth-oidc`, `-ui-components`,
-`-store-eclipsestore`, `-bom` and `-archetype`. The count said nine until 0.7.0, when it was checked
-against `target/central-staging` rather than against this sentence; the three bindings and the OIDC
-provider had been publishing for some time. Read the staging directory before believing this list.
+`-store-eclipsestore`, `-server-test` (new in 0.8.0), `-bom` and `-archetype`. The count said nine
+until 0.7.0, when it was checked against `target/central-staging` rather than against this sentence;
+the three bindings and the OIDC provider had been publishing for some time. Read the staging
+directory before believing this list.
 
 **The examples do not.** They are demonstrations rather than libraries, and
 `zerozstack-examples/pom.xml` sets `maven.deploy.skip`, `skipPublishing`, `gpg.skip`,
@@ -70,8 +74,8 @@ mvn clean verify -Prelease -DskipTests
 ## Tagging
 
 ```bash
-git tag -a v0.4.0 -m "ZeroZ Stack 0.4.0"
-git push origin v0.4.0
+git tag -a v0.8.0 -m "ZeroZ Stack 0.8.0"
+git push origin v0.8.0
 ```
 
 Tag after the release is published, not before — a tag that points at something never released is
