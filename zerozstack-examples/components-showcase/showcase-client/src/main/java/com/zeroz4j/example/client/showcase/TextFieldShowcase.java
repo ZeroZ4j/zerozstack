@@ -95,6 +95,17 @@ public class TextFieldShowcase extends ComponentShowcase {
             tfXs, tfSm, tfMd, tfLg
         );
 
+        // A caption can be given to a field that is already on the page: the control moves into
+        // its group where it stands, keeping its place among its siblings.
+        TextField late = new TextField("Type here");
+        Button giveCaption = new Button("Give it a caption");
+        giveCaption.addClassName("btn-primary");
+        giveCaption.addClickListener(e -> late.setLabel("Added after the field was on the page"));
+        Div lateHost = new Div();
+        lateHost.addClassName("w-full flex items-end gap-4");
+        lateHost.add(late, giveCaption);
+        addSection("A caption can arrive later", lateHost);
+
         // Data Binding Demo
         ValueSignal<String> signal = new ValueSignal<>("Hello");
         TextField component = new TextField();
