@@ -41,6 +41,22 @@ public class StatusDotShowcase extends ComponentShowcase {
 
         addSection("Waiting",
             labelled("PENDING"), labelled("READY"), labelled("INTAKE"), labelled("SOMETHING_ELSE"));
+
+        addSection("The colour and the words are separate - hover each of these",
+            described("DISPATCHED", "Sent to a worker"),
+            described("EXECUTING", "Working on it now"),
+            described("SUPERSEDED", "Replaced by a newer attempt"),
+            described("KILLED", "Stopped before it finished"));
+    }
+
+    /** Coloured by an internal state name, but hovered and announced in words a person reads. */
+    private Div described(String state, String label) {
+        Div row = new Div();
+        row.addClassName("flex items-center gap-2");
+        Span caption = new Span(label);
+        caption.addClassName("text-xs text-base-content/70");
+        row.add(new StatusDot(state, label), caption);
+        return row;
     }
 
     private Div labelled(String state) {
