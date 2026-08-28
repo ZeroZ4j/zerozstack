@@ -43,8 +43,8 @@ class ScopedPublishTest {
     @BeforeEach
     void setUp() throws Exception {
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = new com.zeroz4j.api.ObjectMapper();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
     }
 
     private WasmRmiServerEngineTest.FakeSession session(String id, String user) {
@@ -61,7 +61,7 @@ class ScopedPublishTest {
             s.getUserProperties().put(RmiEndpointConfigurator.TENANT_KEY, tenant);
         }
         s.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, Set.of());
-        WasmRmiServerEngine.addActiveSessionForTesting(s);
+        engine.addActiveSessionForTesting(s);
         return s;
     }
 

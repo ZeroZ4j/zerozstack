@@ -44,17 +44,20 @@ class ScopedSignalTransportTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** One server per test, so nothing survives from the last one. */
+    private ServerRuntime server;
+
     @BeforeEach
     void setUp() {
         Signals.resetForTesting();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
-        ServerSignalTransport.install(mapper);
+        server = new ServerRuntime();
+        ServerSignalTransport.install(server, mapper);
     }
 
     @AfterEach
     void tearDown() {
         Signals.resetForTesting();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
+        server.shutDown();
     }
 
     /** A connected session carrying whichever identity the handshake established. */
@@ -72,7 +75,7 @@ class ScopedSignalTransportTest {
             s.getUserProperties().put(RmiEndpointConfigurator.TENANT_KEY, tenant);
         }
         s.getUserProperties().put(RmiEndpointConfigurator.ROLES_KEY, Set.of(roles));
-        WasmRmiServerEngine.addActiveSessionForTesting(s);
+        server.addSessionForTesting(s);
         return s;
     }
 

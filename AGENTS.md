@@ -50,6 +50,7 @@ cache.
 | `zerozstack-ui-components` | Java component library styled with Tailwind/DaisyUI. Components wrap a TeaVM `HTMLElement`, reachable via `getElement()`; there is no server-side DOM state. |
 | `zerozstack-bom` | Dependency BOM — the intended way for applications to import versions. |
 | `zerozstack-server-core` | CDI engine, RMI dispatcher, `SyncEngine`, `EventPublisher`, dev auth. **Carries no JAX-RS or servlet type**, which is what makes it safe inside somebody else's WAR. |
+| `zerozstack-server-test` | Test harness. `TestServer` starts an isolated server in-process, `TestConnection` stands in for a browser. Application takes it with **test scope**; it starts a bean container and must never reach a production classpath. See docs/guides/testing.md. |
 | `zerozstack-server-jaxrs` | The JAX-RS catch-all at `/` serving the client bundle and the shell. A standalone server wants it; a WAR with its own servlets must be able to leave it out, which is why it is separate. |
 | `zerozstack-server-jakarta` | Servlet-container binding: WebSocket registration, serializer bootstrap, the container `ManagedThreadFactory`, and an optional shell servlet. Take this instead of `-helidon` for a WAR. |
 | `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. Depends on `-jaxrs`. |

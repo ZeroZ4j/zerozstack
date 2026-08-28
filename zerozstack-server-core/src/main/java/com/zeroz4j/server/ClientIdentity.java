@@ -64,9 +64,9 @@ public final class ClientIdentity {
     /** Name of the cookie carrying the signed client id. */
     public static final String COOKIE_NAME = "zeroz_cid";
 
-    private static final String SECRET_PROPERTY = "zeroz.clientId.secret";
-    private static final String TTL_PROPERTY = "zeroz.clientId.ttlDays";
-    private static final String SECURE_COOKIE_PROPERTY = "zeroz.clientId.secureCookie";
+    private static final String SECRET_PROPERTY = ServerSettings.CLIENT_ID_SECRET;
+    private static final String TTL_PROPERTY = ServerSettings.CLIENT_ID_TTL_DAYS;
+    private static final String SECURE_COOKIE_PROPERTY = ServerSettings.CLIENT_ID_SECURE_COOKIE;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final long DEFAULT_TTL_DAYS = 365L;
 

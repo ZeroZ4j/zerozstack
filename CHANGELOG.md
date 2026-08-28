@@ -446,6 +446,154 @@ breaking change, what to do about it.
   not a safe way to ask whether two things that came off the wire are the same one — compare by
   identifier, or with `equals`. This was true before and stated nowhere.
 
+- **A server can now be started inside a test, in the same process, in about a tenth of a second.**
+  Take the new `zerozstack-server-test` artifact with **test scope** and start one:
+
+    ```java
+    try (TestServer server = TestServer.builder()
+                 .named("orders")
+                 .beans(OrderServiceImpl.class)
+                 .start();
+         TestConnection browser = server.connect("alice", "admin")) {
+
+        server.bean(OrderService.class).approve(17L);
+
+        assertEquals(1, browser.pushCount());
+    }
+    ```
+
+    `connect(...)` gives back something the server treats as a real browser connection; the bytes
+    land in a list the test can count and read instead of on a network. Every read waits for the
+    server's writer to catch up first, so there is no sleep to guess at.
+
+    The new module is separate because it starts a bean container, and a bean container has no
+    business on an application's production classpath.
+
+    Full instructions: [Testing an application](docs/guides/testing.md).
+
+- **A server can be given settings of its own, so two servers in one process can be configured
+  differently.** Settings are still system properties by default and nothing about an existing
+  deployment changes. What is new is that a server may be handed its own:
+
+    ```java
+    TestServer small = TestServer.builder()
+            .ignoringSystemProperties()
+            .set(ServerSettings.MAX_BINARY_MESSAGE_BYTES, 1024)
+            .start();
+    ```
+
+    A setting a server is not given still comes from the system property. `ignoringSystemProperties()`
+    cuts even that, which is what a test asserting on a limit wants: the answer then depends only on
+    what the test set, not on which `-D` flags the build happened to run with.
+
+    Every setting the framework reads is now named by a constant in `com.zeroz4j.server.ServerSettings`,
+    in one place, with what it means and what it defaults to.
+
+### Fixed
+
+- **Two servers started in one Java process used to share the list of open connections, and several
+  other things besides.** An event published on the second server arrived at the first server's
+  browsers. The record of which objects had been sent to which browser was one record, so an object
+  one server sent could be read back — or locked — through the other. Deferred-data names, the
+  keepalive budget and the shared-signal delivery path were shared the same way.
+
+    The worst of it was not that the answers were wrong, it was that they looked right. An
+    application that hit this had two of its three browser tests passing while asserting nothing at
+    all: they were watching a connection somebody really was writing to, just not the server under
+    test. Its only way out was one test per process.
+
+    All of that state now belongs to one server. A new `ServerRuntime` object owns it, one per
+    server, and every connection carries a reference to the server it was opened on, so code holding
+    only a connection reaches the right one.
+
+- **The framework looked its own beans up in whichever bean container had started first.** Several
+  places asked `CDI.current()`, which picks a container by thread context class loader — so with two
+  servers in one process, the second server's engine could resolve the first server's services, and
+  a connection closing on one could fire its event into the other. The engine now uses the container
+  it was itself built by.
+
+- **Silent failure is now loud.** Four cases that used to succeed quietly while doing nothing now
+  throw, with a sentence saying what is wrong:
+
+    - handing one server's connection to another server, which names both servers;
+    - writing to a connection that was never opened on any running server;
+    - driving a server that has already been shut down;
+    - a WebSocket endpoint that reached no server at all, which used to surface as a
+      `NullPointerException` on the first connection.
+
+### Breaking
+
+Everything in this section is framework-internal. An application that writes `@RmiService`,
+`@DataModel`, `@LiveSync` and signals is not affected; an application or test that reaches into the
+framework's own classes may be.
+
+- **`Disclosures` — the record of what was sent to which browser — is no longer one record for the
+  whole process.** Each server has its own, and the record is reached through that server.
+
+    **`Disclosures.wasDisclosedTo(session, handleId)` still works unchanged**, because a connection
+    knows which server it belongs to. It now throws if the connection belongs to no running server,
+    rather than answering `false`.
+
+    **If you called any of the other methods** — `record`, `sessionOpened`, `sessionClosed`,
+    `disclosedCount` — **go through the server**: `runtime.disclosures().record(...)`. Get the
+    runtime by injecting `ServerRuntime`, or from a test server with `server.disclosures()`.
+
+    **`Disclosures.resetForTesting()` is gone.** Start a fresh server instead, or call
+    `runtime.disclosures().clear()`.
+
+- **Writing a frame now says which server is writing it, not only which connection.**
+  `LazyHandles.setCurrentSession(id)` and the matching `setCurrentSession(null)` are gone.
+
+    **Replace the pair with one bracket**, which closes itself:
+
+    ```java
+    try (LazyHandles.Write write = LazyHandles.writingTo(runtime, session)) {
+        BinarySerializer.writeValue(buffer, object, mapper);
+    }
+    ```
+
+    `LazyHandles.register(lazy)` and `LazyHandles.currentSession()` are unchanged, so a custom
+    `LazyAdapter` needs no edit. **`LazyHandles.resolve(handle, sessionId)` now answers `null`
+    outside a write bracket**, because outside one there is no server to ask. **`resetForTesting`,
+    `sessionClosed` and `handleCount` are gone**; reach them through the server with
+    `runtime.lazyHandles()`, or simply start a fresh server.
+
+- **Anything that builds `WasmRmiServerEngine` or `SyncEngine` with `new` must give it a server.**
+  Both take one by injection now.
+
+    **In a test, set the field**: `engine.injectedRuntime = new ServerRuntime();` and
+    `syncEngine.runtime = engine.injectedRuntime;`. **Better, use the new test harness**, which does
+    it for you. Nothing changes for a real deployment: the container injects it.
+
+- **`ServerSignalTransport.install(mapper)` now takes the server too:
+  `install(runtime, mapper)`.** Every running server registers itself, and a shared-signal change is
+  delivered to each server's own connections with that server's own mapper. **A shared signal's
+  *value* is still one per process** — it is a `static final` field of one of your classes, which is
+  what `Signals.shared` has always meant.
+
+- **Broadcast helpers on `WasmRmiServerEngine` take the server as their first argument.**
+  `broadcastSignalUpdate(name, value, mapper)` becomes
+  `broadcastSignalUpdate(runtime, name, value, mapper)`, and likewise
+  `broadcastSignalUpdateScoped`.
+
+- **Three test hooks moved off the class and onto the instance.**
+  `WasmRmiServerEngine.addActiveSessionForTesting(session)` and `clearKeepaliveBudgetForTesting()`
+  are now called on an engine, not on the class. **`clearActiveSessionsForTesting()` is gone** —
+  a new server starts with no connections, so **start a fresh one instead**.
+
+- **`LiveMutexManager.configuredWaitSeconds()` is no longer static**, because the wait is now that
+  server's setting rather than the whole process's. **Call it on the manager**:
+  `locks.configuredWaitSeconds()`. `ownerOf(objectId)` and `trackedLockCount()` are public now, so a
+  test outside the framework's own package can ask what is locked.
+
+- **`RmiEndpointConfigurator.knownRoles` is gone.** The roles a sign-in is checked against are
+  collected from each server's own services. **Read them with `runtime.knownRoleNames()`.**
+
+- **`OriginPolicy`, `UploadLimits`, `UploadPasses` and `DevAuth` gained overloads that take a
+  server's settings.** The old no-argument forms still work and still read the system properties, so
+  nothing needs changing; the new ones are how one server applies a limit the process as a whole does
+  not have.
+
 
 ## [0.7.0] — 2026-08-20
 

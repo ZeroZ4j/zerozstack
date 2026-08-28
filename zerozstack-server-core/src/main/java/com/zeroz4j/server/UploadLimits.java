@@ -49,11 +49,11 @@ public final class UploadLimits {
     private static final Logger LOG = Logger.getLogger(UploadLimits.class.getName());
 
     /** System property naming the largest acceptable upload, in bytes. */
-    public static final String MAX_BYTES_PROPERTY = "zeroz.upload.maxBytes";
+    public static final String MAX_BYTES_PROPERTY = ServerSettings.UPLOAD_MAX_BYTES;
     /** System property naming how many seconds an upload pass stays usable. */
-    public static final String PASS_SECONDS_PROPERTY = "zeroz.upload.passSeconds";
+    public static final String PASS_SECONDS_PROPERTY = ServerSettings.UPLOAD_PASS_SECONDS;
     /** System property naming the directory a part-received upload is written to. */
-    public static final String TEMP_DIR_PROPERTY = "zeroz.upload.tempDir";
+    public static final String TEMP_DIR_PROPERTY = ServerSettings.UPLOAD_TEMP_DIR;
 
     /** 25 MB — big enough for a photograph or a slide deck, small enough to be a real limit. */
     public static final long DEFAULT_MAX_BYTES = 25L * 1024L * 1024L;
@@ -68,7 +68,17 @@ public final class UploadLimits {
      * @return the configured maximum in bytes, or {@link #DEFAULT_MAX_BYTES}
      */
     public static long maxBytes() {
-        return positiveLong(MAX_BYTES_PROPERTY, DEFAULT_MAX_BYTES);
+        return maxBytes(ServerConfig.fromSystemProperties());
+    }
+
+    /**
+     * The largest file one server accepts.
+     *
+     * @param config that server's settings
+     * @return the configured maximum in bytes, or {@link #DEFAULT_MAX_BYTES}
+     */
+    public static long maxBytes(ServerConfig config) {
+        return config.positiveLong(MAX_BYTES_PROPERTY, DEFAULT_MAX_BYTES);
     }
 
     /**
@@ -77,7 +87,17 @@ public final class UploadLimits {
      * @return the configured lifetime in milliseconds
      */
     public static long passLifetimeMillis() {
-        return positiveLong(PASS_SECONDS_PROPERTY, DEFAULT_PASS_SECONDS) * 1000L;
+        return passLifetimeMillis(ServerConfig.fromSystemProperties());
+    }
+
+    /**
+     * How long an issued pass stays usable on one server.
+     *
+     * @param config that server's settings
+     * @return the configured lifetime in milliseconds
+     */
+    public static long passLifetimeMillis(ServerConfig config) {
+        return config.positiveLong(PASS_SECONDS_PROPERTY, DEFAULT_PASS_SECONDS) * 1000L;
     }
 
     /**
@@ -91,7 +111,18 @@ public final class UploadLimits {
      * @throws IOException when even the fallback cannot be used
      */
     public static Path tempDirectory() throws IOException {
-        String configured = System.getProperty(TEMP_DIR_PROPERTY);
+        return tempDirectory(ServerConfig.fromSystemProperties());
+    }
+
+    /**
+     * The directory one server writes a file to while it arrives.
+     *
+     * @param config that server's settings
+     * @return an existing directory
+     * @throws IOException when even the fallback cannot be used
+     */
+    public static Path tempDirectory(ServerConfig config) throws IOException {
+        String configured = config.get(TEMP_DIR_PROPERTY);
         if (configured != null && !configured.trim().isEmpty()) {
             try {
                 Path dir = Paths.get(configured.trim());
@@ -115,6 +146,16 @@ public final class UploadLimits {
      */
     public static String describeMaxSize() {
         return describeSize(maxBytes());
+    }
+
+    /**
+     * One server's maximum size written the way a person would say it.
+     *
+     * @param config that server's settings
+     * @return for example 25 MB
+     */
+    public static String describeMaxSize(ServerConfig config) {
+        return describeSize(maxBytes(config));
     }
 
     /**
@@ -146,22 +187,4 @@ public final class UploadLimits {
         return (tenths / 10) + "." + (tenths % 10);
     }
 
-    private static long positiveLong(String property, long fallback) {
-        String configured = System.getProperty(property);
-        if (configured == null || configured.trim().isEmpty()) {
-            return fallback;
-        }
-        try {
-            long value = Long.parseLong(configured.trim());
-            if (value > 0L) {
-                return value;
-            }
-            LOG.warning("[zeroz4j] " + property + "=" + configured + " is not positive; using "
-                    + fallback + ".");
-        } catch (NumberFormatException ex) {
-            LOG.warning("[zeroz4j] " + property + "=" + configured + " is not a number; using "
-                    + fallback + ".");
-        }
-        return fallback;
-    }
 }

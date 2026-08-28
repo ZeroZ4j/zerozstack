@@ -48,8 +48,8 @@ class KeepaliveFrameTest {
     @BeforeEach
     void setUp() {
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = new ServerRuntime();
         engine.mapper = new com.zeroz4j.api.ObjectMapper();
-        WasmRmiServerEngine.clearActiveSessionsForTesting();
     }
 
     @Test

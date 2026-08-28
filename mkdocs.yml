@@ -87,6 +87,7 @@ nav:
       - Forms and binding: guides/ui-forms-and-validation.md
       - Accepting file uploads: guides/file-uploads.md
       - Packaging and running: guides/packaging.md
+      - Testing an application: guides/testing.md
       - Troubleshooting: guides/troubleshooting.md
       - Routing: ROUTING.md
       - Installing as an app (PWA): PWA.md

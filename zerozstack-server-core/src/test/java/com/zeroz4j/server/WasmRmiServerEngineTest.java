@@ -125,6 +125,7 @@ public class WasmRmiServerEngineTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             WasmRmiServerEngine.class,
             SyncEngine.class,
             ObjectMapperProducer.class,
@@ -135,6 +136,9 @@ public class WasmRmiServerEngineTest {
 
     @Inject
     WasmRmiServerEngine engine;
+
+    @Inject
+    ServerRuntime runtime;
 
     @Inject
     ObjectMapper mapper;
@@ -566,7 +570,7 @@ public class WasmRmiServerEngineTest {
         // Re-sync answers only for objects this client was actually sent. Normally the record is
         // written as a side effect of sending the object; here the object is planted directly in
         // the registry, so the record is planted with it.
-        Disclosures.record(fakeSession.getId(), "known-1");
+        runtime.disclosures().record(fakeSession.getId(), "known-1");
 
         GrowableBuffer buffer = new GrowableBuffer();
         buffer.putInt(0); // fire-and-forget

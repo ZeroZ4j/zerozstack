@@ -34,6 +34,7 @@ public class ServerLiveMutexProviderTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             LiveMutexManager.class,
             ObjectMapperProducer.class
     );
