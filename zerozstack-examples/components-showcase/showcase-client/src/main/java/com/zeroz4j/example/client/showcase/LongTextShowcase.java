@@ -79,13 +79,17 @@ public class LongTextShowcase extends ComponentShowcase {
                         + "pointing, or the title attribute — and not thrown away in Java.",
                 "Make the window narrow and look again.",
                 "Broken looks like: a sideways scrollbar on the whole page, a word running out "
-                        + "over the panel next to it, or a name that no longer says which row it is.");
+                        + "over the panel next to it, or a name that no longer says which row it is.",
+                "One section here already fails: the trail of steps with a 63-letter German name "
+                        + "in it makes this whole page scroll sideways. It is left that way on "
+                        + "purpose, because it is the fault this page exists to find.");
 
         addSection("The four texts", theTexts());
         addSection("Table cells", table());
         addSection("Tab headings", tabs());
         addSection("Menu entries", menu());
-        addSection("Breadcrumbs", breadcrumbs());
+        addSection("Breadcrumbs — this is the one that pushes the whole page sideways",
+                breadcrumbs());
         addSection("Badges and chips", badges());
         addSection("KPI tiles", kpiTiles());
         addSection("Timeline events", timeline());

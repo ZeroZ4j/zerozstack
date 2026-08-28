@@ -48,12 +48,16 @@ public class RatingShowcase extends ComponentShowcase {
 
         // Sizes
         Rating ratingXs = new Rating().setThemeSize(ThemeSize.XS);
+        ratingXs.withLabel("Extra small");
         ratingXs.setValue(1);
         Rating ratingSm = new Rating().setThemeSize(ThemeSize.SM);
+        ratingSm.withLabel("Small");
         ratingSm.setValue(2);
         Rating ratingMd = new Rating().setThemeSize(ThemeSize.MD);
+        ratingMd.withLabel("Medium");
         ratingMd.setValue(3);
         Rating ratingLg = new Rating().setThemeSize(ThemeSize.LG);
+        ratingLg.withLabel("Large");
         ratingLg.setValue(4);
 
         addSection("Sizes",
@@ -63,6 +67,7 @@ public class RatingShowcase extends ComponentShowcase {
         // Data Binding Demo
         ValueSignal<Integer> signal = new ValueSignal<>(3);
         Rating component = new Rating();
+        component.withLabel("Choose a number of stars and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));

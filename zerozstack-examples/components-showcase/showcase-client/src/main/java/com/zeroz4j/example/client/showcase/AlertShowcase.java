@@ -23,6 +23,9 @@ import com.zeroz4j.ui.theme.TextStyle;
 
 public class AlertShowcase extends ComponentShowcase {
 
+    /** Shows that pressing an action really did something, rather than looking like it might. */
+    private final Div actionLog = new Div("Nothing pressed yet.");
+
     public AlertShowcase() {
         addTitle("Alert");
         addDescription("The tinted notice. A strip of prose the reader is meant to act on. Pick the tone by "
@@ -41,10 +44,14 @@ public class AlertShowcase extends ComponentShowcase {
                 Alert.danger("The connection to the server was refused, so none of the three "
                         + "files were uploaded.")
                      .withHeading("The upload failed")
-                     .withAction("Try again", e -> { }),
+                     .withAction("Try again", e -> actionLog.setText("Pressed: Try again")),
                 Alert.caution("Two people are editing this page. The last one to save wins.")
                      .withHeading("Somebody else is here")
-                     .withAction("Reload", e -> { })));
+                     .withAction("Reload", e -> actionLog.setText("Pressed: Reload"))));
+
+        actionLog.setId("alert-action-log");
+        actionLog.addClassName("text-sm text-base-content/70");
+        addSection("What was pressed", actionLog);
 
         addSection("Long text wraps rather than running off the side",
             column(

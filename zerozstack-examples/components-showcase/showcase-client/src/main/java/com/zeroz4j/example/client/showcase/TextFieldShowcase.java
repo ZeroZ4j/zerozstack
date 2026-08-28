@@ -40,7 +40,8 @@ public class TextFieldShowcase extends ComponentShowcase {
                         + "or a disabled field that Tab still stops on.");
 
         // Basic TextField
-        TextField basicTextField = new TextField("Enter text...");
+        TextField basicTextField = new TextField("Enter text...")
+            .withLabel("A plain text field");
         addSection("Basic TextField", basicTextField);
 
         // Caption vs placeholder
@@ -83,14 +84,14 @@ public class TextFieldShowcase extends ComponentShowcase {
         addSection("Every state a text field really has", allStates());
 
         // Colors
-        TextField tfPrimary = new TextField("Primary").setThemeColor(ThemeColor.PRIMARY);
-        TextField tfSecondary = new TextField("Secondary").setThemeColor(ThemeColor.SECONDARY);
-        TextField tfAccent = new TextField("Accent").setThemeColor(ThemeColor.ACCENT);
-        TextField tfNeutral = new TextField("Neutral").setThemeColor(ThemeColor.NEUTRAL);
-        TextField tfInfo = new TextField("Info").setThemeColor(ThemeColor.INFO);
-        TextField tfSuccess = new TextField("Success").setThemeColor(ThemeColor.SUCCESS);
-        TextField tfWarning = new TextField("Warning").setThemeColor(ThemeColor.WARNING);
-        TextField tfError = new TextField("Error").setThemeColor(ThemeColor.ERROR);
+        TextField tfPrimary = new TextField("Primary").withLabel("Primary").setThemeColor(ThemeColor.PRIMARY);
+        TextField tfSecondary = new TextField("Secondary").withLabel("Secondary").setThemeColor(ThemeColor.SECONDARY);
+        TextField tfAccent = new TextField("Accent").withLabel("Accent").setThemeColor(ThemeColor.ACCENT);
+        TextField tfNeutral = new TextField("Neutral").withLabel("Neutral").setThemeColor(ThemeColor.NEUTRAL);
+        TextField tfInfo = new TextField("Info").withLabel("Info").setThemeColor(ThemeColor.INFO);
+        TextField tfSuccess = new TextField("Success").withLabel("Success").setThemeColor(ThemeColor.SUCCESS);
+        TextField tfWarning = new TextField("Warning").withLabel("Warning").setThemeColor(ThemeColor.WARNING);
+        TextField tfError = new TextField("Error").withLabel("Error").setThemeColor(ThemeColor.ERROR);
 
         addSection("Colors",
             tfPrimary, tfSecondary, tfAccent, tfNeutral,
@@ -98,10 +99,10 @@ public class TextFieldShowcase extends ComponentShowcase {
         );
 
         // Sizes
-        TextField tfXs = new TextField("Extra Small").setThemeSize(ThemeSize.XS);
-        TextField tfSm = new TextField("Small").setThemeSize(ThemeSize.SM);
-        TextField tfMd = new TextField("Medium").setThemeSize(ThemeSize.MD);
-        TextField tfLg = new TextField("Large").setThemeSize(ThemeSize.LG);
+        TextField tfXs = new TextField("Extra Small").withLabel("Extra small").setThemeSize(ThemeSize.XS);
+        TextField tfSm = new TextField("Small").withLabel("Small").setThemeSize(ThemeSize.SM);
+        TextField tfMd = new TextField("Medium").withLabel("Medium").setThemeSize(ThemeSize.MD);
+        TextField tfLg = new TextField("Large").withLabel("Large").setThemeSize(ThemeSize.LG);
 
         addSection("Sizes",
             tfXs, tfSm, tfMd, tfLg
@@ -120,7 +121,8 @@ public class TextFieldShowcase extends ComponentShowcase {
 
         // Data Binding Demo
         ValueSignal<String> signal = new ValueSignal<>("Hello");
-        TextField component = new TextField();
+        TextField component = new TextField()
+            .withLabel("Type here and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));

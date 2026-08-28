@@ -48,6 +48,13 @@ checkout on this machine — nothing is installed here, and `npm install` is nev
 
 Screenshots and `findings.txt` land in `shots/`.
 
+**What it cannot see.** It is a machine pressing keys, not a person reading a screen. It does not
+know whether a name is a *good* name, whether the focus ring is visible, whether the colours have
+enough contrast, or whether a message makes sense. It also cannot tell a deliberate refusal from a
+fault: the two dialogs that ignore Escape on purpose are reported the same way as one that ignores
+it by accident, and the page itself is what says which is which. Treat its output as a list of
+places to look, not a verdict.
+
 ## What it demonstrates
 
 - **The component catalogue** — 80 showcase panels, one per component, registered in

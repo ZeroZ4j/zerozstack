@@ -48,20 +48,28 @@ public class RangeShowcase extends ComponentShowcase {
 
         // Colors
         Range rangePrimary = new Range().setThemeColor(ThemeColor.PRIMARY);
+        rangePrimary.withLabel("Primary");
         rangePrimary.setValue(20.0);
         Range rangeSecondary = new Range().setThemeColor(ThemeColor.SECONDARY);
+        rangeSecondary.withLabel("Secondary");
         rangeSecondary.setValue(30.0);
         Range rangeAccent = new Range().setThemeColor(ThemeColor.ACCENT);
+        rangeAccent.withLabel("Accent");
         rangeAccent.setValue(40.0);
         Range rangeNeutral = new Range().setThemeColor(ThemeColor.NEUTRAL);
+        rangeNeutral.withLabel("Neutral");
         rangeNeutral.setValue(50.0);
         Range rangeInfo = new Range().setThemeColor(ThemeColor.INFO);
+        rangeInfo.withLabel("Info");
         rangeInfo.setValue(60.0);
         Range rangeSuccess = new Range().setThemeColor(ThemeColor.SUCCESS);
+        rangeSuccess.withLabel("Success");
         rangeSuccess.setValue(70.0);
         Range rangeWarning = new Range().setThemeColor(ThemeColor.WARNING);
+        rangeWarning.withLabel("Warning");
         rangeWarning.setValue(80.0);
         Range rangeError = new Range().setThemeColor(ThemeColor.ERROR);
+        rangeError.withLabel("Error");
         rangeError.setValue(90.0);
         
         addSection("Colors", 
@@ -71,12 +79,16 @@ public class RangeShowcase extends ComponentShowcase {
 
         // Sizes
         Range rangeXs = new Range().setThemeSize(ThemeSize.XS);
+        rangeXs.withLabel("Extra small");
         rangeXs.setValue(10.0);
         Range rangeSm = new Range().setThemeSize(ThemeSize.SM);
+        rangeSm.withLabel("Small");
         rangeSm.setValue(30.0);
         Range rangeMd = new Range().setThemeSize(ThemeSize.MD);
+        rangeMd.withLabel("Medium");
         rangeMd.setValue(50.0);
         Range rangeLg = new Range().setThemeSize(ThemeSize.LG);
+        rangeLg.withLabel("Large");
         rangeLg.setValue(70.0);
 
         addSection("Sizes",
@@ -86,6 +98,7 @@ public class RangeShowcase extends ComponentShowcase {
         // Data Binding Demo
         ValueSignal<Double> signal = new ValueSignal<>(50.0);
         Range component = new Range();
+        component.withLabel("Move this and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));

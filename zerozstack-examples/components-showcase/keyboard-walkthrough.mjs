@@ -147,13 +147,18 @@ Object.assign(window.__kw, {
     reached: window.__kw.reached || new Set(),
     mutations: 0,
 
-    SELECTOR: 'a, button, input, select, textarea, summary, details, [tabindex], ' +
+    // tabindex="-1" and aria-hidden are how a component says 'this is plumbing, not a
+    // control' - a drawer's internal checkbox, for one. Counting those as controls would
+    // report every deliberately skipped element as unreachable and bury the real findings.
+    SELECTOR: 'a, button, input, select, textarea, summary, details, [tabindex]:not([tabindex="-1"]), ' +
         '[role="button"], [role="menuitem"], [role="tab"], [role="link"], [role="checkbox"], ' +
         '[role="separator"]',
 
     visible(el) {
         const style = getComputedStyle(el);
         if (style.display === 'none' || style.visibility === 'hidden') return false;
+        if (el.closest('[aria-hidden="true"]')) return false;
+        if (el.getAttribute('tabindex') === '-1') return false;
         // Inside a folded-away section. The browser still gives these a size in some stylesheets,
         // so the rectangle alone does not catch them.
         const details = el.closest('details');
@@ -162,6 +167,13 @@ Object.assign(window.__kw, {
             if (!summary || !summary.contains(el)) return false;
         }
         if (el.closest('[hidden]')) return false;
+        // Deliberately not a control: taken out of the keyboard's order and hidden from anything
+        // that reads the page. A drawer's own tick box is one of these - the panel is worked
+        // through its buttons, not through the box that records its state.
+        if (el.getAttribute('tabindex') === '-1' && el.closest('[aria-hidden="true"]')) return false;
+        if (el.getAttribute('aria-hidden') === 'true' && el.getAttribute('tabindex') === '-1') {
+            return false;
+        }
         const rect = el.getBoundingClientRect();
         return rect.width > 0 || rect.height > 0;
     },
@@ -296,6 +308,11 @@ Object.assign(window.__kw, {
     mutationCount() { return this.mutations; },
     openDialogs() { return document.querySelectorAll('dialog[open]').length; },
 
+    scrollPosition() {
+        const root = this.root;
+        return String(window.scrollY) + ':' + (root ? root.scrollTop : 0);
+    },
+
     /**
      * The things that are actually over the page right now. A drawer's panel carries
      * role="dialog" whether it is showing or not, so asking for the role alone finds closed ones
@@ -334,8 +351,28 @@ Object.assign(window.__kw, {
     focusInsideOverlay() {
         return !!(this.overlay && this.overlay.contains(document.activeElement));
     },
+    /**
+     * How far the page reaches past its own right-hand edge. The window itself never scrolls in
+     * this application - the content area does - so both are measured and the worse one wins.
+     */
     horizontalOverflow() {
-        return document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        const doc = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        const area = this.root ? this.root.scrollWidth - this.root.clientWidth : 0;
+        return Math.max(doc, area);
+    },
+
+    /** The widest thing sticking out, so the finding names something rather than a number. */
+    widestOverflowingElement() {
+        if (!this.root) return null;
+        const edge = this.root.getBoundingClientRect().right;
+        let worst = null;
+        this.root.querySelectorAll('*').forEach((el) => {
+            const right = el.getBoundingClientRect().right;
+            if (right > edge + 2 && (!worst || right > worst.right)) {
+                worst = { right, describe: this.describe(el) };
+            }
+        });
+        return worst;
     },
 });
 true;
@@ -412,11 +449,18 @@ async function signIn(page) {
 
 /** Opens a folding sidebar section and presses the entry for one page. Keyboard only. */
 async function openPage(page, section, label) {
-    await focusBody(page);
-    const group = await tabUntil(page, (w) => w.name.trim() === section.group, 120);
+    await settle(page);
+    let group = await tabUntil(page, (w) => w.name.trim() === section.group, 300);
+    if (!group) {
+        // One retry from a clean state. A page that left something open can swallow a whole
+        // pass otherwise, and then every page after it looks unreachable too.
+        await settle(page);
+        group = await tabUntil(page, (w) => w.name.trim() === section.group, 300);
+    }
     if (!group) {
         finding('could not be reached',
-            `the sidebar group "${section.group}" could not be reached by Tab`);
+            `the sidebar group "${section.group}" could not be reached by Tab, even after `
+            + 'closing everything the page had open');
         return false;
     }
     const wasOpen = await page.evaluate((name) => {
@@ -560,7 +604,10 @@ async function walkPage(page, label) {
     await settle(page);
     const probeable = await page.evaluate(() => window.__kw.controls
         .filter((c) => !c.disabled
-            && ['button', 'summary', 'a'].includes(c.tag)
+            // Links are left out on purpose: following a link is the browser's job, and a link to
+            // a place on the page you are already at changes nothing without being broken. A link
+            // with no destination is caught by the tab walk instead, because nothing can reach it.
+            && ['button', 'summary'].includes(c.tag)
             && window.__kw.reached.has(String(c.index)))
         .map((c) => ({ index: c.index, describe: c.describe })));
 
@@ -589,7 +636,10 @@ async function walkPage(page, label) {
     // 7. Anything that pushed the page sideways.
     const overflow = await page.evaluate(() => window.__kw.horizontalOverflow());
     if (overflow > 2) {
-        finding('the page scrolls sideways', `${overflow} pixels wider than the window`);
+        const worst = await page.evaluate(() => window.__kw.widestOverflowingElement());
+        finding('the page reaches past its right-hand edge',
+            `${overflow} pixels too wide`
+            + (worst ? `; the furthest out is ${worst.describe}` : ''));
     }
 }
 
@@ -679,29 +729,58 @@ async function overlayWalk(page) {
  * A page that redraws itself on a timer is the one that fails this.
  */
 async function focusSurvival(page) {
-    const target = await page.evaluate(() => {
-        const first = window.__kw.controls.find((c) => !c.disabled
-            && window.__kw.reached.has(String(c.index)));
-        if (!first) return null;
-        const el = document.querySelector('[data-kw="' + first.index + '"]');
-        if (!el) return null;
-        el.focus();
-        return { describe: first.describe, ok: document.activeElement === el };
-    });
-    if (!target || !target.ok) return;
-    await page.waitForTimeout(3000);
-    const after = await page.evaluate(() => window.__kw.here());
-    if (after.describe !== target.describe) {
-        finding('the keyboard moved on its own',
-            `it was on ${target.describe}; three seconds later it was on ${after.describe}`);
+    // Three depths, not one. The start of a page is often a filter box that nothing redraws,
+    // while the control that gets thrown away is in the middle of the list below it. The keyboard
+    // is put there by tabbing rather than by a remembered element, because on a page that redraws
+    // itself the remembered element is gone by the time it is asked for.
+    for (const depth of [3, 12, 24]) {
+        await page.evaluate(() => window.__kw.focusRoot());
+        let landed = null;
+        for (let i = 0; i < depth; i++) {
+            await page.keyboard.press('Tab');
+            const where = await page.evaluate(() => window.__kw.here());
+            if (where.isBody) {
+                // Stepped off the end of the page. Step back onto the last real control, or the
+                // check would compare "on the last control" with "already on the body" and call
+                // every short page a fault.
+                await page.keyboard.press('Shift+Tab');
+                const back = await page.evaluate(() => window.__kw.here());
+                landed = back.isBody ? null : back.describe;
+                break;
+            }
+            landed = where.describe;
+        }
+        if (!landed) continue;
+
+        await page.waitForTimeout(3000);
+        const after = await page.evaluate(() => window.__kw.describe(document.activeElement));
+        if (after !== landed) {
+            finding('the keyboard moved on its own',
+                `it was on ${landed}; three seconds later, with nothing pressed, it was on `
+                + after);
+            // One report per page is enough - the fault is the page, not each control on it.
+            return;
+        }
     }
 }
 
-/** Focuses one control without a mouse, presses a key, and says whether anything changed. */
+/**
+ * Focuses one control without a mouse, presses a key, and says whether anything changed at all.
+ *
+ * <p>"Changed" is deliberately broad: the page's own elements, the address, what is scrolled to,
+ * and whether something opened over the page. A component that only sets a property — a tick box
+ * ticked from code — changes nothing a mutation observer can see, and reporting that as a dead
+ * control would be wrong.</p>
+ */
 async function probe(page, control, key) {
+    // Anything an earlier press left open is shut first. Without this, a control pressed while a
+    // box from the control before it is still covering the page reads as dead when it is not.
+    if (await page.evaluate(() => window.__kw.openOverlays().length) > 0) {
+        await settle(page);
+    }
     const focused = await page.evaluate((index) => {
         const el = document.querySelector('[data-kw="' + index + '"]');
-        if (!el) return false;
+        if (!el || !el.focus) return false;
         el.focus();
         window.__kw.resetMutations();
         return document.activeElement === el;
@@ -710,20 +789,23 @@ async function probe(page, control, key) {
 
     const urlBefore = page.url();
     const overlaysBefore = await page.evaluate(() => window.__kw.openOverlays().length);
+    const scrollBefore = await page.evaluate(() => window.__kw.scrollPosition());
+
     await page.keyboard.press(key === ' ' ? 'Space' : key);
     // TeaVM runs a component's handler on a green thread, so the effect is not on the very next
     // frame. Anything under about a third of a second reports working controls as dead.
     await page.waitForTimeout(400);
-    // A component that only sets a property - a tick box being ticked from code, say - changes
-    // nothing a mutation observer can see, so opening an overlay is counted separately.
+
     const overlaysAfter = await page.evaluate(() => window.__kw.openOverlays().length);
+    const scrollAfter = await page.evaluate(() => window.__kw.scrollPosition());
     const changed = await page.evaluate(() => window.__kw.mutationCount())
         + (page.url() === urlBefore ? 0 : 1)
-        + (overlaysAfter === overlaysBefore ? 0 : 1);
-    // Whatever this opened is closed again here; the overlay walk above is where opening and
-    // closing is actually judged.
-    const dialogs = await page.evaluate(() => window.__kw.openOverlays().length);
-    if (dialogs > 0) {
+        + (overlaysAfter === overlaysBefore ? 0 : 1)
+        + (scrollAfter === scrollBefore ? 0 : 1);
+
+    // Whatever this opened is closed again here; the overlay walk is where opening and closing is
+    // actually judged.
+    if (overlaysAfter > 0) {
         await settle(page);
     }
     return changed === 0;

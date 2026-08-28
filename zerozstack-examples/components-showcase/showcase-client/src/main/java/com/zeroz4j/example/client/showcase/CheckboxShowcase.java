@@ -43,34 +43,42 @@ public class CheckboxShowcase extends ComponentShowcase {
 
         // Color variants
         Checkbox primary = new Checkbox();
+        primary.withLabel("Primary");
         primary.setValue(true);
         primary.setThemeColor(ThemeColor.PRIMARY);
 
         Checkbox secondary = new Checkbox();
+        secondary.withLabel("Secondary");
         secondary.setValue(true);
         secondary.setThemeColor(ThemeColor.SECONDARY);
 
         Checkbox accent = new Checkbox();
+        accent.withLabel("Accent");
         accent.setValue(true);
         accent.setThemeColor(ThemeColor.ACCENT);
 
         Checkbox neutral = new Checkbox();
+        neutral.withLabel("Neutral");
         neutral.setValue(true);
         neutral.setThemeColor(ThemeColor.NEUTRAL);
 
         Checkbox info = new Checkbox();
+        info.withLabel("Info");
         info.setValue(true);
         info.setThemeColor(ThemeColor.INFO);
 
         Checkbox success = new Checkbox();
+        success.withLabel("Success");
         success.setValue(true);
         success.setThemeColor(ThemeColor.SUCCESS);
 
         Checkbox warning = new Checkbox();
+        warning.withLabel("Warning");
         warning.setValue(true);
         warning.setThemeColor(ThemeColor.WARNING);
 
         Checkbox error = new Checkbox();
+        error.withLabel("Error");
         error.setValue(true);
         error.setThemeColor(ThemeColor.ERROR);
 
@@ -78,18 +86,22 @@ public class CheckboxShowcase extends ComponentShowcase {
 
         // Size variants
         Checkbox xs = new Checkbox();
+        xs.withLabel("Extra small");
         xs.setValue(true);
         xs.setThemeSize(ThemeSize.XS);
 
         Checkbox sm = new Checkbox();
+        sm.withLabel("Small");
         sm.setValue(true);
         sm.setThemeSize(ThemeSize.SM);
 
         Checkbox md = new Checkbox();
+        md.withLabel("Medium");
         md.setValue(true);
         md.setThemeSize(ThemeSize.MD);
 
         Checkbox lg = new Checkbox();
+        lg.withLabel("Large");
         lg.setValue(true);
         lg.setThemeSize(ThemeSize.LG);
 
@@ -98,6 +110,7 @@ public class CheckboxShowcase extends ComponentShowcase {
         // Data Binding Demo
         ValueSignal<Boolean> signal = new ValueSignal<>(false);
         Checkbox component = new Checkbox();
+        component.withLabel("Tick this and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));

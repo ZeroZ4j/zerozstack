@@ -75,7 +75,7 @@ public class MovingListShowcase extends ComponentShowcase {
                 + "keyboard. Something has to give, and this page shows what.");
 
         addWhatToCheck("Try this",
-                "Press start. Tab onto a row's button and leave it there.",
+                "The list is already moving. Tab onto a row's button and leave it there.",
                 "Watch the line marked \"the keyboard is on\". If it changes on its own, the list "
                         + "took the keyboard away from you.",
                 "Type in the filter box while the list is moving. Your letters must not be lost "
@@ -92,6 +92,10 @@ public class MovingListShowcase extends ComponentShowcase {
         focusReadout.setId("moving-list-focus");
         focusReadout.addClassName("font-mono text-sm");
 
+        // The list moves from the moment the page opens. A page about a list that moves, sitting
+        // still until somebody presses a button, is the easy example again.
+        startTimer();
+
         addSection("Controls", controls());
         addSection("Where the keyboard is", focusReadout);
         addSection("Rebuilt from scratch on every change", rebuiltList());
@@ -106,7 +110,7 @@ public class MovingListShowcase extends ComponentShowcase {
         filterField.setHelperText("Type part of a job name. The list keeps moving while you type.");
         filterField.addValueChangeListener(e -> filter.set(e.getValue() == null ? "" : e.getValue()));
 
-        Button start = new Button("Start the changes");
+        Button start = new Button("Start the changes again");
         start.setId("moving-list-start");
         start.addClassName("btn-primary");
         start.addClickListener(e -> startTimer());

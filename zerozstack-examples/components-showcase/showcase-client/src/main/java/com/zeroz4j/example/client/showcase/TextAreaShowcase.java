@@ -45,14 +45,14 @@ public class TextAreaShowcase extends ComponentShowcase {
         addSection("Every state a text area really has", allStates());
 
         // Colors
-        TextArea taPrimary = new TextArea("Primary").setThemeColor(ThemeColor.PRIMARY);
-        TextArea taSecondary = new TextArea("Secondary").setThemeColor(ThemeColor.SECONDARY);
-        TextArea taAccent = new TextArea("Accent").setThemeColor(ThemeColor.ACCENT);
-        TextArea taNeutral = new TextArea("Neutral").setThemeColor(ThemeColor.NEUTRAL);
-        TextArea taInfo = new TextArea("Info").setThemeColor(ThemeColor.INFO);
-        TextArea taSuccess = new TextArea("Success").setThemeColor(ThemeColor.SUCCESS);
-        TextArea taWarning = new TextArea("Warning").setThemeColor(ThemeColor.WARNING);
-        TextArea taError = new TextArea("Error").setThemeColor(ThemeColor.ERROR);
+        TextArea taPrimary = new TextArea("Primary").withLabel("Primary").setThemeColor(ThemeColor.PRIMARY);
+        TextArea taSecondary = new TextArea("Secondary").withLabel("Secondary").setThemeColor(ThemeColor.SECONDARY);
+        TextArea taAccent = new TextArea("Accent").withLabel("Accent").setThemeColor(ThemeColor.ACCENT);
+        TextArea taNeutral = new TextArea("Neutral").withLabel("Neutral").setThemeColor(ThemeColor.NEUTRAL);
+        TextArea taInfo = new TextArea("Info").withLabel("Info").setThemeColor(ThemeColor.INFO);
+        TextArea taSuccess = new TextArea("Success").withLabel("Success").setThemeColor(ThemeColor.SUCCESS);
+        TextArea taWarning = new TextArea("Warning").withLabel("Warning").setThemeColor(ThemeColor.WARNING);
+        TextArea taError = new TextArea("Error").withLabel("Error").setThemeColor(ThemeColor.ERROR);
 
         addSection("Colors",
             taPrimary, taSecondary, taAccent, taNeutral,
@@ -60,10 +60,10 @@ public class TextAreaShowcase extends ComponentShowcase {
         );
 
         // Sizes
-        TextArea taXs = new TextArea("Extra Small").setThemeSize(ThemeSize.XS);
-        TextArea taSm = new TextArea("Small").setThemeSize(ThemeSize.SM);
-        TextArea taMd = new TextArea("Medium").setThemeSize(ThemeSize.MD);
-        TextArea taLg = new TextArea("Large").setThemeSize(ThemeSize.LG);
+        TextArea taXs = new TextArea("Extra Small").withLabel("Extra small").setThemeSize(ThemeSize.XS);
+        TextArea taSm = new TextArea("Small").withLabel("Small").setThemeSize(ThemeSize.SM);
+        TextArea taMd = new TextArea("Medium").withLabel("Medium").setThemeSize(ThemeSize.MD);
+        TextArea taLg = new TextArea("Large").withLabel("Large").setThemeSize(ThemeSize.LG);
 
         addSection("Sizes",
             taXs, taSm, taMd, taLg
@@ -71,7 +71,7 @@ public class TextAreaShowcase extends ComponentShowcase {
 
         // Data Binding Demo
         ValueSignal<String> signal = new ValueSignal<>("Hello World");
-        TextArea component = new TextArea();
+        TextArea component = new TextArea().withLabel("Type here and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
