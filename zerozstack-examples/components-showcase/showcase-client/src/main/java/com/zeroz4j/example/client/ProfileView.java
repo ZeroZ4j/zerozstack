@@ -37,8 +37,11 @@ public class ProfileView extends VerticalLayout {
     }
 
     public ProfileView() {
-        TextField usernameField = new TextField("Username");
-        TextField emailField = new TextField("Email");
+        addClassName("gap-4");
+        // Captions, not placeholders: the name of a field has to stay visible while it is typed
+        // in. asRequired below adds the asterisk and puts the message under the field by itself.
+        TextField usernameField = new TextField().withLabel("Username");
+        TextField emailField = new TextField("you@example.com").withLabel("Email address");
 
         Button saveButton = new Button("Save");
         saveButton.addClassName("btn-primary");

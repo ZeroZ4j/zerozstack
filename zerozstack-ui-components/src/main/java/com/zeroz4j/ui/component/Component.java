@@ -66,6 +66,21 @@ public abstract class Component {
     public HTMLElement getElement() {
         return element;
     }
+
+    /**
+     * Returns the element a container should insert to place this component on the page.
+     *
+     * <p>For nearly every component this is the same element as {@link #getElement()}. It differs
+     * only where a component has to wrap itself in something larger to be complete: an input field
+     * given a caption, for instance, is a caption, a control and a message line, and inserting the
+     * control alone would leave the other two behind. Containers add and remove this element;
+     * everything else — styling, sizing, events, focus — still goes to {@link #getElement()}.</p>
+     *
+     * @return the outermost element of this component
+     */
+    public HTMLElement getOuterElement() {
+        return element;
+    }
     
     /**
      * Sets the HTML {@code id} attribute of the underlying DOM element.
@@ -91,10 +106,11 @@ public abstract class Component {
      * @param visible true to show the component; false to set {@code display: none}
      */
     public void setVisible(boolean visible) {
+        HTMLElement outer = getOuterElement();
         if (visible) {
-            element.getStyle().removeProperty("display");
+            outer.getStyle().removeProperty("display");
         } else {
-            element.getStyle().setProperty("display", "none");
+            outer.getStyle().setProperty("display", "none");
         }
     }
 

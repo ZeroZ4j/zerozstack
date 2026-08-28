@@ -39,6 +39,12 @@ public class Checkbox extends AbstractField<Checkbox, Boolean> implements
         addDomEventListener("change", changeListener);
     }
 
+    /** A checkbox reads as "[x] Remember me": the caption follows the box on the same line. */
+    @Override
+    protected boolean labelFollowsControl() {
+        return true;
+    }
+
     @Override
     protected void setPresentationValue(Boolean value) {
         HTMLInputElement input = getElement().cast();

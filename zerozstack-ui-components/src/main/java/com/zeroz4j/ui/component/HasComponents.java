@@ -29,14 +29,14 @@ public interface HasComponents {
     
     default void add(Component... components) {
         for (Component c : components) {
-            getComponent().getElement().appendChild(c.getElement());
+            getComponent().getElement().appendChild(c.getOuterElement());
             c.onAttach();
         }
     }
     
     default void remove(Component... components) {
         for (Component c : components) {
-            getComponent().getElement().removeChild(c.getElement());
+            getComponent().getElement().removeChild(c.getOuterElement());
             c.onDetach();
         }
     }

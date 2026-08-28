@@ -77,7 +77,7 @@ public class FormLayout extends Component implements HasComponents, HasSize, Has
     }
     
     public void setColSpan(Component component, int span) {
-        component.getElement().getStyle().setProperty("grid-column", "span " + span);
+        component.getOuterElement().getStyle().setProperty("grid-column", "span " + span);
     }
 
     private void updateStyles() {
