@@ -65,8 +65,9 @@ The caption is a real `<label>` tied to the control by a generated id, so clicki
 the field — and ticks the box, for a checkbox — and a screen reader announces the two together. You
 never write the id; if you set one of your own with `setId`, the caption follows it.
 
-Three more things a field can say, all on the same class, so every input has them — text fields,
-text areas, selects, checkboxes, toggles, ranges, ratings, radio groups and file pickers:
+Three more things a field can say, all on the same class, so every input has them - text fields,
+text areas, selects, checkboxes, toggles, ranges, ratings, radio groups, file pickers, swaps and
+theme switches:
 
 ```java
 field.setHelperText("An absolute path. It is created if it does not exist yet.");
@@ -78,9 +79,10 @@ field.setErrorMessage("A port is a number between 1 and 65535.");
 invalid for assistive technology; passing `null` clears all three. A `Binder` calls it for you — see
 [Forms and binding](guides/ui-forms-and-validation.md).
 
-A checkbox and a toggle put the caption to the right of the control on one line; everything else
-puts it above. A radio group is captioned as a named group, since there is no single control for a
-label to point at.
+A checkbox, a toggle, a swap and a theme switch put the caption to the right of the control on one
+line; everything else puts it above. A radio group and a rating are captioned as a named group,
+since each of them is several controls and there is no single one for a label to point at: a screen
+reader reads the caption, then "group", then each choice.
 
 **Captions work anywhere, not only inside a `FormLayout`.** There is deliberately no separate
 "form item" wrapper: a field carries its own caption, so it is named the same way in a form layout,

@@ -345,7 +345,11 @@ public class Binder<BEAN> {
             if (field instanceof HasStyle) {
                 HasStyle style = (HasStyle) field;
                 style.addClassName("input-error");
-                style.setStyle("--error-message", "'" + result.getErrorMessage().replace("'", "\\'") + "'");
+                // Kept only for applications that wrote a stylesheet rule around this variable
+                // before 0.8.0. It is not how the message is shown - see below - and it is
+                // scheduled to go.
+                style.setStyle("--error-message",
+                        "'" + result.getErrorMessage().replace("'", "\\'") + "'");
             }
             // Until 0.8.0 the message went only into a stylesheet variable, which nothing displayed
             // unless the application had written a rule for it. A field can now show it itself.
@@ -359,6 +363,9 @@ public class Binder<BEAN> {
             if (field instanceof HasStyle) {
                 HasStyle style = (HasStyle) field;
                 style.removeClassName("input-error");
+                // Left set, this outlived the error it described: an application displaying the
+                // variable kept showing the old sentence after the value was corrected.
+                style.setStyle("--error-message", "''");
             }
             if (field instanceof com.zeroz4j.ui.component.AbstractField) {
                 ((com.zeroz4j.ui.component.AbstractField<?, ?>) field).setErrorMessage(null);

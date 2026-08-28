@@ -193,6 +193,36 @@ first published, and repairs to the two components whose labels an application c
     stylesheet variable is still set, so an application that did write a rule for it keeps working —
     if you had one, delete it now, or the message will be shown twice.
 
+- **The old stylesheet variable held on to a message after the value was corrected.** `Binder` set
+  `--error-message` when a check failed and never emptied it again, so an application that did
+  display it kept showing the old complaint about a value the person had already fixed. It is now
+  emptied when the field goes back to being valid.
+
+- **A rating, a swap and a theme switch could be given a caption that named nothing.** All three are
+  built from several parts — five stars, or a hidden checkbox inside a decorative wrapper — and the
+  caption was tied to the wrapper rather than to anything a browser treats as a control. The words
+  appeared, and that was all: clicking them did nothing, and a screen reader read the field as
+  having no name at all, which is the fault the caption was added to fix. A rating is now announced
+  as a named group, like a radio group; a swap and a theme switch name the checkbox inside them, so
+  clicking the caption focuses and flips it. Nothing changes in your code.
+
+- **Every field is now checked in a real browser on every build.** Nine kinds of check, for eleven
+  kinds of field, and each one ends at the same question: would a person reading the screen see
+  this? The caption, the explanation under the field, the asterisk on a required field, and above
+  all the sentence explaining why a value was refused — each has to be part of the visible text of
+  the page, tied to the right control, and gone again once the value is corrected.
+
+    This exists because the fault above could not have been caught any other way. The message was a
+    perfectly good sentence held on a perfectly good object; a test asking the field what its
+    message was would have passed for the whole life of 0.7.0 while every user saw a red box and no
+    words. So the page is built by the library, opened in headless Chrome, and asked what it
+    actually says. Re-introducing the 0.7.0 behaviour on purpose fails 24 of those checks; making
+    the caption group real but never putting it on the page fails 77.
+
+    It adds roughly ten seconds to this one module's build and needs a Chrome or an Edge on the
+    machine. Without one it reports itself as skipped rather than failing, and `-DskipDomProof`
+    leaves it out entirely.
+
 - **A lane in `LaneTimeline` could only be named in twelve characters.** The name column was 90
   pixels wide and could not be changed, and anything longer was silently cut — `worker-0
   qwen36-27b` arrived as a stub. The column is now measured from the longest name, between 90 and
