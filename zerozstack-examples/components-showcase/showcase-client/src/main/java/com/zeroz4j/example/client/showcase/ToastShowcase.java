@@ -26,12 +26,11 @@ public class ToastShowcase extends ComponentShowcase {
 
     public ToastShowcase() {
         addTitle("Toast");
-        addDescription("Toast is a wrapper to stack alert messages on the corner of the screen.");
+        addDescription("Toast is a wrapper to stack alert messages on the corner of the screen. A message is announced when it appears, never takes the keyboard, and Escape takes it away.");
 
-        // Simple text toast
+        // Simple text toast. It carries Layer.TOAST already; nothing here picks a number.
         Toast toastText = new Toast("Message sent successfully!");
         toastText.addClassName("relative");
-        toastText.addClassName("z-50");
 
         // Toast with an Alert inside
         Toast toastAlert = new Toast();

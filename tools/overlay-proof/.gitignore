@@ -1,0 +1,6 @@
+# Built by build.sh and drive.mjs; all of it is reproducible.
+lib/
+web/js/
+shots/
+target/
+run.log

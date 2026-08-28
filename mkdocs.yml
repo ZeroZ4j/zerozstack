@@ -85,6 +85,7 @@ nav:
       - Authentication and authorization: guides/security-auth.md
       - Logging in with OpenID Connect: guides/oidc-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
+      - Stacking overlays: guides/ui-layering.md
       - Accepting file uploads: guides/file-uploads.md
       - Packaging and running: guides/packaging.md
       - Troubleshooting: guides/troubleshooting.md

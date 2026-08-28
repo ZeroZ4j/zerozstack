@@ -147,6 +147,29 @@ When building your own custom components that hook into low-level DOM events via
 
 ---
 
+## Overlays: what sits above what
+
+Anything that draws over the page — a dialog, a drawer, a menu, a message, a tip — is put on a
+**named layer** rather than given a stacking number:
+
+```java
+import com.zeroz4j.ui.theme.Layer;
+
+Toast saved = new Toast("Saved");
+saved.setLayer(Layer.TOAST);      // rarely needed: a Toast is already on this layer
+```
+
+Every overlay in the library sets its own layer when you create it, so most applications never call
+this. The layers, from the bottom up, are `PAGE`, `STICKY`, `DROPDOWN`, `OVERLAY`, `TOAST` and
+`TOOLTIP`.
+
+**One thing beats all of them.** An open modal `Dialog` is in the browser's own *top layer*, which
+is above every stacking number there is. Nothing on the scale can cover it. If something has to
+cover a dialog, it has to be a dialog too.
+
+Full explanation, including how to slot a layer of your own in between two of these:
+[Stacking overlays](guides/ui-layering.md).
+
 ## Component Reference
 
 The framework provides a rich set of 106 UI components, broken down into the following functional categories:
@@ -186,7 +209,11 @@ Components that trigger actions or navigate between views.
 - **Button**: A standard clickable button.
 - **BottomNavigation**: A mobile-friendly navigation bar fixed to the bottom of the screen.
 - **Breadcrumbs**: Displays the current navigational hierarchy and path.
-- **Dropdown**: A contextual overlay menu triggered by an anchor element.
+- **Dropdown**: A button that drops a small panel of choices open underneath it. Clicking the
+  button opens it, clicking anywhere else shuts it, and Escape shuts it and puts the keyboard back
+  on the button. Open and close it from code with `open()` and `close()`. The panel sits on
+  `Layer.DROPDOWN`. The keyboard is not held inside — Tab walks into the panel and out the far
+  side, which is right for something that does not take the page over.
 - **Menu**: A list of navigational or action items, often placed in sidebars or dropdowns.
 - **Navbar**: A standard top navigation header.
 - **Pagination**: Controls for navigating through paginated datasets.
@@ -207,7 +234,10 @@ Components used to present data, alerts, and content to the user.
 - **ChatBubble**: Displays a single message within a conversational UI.
 - **CodeBlock**: A styled container for displaying formatted source code.
 - **Collapse**: A generic expand/collapse container.
-- **ContextMenu**: A popup menu triggered by a right-click or long-press.
+- **ContextMenu**: The menu that appears where you right-click. Opening it moves the keyboard onto
+  the first entry, so entries can be walked with Tab and chosen with Enter; Escape shuts it and puts
+  the keyboard back on the row that was right-clicked. It sits on `Layer.DROPDOWN`. The keyboard is
+  not held inside it; if you want something the keyboard cannot leave, you want a **Dialog**.
 - **Countdown**: Displays a timer counting down to a specific event.
 - **Dialog**: A panel that takes over the page until it is answered. Opening it hands the
   element to the browser, so Escape closes it, focus stays inside it, the page behind it stops
@@ -217,9 +247,21 @@ Components used to present data, alerts, and content to the user.
   once per close however it closed. For a question that must be answered, take the exits away
   with `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)` — and leave the user a
   button. `setModal(false)` restores the appearance-only dialog of 0.7.0 and earlier.
+  `new Dialog("Delete the account?")` puts a heading at the top of the panel and gives the dialog a
+  name a screen reader announces; `setAriaLabel` names one that has no room for a heading. Opening
+  moves the keyboard into the dialog and closing puts it back on whatever opened it. An open modal
+  dialog is in the browser's **top layer**, so it is above everything else on the page whatever
+  stacking numbers are involved — see [Stacking overlays](guides/ui-layering.md).
 - **Diff / DiffView**: Components for displaying file or text differences side-by-side.
 - **Divider**: A visual separator between content sections.
-- **Drawer**: A sliding side panel for navigation or secondary content.
+- **Drawer**: A panel that slides in from the side of the window. `add` puts things in the sliding
+  panel; `addToPage` puts things on the page it slides over. Open and close it with `open()` and
+  `close()`; Escape closes it, and so does clicking the dimmed page beside it —
+  `setCloseOnEsc(false)` and `setCloseOnOutsideClick(false)` take those away. Opening moves the
+  keyboard into the panel and **holds it there** until the drawer closes, then puts it back on
+  whatever opened it. `new Drawer("Settings")` gives it a heading and a name a screen reader
+  announces. `setModal(false)` turns the dim and the hold off, for a sidebar that lives beside the
+  page rather than over it. The panel sits on `Layer.OVERLAY`.
 - **EmptyState**: A placeholder view shown when there is no data to display.
 - **Footer**: A standard page footer element.
 - **Hero**: A large, prominent banner often used at the top of landing pages.
@@ -261,9 +303,18 @@ Components used to present data, alerts, and content to the user.
 - **Table**: A structured grid for displaying tabular data.
 - **ThemeController**: A component for managing and switching application themes (e.g., light/dark mode).
 - **Timeline**: A linear representation of events ordered by time.
-- **Toast**: A brief, auto-expiring notification message overlaid on the screen.
+- **Toast**: A short message that floats in a corner of the window. It is announced by a screen
+  reader when it appears, politely; `setUrgent(true)` makes it interrupt, for the rare message that
+  cannot wait. It **never takes the keyboard** — a message arriving while somebody is typing must not
+  move them out of the box they are typing in. Escape removes it, and `close()` does the same from
+  code; `setCloseOnEsc(false)` keeps it put. It sits on `Layer.TOAST`, above panels and menus.
 - **TokenMeter**: A specialized visualization component (e.g., for showing API token usage).
-- **Tooltip**: A small informational popup shown when hovering over an element.
+- **Tooltip**: A few words that appear next to whatever the pointer is resting on. `setText` sets
+  the words the tip shows; wrap the control it belongs to with `add`. It takes no keyboard focus and
+  holds nothing — put nothing in one that has to be clicked, because it cannot be reached. Escape
+  hides it until the pointer leaves and comes back. While the tip is showing it is on
+  `Layer.TOOLTIP`, the top of the scale; the rest of the time it is ordinary page content, because
+  it wraps your control and floating that over every drawer would be wrong.
 - **VirtualScroller**: An optimized list container that only renders visible items for high performance with large datasets.
 
 ### Charts & Dashboards
@@ -332,5 +383,8 @@ Core building blocks that other components extend or implement.
 - **HasComponents**: Interface for containers that can hold child components.
 - **HasValue**: Interface for components that handle data binding.
 - **HasSize / HasStyle / HasText / HasEnabled**: Mixin interfaces for standard component properties.
+- **HasLayer / Layer**: How high above the page something floats, asked for by name rather than by
+  number — `overlay.setLayer(Layer.TOAST)`. Every overlay in the library comes with the right layer
+  already set. See [Stacking overlays](guides/ui-layering.md).
 - **DomListenerRegistration / EventListener / ComponentEvent / ClickEvent**: Infrastructure for DOM event handling and custom component events.
 - **Focusable**: Interface for components that can receive keyboard focus.
