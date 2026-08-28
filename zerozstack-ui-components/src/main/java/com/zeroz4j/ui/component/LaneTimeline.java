@@ -24,6 +24,7 @@ import com.zeroz4j.signals.ValueSignal;
 import org.teavm.jso.browser.Window;
 
 import org.teavm.jso.dom.events.MouseEvent;
+import org.teavm.jso.dom.html.HTMLElement;
 import org.teavm.jso.dom.xml.Element;
 
 import java.util.ArrayList;
@@ -60,6 +61,7 @@ public final class LaneTimeline extends Div {
     private boolean playing;
     private int labelWidth;      // 0 = measured from the lane names
     private int labelColumn = LABEL_W_MIN;
+    private boolean labelWrap;   // false = one line, clipped by the browser with an ellipsis
 
     public LaneTimeline() {
         addClassName("flex flex-col border-t border-base-300 bg-base-200/40 shrink-0");
@@ -73,14 +75,40 @@ public final class LaneTimeline extends Div {
      * longest lane name and sits between 90 and 260 pixels wide, so a name like
      * {@code worker-0 qwen36-27b} is shown in full instead of being cut after twelve characters.
      * Set a width when several timelines on one page have to line up with each other; pass 0 to go
-     * back to measuring. A name too long even for the widest column is shortened, and hovering the
-     * lane always shows it whole.
+     * back to measuring. A name too long even for the widest column is shown with its end faded
+     * out by the browser, and hovering the lane always shows it whole - or turn on
+     * {@link #setLabelWrap(boolean)} and it runs onto a second line instead.
      *
      * @param pixels the fixed width of the name column, or 0 to measure it
      */
     public void setLabelWidth(int pixels) {
         this.labelWidth = Math.max(0, pixels);
         redraw();
+    }
+
+    /**
+     * Lets a name too long for the column run onto more lines, growing that lane to fit.
+     *
+     * <p>Off by default, because lanes of the same height are easier to scan and a name that long
+     * is unusual. Off, a name too long for the column is cut off <i>visually</i> by the browser,
+     * with the last characters faded away - the whole name is still there, still selectable, still
+     * shown on hover. Either way nothing is thrown away: this component used to cut the name into
+     * a shorter string and draw that, so the rest of it existed nowhere on the page.</p>
+     *
+     * @param wrap true to let long names run onto more lines
+     */
+    public void setLabelWrap(boolean wrap) {
+        this.labelWrap = wrap;
+        redraw();
+    }
+
+    /**
+     * Says whether long names run onto more lines.
+     *
+     * @return true when they do
+     */
+    public boolean isLabelWrap() {
+        return labelWrap;
     }
 
     /**
@@ -191,40 +219,42 @@ public final class LaneTimeline extends Div {
         labelColumn = measureLabelColumn();
         int width = Math.max(600, getElement().getClientWidth() - 24);
         int plotW = width - labelColumn - LABEL_GAP;
-        int height = AXIS_H + lanes.size() * (LANE_H + 4) + 6;
+        int[] tops = new int[lanes.size()];
+        int[] heights = new int[lanes.size()];
+        int cursorY = AXIS_H;
+        for (int i = 0; i < lanes.size(); i++) {
+            heights[i] = laneHeight(lanes.get(i));
+            tops[i] = cursorY;
+            cursorY += heights[i] + 4;
+        }
+        int height = cursorY + 6;
         Element svg = SvgCanvas.el("svg",
             "width", String.valueOf(width), "height", String.valueOf(height));
 
         for (int i = 0; i < lanes.size(); i++) {
             Lane lane = lanes.get(i);
-            int y = AXIS_H + i * (LANE_H + 4);
-            Element label = SvgCanvas.el("text",
-                "x", "0", "y", String.valueOf(y + 15), "font-size", "10",
-                "fill", "currentColor", "font-family", "ui-monospace, monospace");
+            int y = tops[i];
+            int laneH = heights[i];
             String name = lane.label() == null ? "" : lane.label();
-            label.appendChild(Window.current().getDocument().createTextNode(
-                truncate(name, charsThatFit(labelColumn))));
-            // The whole name on hover, however narrow the column had to be.
-            Element labelTitle = SvgCanvas.el("title");
-            labelTitle.appendChild(Window.current().getDocument().createTextNode(name));
-            label.appendChild(labelTitle);
-            svg.appendChild(label);
+            svg.appendChild(labelBox(name, y, laneH));
 
             long end = lane.closedAt() > 0 ? lane.closedAt() : maxTime;
             int barX = labelColumn + x(lane.openedAt(), plotW);
             int barW = Math.max(3, x(end, plotW) - x(lane.openedAt(), plotW));
+            int barH = LANE_H - 8;
+            int barY = y + (laneH - barH) / 2;
             Element bar = SvgCanvas.el("rect",
-                "x", String.valueOf(barX), "y", String.valueOf(y + 4),
-                "width", String.valueOf(barW), "height", String.valueOf(LANE_H - 8),
+                "x", String.valueOf(barX), "y", String.valueOf(barY),
+                "width", String.valueOf(barW), "height", String.valueOf(barH),
                 "rx", "4", "fill", outcomeColor(lane.outcome()), "fill-opacity", "0.25",
                 "stroke", outcomeColor(lane.outcome()), "stroke-width", "1");
             svg.appendChild(bar);
             for (long event : lane.events()) {
                 Element tickMark = SvgCanvas.el("line",
                     "x1", String.valueOf(labelColumn + x(event, plotW)),
-                    "y1", String.valueOf(y + 6),
+                    "y1", String.valueOf(barY - 2),
                     "x2", String.valueOf(labelColumn + x(event, plotW)),
-                    "y2", String.valueOf(y + LANE_H - 6),
+                    "y2", String.valueOf(barY + barH + 2),
                     "stroke", outcomeColor(lane.outcome()), "stroke-width", "1.5");
                 svg.appendChild(tickMark);
             }
@@ -306,12 +336,75 @@ public final class LaneTimeline extends Div {
         return Math.max(LABEL_W_MIN, Math.min(LABEL_W_MAX, needed));
     }
 
-    private static int charsThatFit(int column) {
-        return Math.max(4, (int) ((column - LABEL_GAP) / LABEL_CHAR_W));
+    /**
+     * The lane name, whole, as ordinary HTML inside the drawing.
+     *
+     * <p>The name is put on the page in full and the browser decides what to do when the column is
+     * too narrow for it: fade the end away on one line, or run onto more lines when wrapping is
+     * on. Either way every character is in the page, so it can be selected, searched for and read
+     * out - which is what drawing a shortened copy of it could never manage.</p>
+     */
+    private Element labelBox(String name, int top, int laneH) {
+        Element host = SvgCanvas.el("foreignObject",
+            "x", "0", "y", String.valueOf(top),
+            "width", String.valueOf(Math.max(10, labelColumn - LABEL_GAP)),
+            "height", String.valueOf(laneH));
+        HTMLElement text = Window.current().getDocument().createElement("div");
+        String common = "font-size:10px;font-family:ui-monospace, monospace;color:currentColor;";
+        text.setAttribute("style", labelWrap
+            ? common + "height:100%;display:flex;align-items:center;line-height:12px;"
+              + "white-space:normal;overflow-wrap:anywhere;"
+            : common + "height:" + laneH + "px;line-height:" + laneH + "px;white-space:nowrap;"
+              + "overflow:hidden;text-overflow:ellipsis;");
+        text.setAttribute("title", name);
+        text.setTextContent(name);
+        host.appendChild(text);
+        return host;
     }
 
-    private static String truncate(String s, int max) {
-        return s == null ? "" : s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    /** A lane is one row tall unless a wrapped name needs more room. */
+    private int laneHeight(Lane lane) {
+        if (!labelWrap) {
+            return LANE_H;
+        }
+        int lines = wrappedLineCount(lane.label(), Math.max(10, labelColumn - LABEL_GAP));
+        return Math.max(LANE_H, lines * 12 + 8);
+    }
+
+    /**
+     * How many lines the name will take, worked out the same way the browser does it: whole words
+     * first, and a word longer than the column broken across lines.
+     *
+     * <p>Package-private so a test can check the arithmetic without a browser.</p>
+     */
+    static int wrappedLineCount(String name, int columnPx) {
+        if (name == null || name.isEmpty()) {
+            return 1;
+        }
+        int perLine = Math.max(1, (int) (columnPx / LABEL_CHAR_W));
+        int lines = 1;
+        int used = 0;
+        for (String word : name.split(" ")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            int wordLength = word.length();
+            int needed = used == 0 ? wordLength : wordLength + 1;
+            if (used + needed <= perLine) {
+                used += needed;
+                continue;
+            }
+            if (used > 0) {
+                lines++;
+                used = 0;
+            }
+            while (wordLength > perLine) {
+                lines++;
+                wordLength -= perLine;
+            }
+            used = wordLength;
+        }
+        return lines;
     }
 }
 

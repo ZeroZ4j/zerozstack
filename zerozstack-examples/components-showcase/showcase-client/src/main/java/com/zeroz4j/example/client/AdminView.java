@@ -27,6 +27,7 @@ import com.zeroz4j.ui.layout.FlexComponent.JustifyContentMode;
 import com.zeroz4j.ui.layout.HorizontalLayout;
 import com.zeroz4j.ui.layout.VerticalLayout;
 import org.teavm.jso.browser.Window;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class AdminView extends VerticalLayout {
 
@@ -75,7 +76,7 @@ public class AdminView extends VerticalLayout {
         title.getElement().setClassName("font-medium");
         title.getElement().setInnerHTML(titleStr);
         Component desc = new Component("p") {};
-        desc.getElement().setClassName("text-sm opacity-70");
+        desc.getElement().setClassName(TextStyle.SECONDARY.getClassNames());
         desc.getElement().setInnerHTML(descStr);
         textLayout.add(title, desc);
 

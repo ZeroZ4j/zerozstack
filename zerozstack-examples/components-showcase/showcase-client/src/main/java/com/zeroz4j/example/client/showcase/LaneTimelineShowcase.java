@@ -53,15 +53,29 @@ public class LaneTimelineShowcase extends ComponentShowcase {
         addSection("Five worker sessions - drag the cursor or press play. The name column is as "
             + "wide as the longest name needs; hover a name to see it whole.", host);
 
-        List<LaneTimeline.Lane> narrow = new ArrayList<>(lanes);
+        List<LaneTimeline.Lane> wordy = new ArrayList<>(lanes);
+        wordy.add(lane("worker-5 mixtral-8x22b-instruct-v0.1-quantised", "RUNNING",
+            start + 90_000L, 0, data, 5));
+
         LaneTimeline fixed = new LaneTimeline();
         fixed.setLabelWidth(110);
-        fixed.setLanes(narrow);
+        fixed.setLanes(wordy);
         Div fixedHost = new Div();
         fixedHost.addClassName("w-full");
         fixedHost.add(fixed);
-        addSection("The same lanes with the name column pinned to 110 pixels - names too long for "
-            + "it are shortened, and hovering still shows them whole", fixedHost);
+        addSection("The same lanes with the name column pinned to 110 pixels, plus one very long "
+            + "name - the browser fades out the end of it, the whole name is still in the page, "
+            + "and hovering shows it", fixedHost);
+
+        LaneTimeline wrapped = new LaneTimeline();
+        wrapped.setLabelWidth(110);
+        wrapped.setLabelWrap(true);
+        wrapped.setLanes(wordy);
+        Div wrappedHost = new Div();
+        wrappedHost.addClassName("w-full");
+        wrappedHost.add(wrapped);
+        addSection("The same again with wrapping turned on - the long name runs onto more lines "
+            + "and its lane grows to fit", wrappedHost);
     }
 
     private static LaneTimeline.Lane lane(String label, String outcome, long openedAt, long closedAt,

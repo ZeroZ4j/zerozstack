@@ -24,14 +24,19 @@ import com.zeroz4j.ui.layout.Span;
  *
  * <p>A dot has <b>two</b> pieces of text, and they are rarely the same one. The <i>state</i> is an
  * internal name that decides the colour and whether the dot pulses; the <i>label</i> is what a
- * person reads when they hover it. Given only a state, the dot uses it for both - which is how
- * every dot in one application ended up hovering as {@code DISPATCHED}. Give both whenever the
- * state is a name from your code rather than a word for the reader:</p>
+ * person reads when they hover it. Give both whenever you have words worth reading:</p>
  *
  * <pre>{@code
  * new StatusDot("DISPATCHED", "Sent to a worker");
  * dot.setState("FAILED", "Could not finish");
  * }</pre>
+ *
+ * <p><b>Given only a state, the dot writes the hover text itself</b>, in ordinary language:
+ * {@code DESIGN_REVIEW} hovers as "Design review" rather than as the constant. That is a fallback,
+ * not an excuse - it can only reword the name it was given, so a name that means nothing to the
+ * reader still means nothing once the underscores are gone. It stops a console full of dots
+ * shouting {@code DISPATCHED} at somebody who does not work on the code. Text that already reads
+ * like a sentence is left exactly as it was.</p>
  *
  * <p>The label is also what assistive technology announces; a dot is a picture with no text in it,
  * so without a label there is nothing to announce.</p>
@@ -44,12 +49,13 @@ public final class StatusDot extends Span {
     private String label;
 
     /**
-     * Creates a dot coloured by the given state, using that same state as the hover text.
+     * Creates a dot coloured by the given state, with the state reworded into ordinary language
+     * for the hover text.
      *
      * @param state the state name, which decides colour and pulse
      */
     public StatusDot(String state) {
-        this(state, state);
+        this(state, readableLabel(state));
     }
 
     /**
@@ -69,13 +75,13 @@ public final class StatusDot extends Span {
     }
 
     /**
-     * Sets the state, and uses it as the hover text as well. Call
-     * {@link #setState(String, String)} instead whenever the state is an internal name.
+     * Sets the state, rewording it into ordinary language for the hover text. Call
+     * {@link #setState(String, String)} instead whenever you have better words than the name.
      *
      * @param state the state name, which decides colour and pulse
      */
     public void setState(String state) {
-        setState(state, state);
+        setState(state, readableLabel(state));
     }
 
     /**
@@ -122,6 +128,56 @@ public final class StatusDot extends Span {
      */
     public String getLabel() {
         return label;
+    }
+
+    /**
+     * Turns a state name into words a person can read.
+     *
+     * <p>{@code DESIGN_REVIEW} becomes "Design review". Anything that does not look like a
+     * constant - anything with a lower-case letter or a space in it - is already somebody's
+     * writing and is handed back untouched.</p>
+     *
+     * @param state the state name
+     * @return the same words, readable; an empty string when there was no state
+     */
+    public static String readableLabel(String state) {
+        if (state == null || state.isEmpty()) {
+            return "";
+        }
+        if (!looksLikeAConstant(state)) {
+            return state;
+        }
+        StringBuilder out = new StringBuilder(state.length());
+        boolean first = true;
+        for (int i = 0; i < state.length(); i++) {
+            char c = state.charAt(i);
+            if (c == '_' || c == '-') {
+                out.append(' ');
+            } else if (first) {
+                out.append(Character.toUpperCase(c));
+                first = false;
+            } else {
+                out.append(Character.toLowerCase(c));
+            }
+        }
+        return out.toString().trim();
+    }
+
+    /** A constant is upper case, digits, underscores and hyphens - and nothing else. */
+    private static boolean looksLikeAConstant(String state) {
+        boolean sawLetter = false;
+        for (int i = 0; i < state.length(); i++) {
+            char c = state.charAt(i);
+            if (c == '_' || c == '-' || (c >= '0' && c <= '9')) {
+                continue;
+            }
+            if (Character.isLetter(c) && !Character.isLowerCase(c)) {
+                sawLetter = true;
+                continue;
+            }
+            return false;
+        }
+        return sawLetter;
     }
 
     /** DaisyUI background class for any state string used across the domain. */

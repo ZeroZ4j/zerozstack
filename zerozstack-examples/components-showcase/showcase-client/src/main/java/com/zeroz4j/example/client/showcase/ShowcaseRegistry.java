@@ -79,6 +79,7 @@ public class ShowcaseRegistry {
         showcases.put("input", TextFieldShowcase::new);
         showcases.put("theme-controller", ThemeControllerShowcase::new);
         showcases.put("timeline", TimelineShowcase::new);
+        showcases.put("type-scale", TextStyleShowcase::new);
         showcases.put("toast", ToastShowcase::new);
         showcases.put("toggle", ToggleShowcase::new);
         showcases.put("tooltip", TooltipShowcase::new);
@@ -176,6 +177,7 @@ public class ShowcaseRegistry {
         labels.put("input", "Text Field");
         labels.put("theme-controller", "Theme Controller");
         labels.put("timeline", "Timeline");
+        labels.put("type-scale", "Type Scale");
         labels.put("toast", "Toast");
         labels.put("toggle", "Toggle");
         labels.put("tooltip", "Tooltip");

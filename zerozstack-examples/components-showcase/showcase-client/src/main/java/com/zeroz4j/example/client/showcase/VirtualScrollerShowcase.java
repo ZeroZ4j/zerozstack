@@ -23,6 +23,7 @@ import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import java.util.ArrayList;
 import java.util.List;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class VirtualScrollerShowcase extends ComponentShowcase {
 
@@ -44,7 +45,7 @@ public class VirtualScrollerShowcase extends ComponentShowcase {
             row.addClassName("flex items-center gap-3 border-b border-base-300/40 px-3 "
                 + "font-mono text-xs hover:bg-base-content/5");
             Span index = new Span(item);
-            index.addClassName("text-base-content/50");
+            TextStyle.CAPTION.applyTo(index);
             Span payload = new Span("payload for " + item);
             row.add(index, payload);
             return row;

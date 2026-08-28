@@ -20,8 +20,10 @@ package com.zeroz4j.example.client.showcase;
 import com.zeroz4j.ui.component.Card;
 import com.zeroz4j.ui.component.CardTitle;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.component.HasStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.VerticalLayout;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public abstract class ComponentShowcase extends VerticalLayout {
 
@@ -32,26 +34,43 @@ public abstract class ComponentShowcase extends VerticalLayout {
         addClassName("max-w-4xl");
     }
 
+    /**
+     * The name of this page, in the library's own type scale. The accent colour is the one thing
+     * chosen here; the size and weight are asked for by name so every page is the same.
+     */
     protected void addTitle(String text) {
-        class H1Title extends Component {
+        class H1Title extends Component implements HasStyle {
             public H1Title(String t) {
                 super("h1");
                 getElement().setTextContent(t);
-                getElement().setClassName("text-3xl font-bold mb-2 text-primary");
+                addClassName("mb-2 text-primary");
+                TextStyle.PAGE_TITLE.applyTo(this);
+            }
+
+            @Override
+            public Component getComponent() {
+                return this;
             }
         }
         add(new H1Title(text));
     }
 
+    /** The sentence under the title: supporting words, one step quieter than the prose. */
     protected void addDescription(String text) {
-        class DescSpan extends Component {
-            public DescSpan(String t) {
+        class DescParagraph extends Component implements HasStyle {
+            public DescParagraph(String t) {
                 super("p");
                 getElement().setTextContent(t);
-                getElement().setClassName("text-base text-base-content/75 mb-4");
+                addClassName("mb-4");
+                TextStyle.SECONDARY.applyTo(this);
+            }
+
+            @Override
+            public Component getComponent() {
+                return this;
             }
         }
-        add(new DescSpan(text));
+        add(new DescParagraph(text));
     }
 
     protected void addSection(String title, Component... components) {

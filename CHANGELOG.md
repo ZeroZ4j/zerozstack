@@ -140,6 +140,74 @@ first published, and repairs to the two components whose labels an application c
 - **`LaneTimeline.setLabelWidth`** — pins the width of the name column, for lining several
   timelines up with each other. Leave it alone, or pass 0, and the column measures itself.
 
+- **A notice can say what kind of thing it is, and carry a heading and a button.** `Alert` could
+  only be a line of text in a coloured box, and the colour had to be spelled out as a stylesheet
+  class name — `new Alert(msg, "alert-error")`, or `setThemeColor(ThemeColor.ERROR)`. So an
+  application that needed a warning with a title above it, or a "Try again" button beside it, built
+  its own. One built the same tinted box twice, in two files, neither knowing about the other.
+
+    ```java
+    add(Alert.caution("The disk is nearly full."));
+
+    add(Alert.danger("Nothing was saved.")
+             .withHeading("The upload failed")
+             .withAction("Try again", e -> upload()));
+    ```
+
+    The four tones are named for what you are saying rather than for a colour: `info`, `success`,
+    `caution`, `danger`. Each notice carries a small mark showing its tone, so the four are still
+    told apart by somebody who cannot separate the colours — `setIconVisible(false)` takes it away.
+    A notice now tells a screen reader that it is a notice, and a failure interrupts where the
+    other three wait their turn. Long text wraps instead of running off the side.
+
+    `setThemeColor` and `new Alert(text, "alert-info")` still work and are now marked as things not
+    to use. They put a stylesheet class name into application code, where nothing checks the
+    spelling and no reader understands it.
+
+- **Five sizes of text, by name.** Every screen has text and no component owns it, so text is what
+  applications describe over and over instead of asking for. One application wrote out its own idea
+  of "quiet supporting text" a dozen times and finished with three sizes and four degrees of grey,
+  on pages sitting next to each other. This library had done the same to itself: its own components
+  spell out quiet text thirteen different ways, in five degrees of fade, across fifty-six places.
+
+    ```java
+    add(TextStyle.PAGE_TITLE.span("Deliveries"));
+    add(TextStyle.SECONDARY.paragraph("Nineteen stops left, updated a moment ago"));
+
+    TextStyle.CAPTION.applyTo(somethingYouAlreadyBuilt);
+    ```
+
+    The five are `PAGE_TITLE` (the name of the screen), `SECTION_TITLE` (the heading over a group),
+    `BODY` (ordinary prose), `SECONDARY` (supporting words, a step quieter) and `CAPTION` (the
+    smallest label there is). There is one definition of each and no way to say "nearly that".
+
+    **Quiet is a fade, not a colour.** The two quiet sizes fade whatever colour they inherit rather
+    than naming one, so the same words are right on a page, on a tinted notice, on a coloured card
+    and on a dark background — and two greys that were meant to match cannot drift apart.
+
+    Five is deliberate. A scale nobody can hold in their head gets ignored and typed out again,
+    which is the problem it exists to end.
+
+- **A timeline can be given its events, instead of being handed hand-built list items.** `Timeline`
+  was an empty container: it drew the line but knew nothing about what went on it, so every
+  application wrote its own forty lines of markup to make one step, and the component gallery did
+  too.
+
+    ```java
+    Timeline history = new Timeline().vertical();
+    history.addEvent("09:14", "Order placed", "Paid by card, delivered to the office address.");
+    history.addEvent("Tomorrow", "Expected");
+    ```
+
+    The line joining one event to the next is drawn and redrawn as events are added, so nothing has
+    to be told which one is first or last. An event's words are never shortened: a long description
+    wraps inside its box, the box stops growing at about 20rem — `setEventWidth` changes that — and
+    a timeline laid out in a row scrolls sideways rather than pushing the page out of shape. A step
+    built by hand is still welcome, and `add` still takes one.
+
+- **`LaneTimeline.setLabelWrap`** — lets a lane name too long for its column run onto more lines,
+  growing that lane to fit. Off by default, because lanes of one height are easier to scan.
+
 ### Fixed
 
 - **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
@@ -228,6 +296,36 @@ first published, and repairs to the two components whose labels an application c
   qwen36-27b` arrived as a stub. The column is now measured from the longest name, between 90 and
   260 pixels, hovering a name always shows it whole, and `setLabelWidth` pins the column where a
   fixed one is wanted.
+
+- **A lane name was still being cut down to a shorter string before it was drawn.** Widening the
+  column moved the line where the cut happened; it did not stop the cutting. A name too long for
+  whatever width the column ended up with was chopped in Java and the short copy was drawn, so the
+  characters past the cut existed nowhere on the page: they could not be selected, could not be
+  found by the browser's search, and were never read out. A shortened name also looks exactly like
+  a short one, which is why nobody noticed.
+
+    The whole name now goes into the page and the browser decides what to do when it does not fit —
+    it fades the end away, and hovering still shows the lot. `setLabelWrap(true)` runs it onto more
+    lines instead. Either way nothing is thrown away, and a test now fails if this component ever
+    starts cutting text again.
+
+- **A status dot given only a state hovered as that state.** `new StatusDot("DESIGN_REVIEW")` put
+  `DESIGN_REVIEW` under the mouse and read `DESIGN_REVIEW` out to a screen reader, so a console
+  full of dots shouted the code's own vocabulary at people who do not work on the code. A state on
+  its own is now reworded into ordinary language — "Design review" — before it is shown.
+
+    This is a fallback, not a substitute for saying what you mean: it can only reword the name it
+    was given, so `new StatusDot("FSM_7", "Waiting for a slot")` is still the right way to write it.
+    Words that already read like a sentence are left exactly as they were.
+
+    **If you were relying on the hover text being the constant** — a diagnostic console, say — pass
+    it twice: `new StatusDot("DESIGN_REVIEW", "DESIGN_REVIEW")`.
+
+- **Setting the text on a notice replaced everything inside it.** `Alert` kept its words in a box of
+  its own, but `setText` wrote over the notice's whole contents and threw that box away. Nothing
+  visible broke, because a notice held nothing but its words — but now that one can hold a heading
+  and a button, changing the message would have thrown those away too. `setText` now changes the
+  message and leaves the rest of the notice alone.
 
 ## [Unreleased] — 0.8.0
 

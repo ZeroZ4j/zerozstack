@@ -26,6 +26,7 @@ import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import java.util.ArrayList;
 import java.util.List;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class TimeRangePickerShowcase extends ComponentShowcase {
 
@@ -46,7 +47,8 @@ public class TimeRangePickerShowcase extends ComponentShowcase {
         chart.setChartHeight(160);
 
         Span readout = new Span();
-        readout.addClassName("font-mono text-xs text-base-content/60");
+        TextStyle.CAPTION.applyTo(readout);
+        readout.addClassName("font-mono");
 
         TimeRangePicker driver = new TimeRangePicker(0);
         // The Effect is the whole point: no click listener, no manual wiring.

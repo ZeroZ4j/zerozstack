@@ -90,6 +90,45 @@ a vertical layout, a dialog or a card. A field with a caption is inserted into i
 group — caption, control, explanation, message. A field with no caption is inserted exactly as
 before, so a page that uses none is unchanged.
 
+## Naming text sizes
+
+Every screen has text, and no component owns it. So text is the thing applications describe over
+and over instead of asking for it — and because it is described rather than named, it comes out
+slightly different every time. One application built on this library wrote out its own idea of
+"quiet supporting text" a dozen times and ended up with three sizes and four degrees of grey, on
+pages sitting next to each other.
+
+There are five sizes of text, by name, in `com.zeroz4j.ui.theme.TextStyle`:
+
+| Name | For |
+|---|---|
+| `PAGE_TITLE` | the name of the screen — one per page, at the top |
+| `SECTION_TITLE` | the heading over a group of things: a card, a panel, a block of a form |
+| `BODY` | ordinary prose, the words the reader came for |
+| `SECONDARY` | supporting words, one step quieter: timestamps, counts, explanations |
+| `CAPTION` | the smallest label there is: units, hints, the words under a picture |
+
+Ask for one, rather than describing it:
+
+```java
+add(TextStyle.PAGE_TITLE.span("Deliveries"));
+add(TextStyle.SECONDARY.paragraph("Nineteen stops left, updated a moment ago"));
+
+TextStyle.CAPTION.applyTo(existingComponent);   // on something you already have
+```
+
+`span` makes inline text, `paragraph` makes a block that starts on its own line, and `applyTo`
+styles a component you already built and returns it. Applying a second size replaces the first
+rather than fighting it.
+
+**Quiet is a fade, not a colour.** The two quiet sizes fade whatever colour they inherit instead of
+naming one. The same words are therefore right on a page, on a tinted notice, on a coloured card
+and on a dark background, without anybody choosing per surface — and two greys that were meant to
+be the same one cannot drift apart.
+
+Five is deliberate. A scale nobody can hold in their head is one that gets ignored and typed out
+again, which is the whole problem.
+
 ## Data Binding to POJOs
 
 Input components (those implementing `HasValue`) can be directly bound to data POJOs using the `Binder<BEAN>` class. The Binder facilitates a two-way data flow between your UI components and your Java model.
@@ -200,7 +239,15 @@ Components that trigger actions or navigate between views.
 ### Data Display & Content
 Components used to present data, alerts, and content to the user.
 - **Accordion**: An expandable/collapsible list of panels for dense content.
-- **Alert**: A distinct message banner to convey important information or warnings.
+- **Alert**: The tinted notice — a strip of prose the reader is meant to act on. Pick it by what
+  you are saying rather than by a colour: `Alert.info`, `Alert.success`, `Alert.caution`,
+  `Alert.danger`. A notice can carry a short bold heading and one button:
+  `Alert.danger("Nothing was saved.").withHeading("The upload failed").withAction("Try again",
+  e -> upload())`. It shows a small mark for its tone, so the four are told apart by somebody who
+  cannot separate the colours (`setIconVisible(false)` removes it); it announces itself to a screen
+  reader as a notice; and long text wraps instead of running off the side. `setThemeColor` and
+  `new Alert(text, "alert-info")` still work and are deprecated — they spell out a stylesheet class,
+  which nothing checks and no reader understands.
 - **Avatar**: Represents a user or entity with an image or initials.
 - **Badge**: A small label or indicator, often used for counts or status.
 - **Card**: A bounded container for grouping related content and actions.
@@ -238,7 +285,10 @@ Components used to present data, alerts, and content to the user.
 - **LaneTimeline**: A timeline view segmented into multiple lanes. The name column is measured
   from the longest lane name, between 90 and 260 pixels; hovering a name shows it whole however
   narrow the column had to be. `setLabelWidth(px)` pins the column for lining several timelines up
-  with each other, and `setLabelWidth(0)` goes back to measuring.
+  with each other, and `setLabelWidth(0)` goes back to measuring. A name too long for the column is
+  never shortened in Java: the whole name is in the page and the browser fades out the end of it,
+  so it can still be selected, searched for and read out. `setLabelWrap(true)` runs it onto more
+  lines instead and grows that lane to fit.
 - **Loading**: A spinner or indicator signifying a background process is running.
 - **MarkdownView**: Renders Markdown text safely into HTML.
 - **Mask**: A component for shaping or clipping elements (e.g., circular images).
@@ -256,13 +306,20 @@ Components used to present data, alerts, and content to the user.
 - **StatusDot**: A small coloured indicator representing a status. It has two pieces of text and
   they are rarely the same one: the *state* decides the colour and the pulse, the *label* is what a
   person reads on hover and what a screen reader announces — `new StatusDot("DISPATCHED", "Sent to
-  a worker")`. Given one string it uses it for both, which is how a console full of dots ends up
-  hovering as `DISPATCHED`.
+  a worker")`. Given only a state it writes the hover text itself, in ordinary language:
+  `DESIGN_REVIEW` hovers as "Design review". That is a fallback and not an excuse — it can only
+  reword the name it was given — but it stops a console full of dots shouting `DISPATCHED` at
+  somebody who does not work on the code. Text that already reads like a sentence is left alone.
 - **StreamingText**: A component for displaying text that streams in dynamically (e.g., LLM responses).
 - **SvgCanvas**: A container for drawing and displaying SVG graphics.
 - **Table**: A structured grid for displaying tabular data.
 - **ThemeController**: A component for managing and switching application themes (e.g., light/dark mode).
-- **Timeline**: A linear representation of events ordered by time.
+- **Timeline**: Events in the order they happened, across the page or down it
+  (`new Timeline().vertical()`). Add them one at a time — `addEvent("09:14", "Order placed", "Paid
+  by card")` — and the line joining one to the next is drawn and redrawn for you. An event's words
+  are never shortened: a long description wraps inside its box, the box stops growing at about
+  20rem (`setEventWidth`), and a timeline laid out in a row scrolls sideways rather than pushing
+  the page out of shape. Any component can still be added as a step by hand.
 - **Toast**: A brief, auto-expiring notification message overlaid on the screen.
 - **TokenMeter**: A specialized visualization component (e.g., for showing API token usage).
 - **Tooltip**: A small informational popup shown when hovering over an element.
@@ -336,3 +393,11 @@ Core building blocks that other components extend or implement.
 - **HasSize / HasStyle / HasText / HasEnabled**: Mixin interfaces for standard component properties.
 - **DomListenerRegistration / EventListener / ComponentEvent / ClickEvent**: Infrastructure for DOM event handling and custom component events.
 - **Focusable**: Interface for components that can receive keyboard focus.
+
+### Shared Styling
+Package `com.zeroz4j.ui.theme`. Not components — the small vocabulary every component and every
+screen shares, so the same thing is asked for by name rather than described again.
+- **TextStyle**: The five sizes of text, by name — see [Naming text sizes](#naming-text-sizes).
+- **ThemeColor**: The DaisyUI colour names a component can be given, for the components that take
+  one (`setThemeColor`).
+- **ThemeSize**: The size names a component can be given, for the components that take one.
