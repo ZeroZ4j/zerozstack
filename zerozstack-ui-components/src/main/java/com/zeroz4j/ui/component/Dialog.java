@@ -131,10 +131,10 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
      * add it to a layout before opening it.</p>
      */
     public void open() {
-        if (opened) {
-            return;
-        }
         if (modal) {
+            // Deliberately not guarded by the opened flag: this is a no-op on a dialog that is
+            // genuinely showing, and on one whose element was taken out of the page and put back
+            // it is the repair that lets it show again.
             Js.dialogShowModal(getElement());
         }
         addClassName("modal-open");
@@ -207,8 +207,17 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
      * Whether the browser owns the open dialog. On by default.
      *
      * <p>Off, {@link #open()} only changes how the dialog looks, which is what every version up to
-     * 0.7.0 did: Escape does nothing, focus can wander out, the page behind stays live, and only
-     * something the application wires up can close it. Set it before opening.</p>
+     * 0.7.0 did: Escape does nothing, focus can wander out and the page behind stays live. Set it
+     * before opening.</p>
+     *
+     * <p>A click outside the panel is the one exit this does <b>not</b> take away, because it is
+     * drawn and handled by the component rather than by the browser. To match 0.7.0 exactly, turn
+     * that off as well:</p>
+     *
+     * <pre>{@code
+     * dialog.setModal(false);
+     * dialog.setCloseOnOutsideClick(false);
+     * }</pre>
      *
      * @param modal true to hand the open dialog to the browser
      */
@@ -287,6 +296,16 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
     public void setHeight(String height) {
         modalBox.setStyle("height", height);
         modalBox.setStyle("max-height", "100%");
+    }
+
+    /**
+     * Closes the dialog when it is taken out of the page while showing, so that the application
+     * is told rather than left believing a dialog it can no longer see is still open.
+     */
+    @Override
+    protected void onDetach() {
+        closeInternal(false);
+        super.onDetach();
     }
 
     @Override

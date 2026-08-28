@@ -45,10 +45,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Eight strings in this module reached the published 0.7.0 jar in that state, three rounds of
  * it deep — the pause and play-speed labels of {@code LaneTimeline}, the deleted-lines marker of
  * {@code DiffView}, the empty-value dash of {@code PropertyGrid} and the caret of
- * {@code StreamingText} — so applications rendered {@code ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â} where a dash
- * belonged. The build was never at fault: the corruption was in the committed bytes, so every
- * build faithfully reproduced it and nothing anywhere reported a problem. Only reading the files
- * catches this, which is what this test does.</p>
+ * {@code StreamingText} — so applications rendered a dozen characters of Latin-1 punctuation
+ * where a dash belonged. The build was never at fault: the corruption was in the committed bytes,
+ * so every build faithfully reproduced it and nothing anywhere reported a problem. Only reading
+ * the files catches this, which is what this test does — and it deliberately quotes no corrupted
+ * text of its own, since it would then fail on itself.</p>
  *
  * <p><b>How it detects it.</b> Corruption of this kind is reversible. Take a run of non-ASCII
  * characters, write it back out as Windows-1252, and try to read those bytes as UTF-8: text that
