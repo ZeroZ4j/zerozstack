@@ -47,14 +47,14 @@ Effect.create(() -> install.setVisible(Pwa.installable().get()));
 Once installed it opens in its own window with no browser chrome, and `Pwa.isInstalled()` is true.
 
 **2. Change the identity.** Open <http://localhost:8083/?brand=sunset>. The manifest is built per
-request by `PwaManifest`, so the installed name and colour change:
+request by `PwaManifest`, so the installed name and color change:
 
 ```java
 @GET @Path("/manifest.webmanifest")
 @Produces("application/manifest+json")
 public String manifest(@QueryParam("brand") String brand) {
     return PwaManifest.named(name, shortName)
-            .themeColor(colour)
+            .themeColor(color)
             .icon("/icons/icon-192.png", 192)
             .icon("/icons/icon-512.png", 512)
             .toJson();

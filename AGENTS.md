@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.7.0**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.8.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
@@ -103,6 +103,12 @@ implementations).
    on every build and fails it otherwise, and every control also has to appear on the browser
    proof page in `tools/ui-proof`. Full rule:
    [docs/guides/ui-keyboard-and-naming.md](docs/guides/ui-keyboard-and-naming.md).
+11. **Name every input with `withLabel(...)`, not with the constructor argument** (0.8.0+).
+   `new TextField("Email address")` sets the *placeholder* — example text inside the empty box that
+   disappears the moment somebody types and is announced by nothing. The caption is
+   `new TextField().withLabel("Email address")`. `setHelperText`, `setRequiredIndicatorVisible` and
+   `setErrorMessage` carry the other three things a field says, and a `Binder` sets the last of them
+   for you. Every input in the library has all four.
 
 ## Persistence and transactions
 
@@ -305,8 +311,6 @@ internally for every navigation.
 
 ## When nothing happens
 
-| Symptom | Cause |
-|---|---|
 Most of these now throw. The ones that remain are the genuinely silent cases.
 
 | Symptom | Cause |
@@ -505,9 +509,10 @@ is built. See [docs/PWA.md](docs/PWA.md).
 - The route chain is **rebuilt on every navigation**; a layout is not kept mounted while its children
   swap, so its loader re-runs.
 - Routing has no wildcard or optional segments, no lazy loading, and one child per layout.
-- Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x15 REJECT`,
-  `0x16 SIGNAL_SUB` and `0x18 PUSH` are declared but unreferenced. There is no version field, no
-  acknowledgement and no conflict rejection in the implemented sync path.
+- Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x16 SIGNAL_SUB`
+  and `0x18 PUSH` are declared but unreferenced. There is no version field, no acknowledgment and no
+  conflict rejection in the implemented sync path. `0x15 REJECT` **is** implemented: it carries the
+  reason a live mutation was refused.
 - LiveSync has no field-level merging and no version-conflict detection. Whole-object,
   last-write-wins.
 - Tracked collections do not exist.
@@ -542,7 +547,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 
 ## Conventions
 
-- Apache 2.0 licence header on every new `.java` file; copy an existing one.
+- Apache 2.0 license header on every new `.java` file; copy an existing one.
 - Javadoc on public API, including the wire opcode where a method sends a frame.
 - Documentation lives in `/docs` as plain Markdown. See
   [docs/contribute/docs-style-guide.md](docs/contribute/docs-style-guide.md).

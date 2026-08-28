@@ -5,7 +5,7 @@ that read it. They are short enough to actually follow.
 
 ## Structure
 
-Documentation is organised on [Diátaxis](https://diataxis.fr): four kinds of page that serve different
+Documentation is organized on [Diátaxis](https://diataxis.fr): four kinds of page that serve different
 needs and must not be mixed.
 
 | Section | Serves | Voice |
@@ -14,8 +14,14 @@ needs and must not be mixed.
 | `guides/` | a task, for someone who already has the concepts | "To achieve X, do Y." |
 | `decide/` | choosing between constructs | "Use X when…, not when…" |
 | `reference/` | looking a fact up | dry, complete, no narrative |
-| `explain/` | understanding why | discursive; the only place for rationale |
-| `agents/` | AI coding agents | imperative, compressed |
+| Explanation | understanding why | discursive; the only place for rationale |
+| AI agents | AI coding agents | imperative, compressed |
+
+The last two have no folder of their own yet. Explanation is `ARCHITECTURE.md`, `CONCEPTS.md` and
+`CODE_WALKTHROUGH.md` at the top of `docs/`; the agent material is `AGENTS.md` in the repository root
+and `docs/AGENT_PROMPTS.md`. `mkdocs.yml` groups them under those names. Several older pages also sit
+at the top of `docs/` — `SIGNALS.md`, `ROUTING.md`, `UI_COMPONENTS.md` and the rest — and are filed
+as guides in the navigation; new guides go in `guides/`.
 
 If you cannot tell which section a page belongs in, it is probably two pages.
 
@@ -23,8 +29,8 @@ If you cannot tell which section a page belongs in, it is probably two pages.
 
 1. **Second person, present tense, active voice.** "You declare the topic once." Not "The topic should
    be declared."
-2. **Instructions carry no thesis.** Architectural justification lives only in `explain/`. A how-to
-   page never explains why the industry is wrong.
+2. **Instructions carry no thesis.** Architectural justification lives only on the explanation pages
+   (`ARCHITECTURE.md`, `CONCEPTS.md`). A how-to page never explains why the industry is wrong.
 3. **Open every page with one sentence** naming who it is for and what they will end up with.
 4. **State limits where the feature is taught**, not in a distant caveats file. A "Limits" section at
    the end of a guide is the habit that keeps this documentation trustworthy — keep it, and keep it
@@ -36,7 +42,10 @@ If you cannot tell which section a page belongs in, it is probably two pages.
 7. **Terminology is fixed by the [glossary](../reference/glossary.md).** Event, signal, push, message,
    sync and mutation never drift. If you need a new term, add it there first.
 8. **Cross-link on first mention** of another construct, always to the same canonical page.
-9. **American spelling**, consistent with the code identifiers.
+9. **American spelling**, consistent with the code identifiers. Color, behavior, catalog, gray,
+   canceled, organize, license, center. `DocumentationSpellingTest` fails the build on a British
+   spelling in prose, naming the file, the line and the word to use; anything inside backticks or a
+   code fence is exempt, because a real name has to be spelled the way the code spells it.
 10. **One sentence per line** where it makes review diffs readable. Wrap at 100 columns.
 
 ## Code samples
@@ -76,9 +85,12 @@ nothing and make retrieval much better:
   answer well.
 - **Stable headings.** They anchor retrieval and inbound links. Do not rename them casually.
 
-Keep [`context7.json`](https://github.com/ZeroZ4j/zerozstack/blob/main/context7.json)'s `rules` array in
-sync with `agents/rules.md`. The array is the compressed projection of that page, and it is how
-guidance reaches agents working in other repositories.
+Keep [`context7.json`](https://github.com/ZeroZ4j/zerozstack/blob/main/context7.json)'s `rules` array
+and [`llms.txt`](https://github.com/ZeroZ4j/zerozstack/blob/main/llms.txt) in sync with
+[`AGENTS.md`](https://github.com/ZeroZ4j/zerozstack/blob/main/AGENTS.md). Those two files are the
+compressed projection of that page, and they are how guidance reaches agents working in other
+repositories. Three things drift and have drifted: the version number, a rule that describes an old
+API, and a new page that never gets a link. Check all three whenever you change `AGENTS.md`.
 
 ## Markdown
 

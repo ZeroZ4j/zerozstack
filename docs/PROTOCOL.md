@@ -120,7 +120,7 @@ application's service interface.
 
 After **25 seconds of silence** the client sends a five-byte RMI-shaped frame naming the reserved
 service `zeroz4j.keepalive`, method `ping`, with correlation id `0` — fire and forget, because
-nothing waits for the answer. The server recognises the name before service dispatch and replies with
+nothing waits for the answer. The server recognizes the name before service dispatch and replies with
 one `0x19 PONG`: no service lookup, nothing checked beyond the connection already being open, no
 request context.
 

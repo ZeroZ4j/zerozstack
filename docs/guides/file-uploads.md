@@ -17,7 +17,7 @@ message is assembled whole in memory and is subject to `zeroz.ws.maxBinaryMessag
 **Uploads do not travel over the live WebSocket connection, so its message size limit does not apply
 to them.**
 They are posted to a separate HTTP address that writes them straight to disk, which is what makes
-progress reporting and cancelling possible.
+progress reporting and canceling possible.
 
 ## Three steps
 
@@ -141,7 +141,7 @@ move is a rename rather than a copy.
   body is read, and then against the bytes actually counted as they arrive.
 - **The temporary file is named by the framework.** Nothing the browser sent is used to build a
   path.
-- **The file is whole when the handler runs.** An upload that was cancelled or whose connection
+- **The file is whole when the handler runs.** An upload that was canceled or whose connection
   dropped is answered "That file did not finish sending. Please try again." and never reaches your
   code.
 - **The temporary file is always deleted** — on success, on rejection, on a handler that threw, on a
@@ -188,7 +188,7 @@ altogether.
   If more than one `FileUploadHandler` is deployed the framework uses one and logs a warning naming
   them all.
 - **No resume and no chunking.**
-  A cancelled or dropped upload starts again from the beginning.
+  A canceled or dropped upload starts again from the beginning.
 - **No per-user or per-tenant quota**, and no limit on how many files can be uploaded at once.
   `zeroz.upload.maxBytes` applies to one file.
 - **No virus scanning, and no image or document validation.**

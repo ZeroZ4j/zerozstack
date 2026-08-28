@@ -184,7 +184,7 @@ sub.dispose();
 ```
 
 **Limits.** Delivery is at-most-once: a disconnected client misses events, and there is no queueing,
-acknowledgement or redelivery. Late subscribers receive nothing. Payloads must be `@DataModel` or a
+acknowledgment or redelivery. Late subscribers receive nothing. Payloads must be `@DataModel` or a
 built-in serializable type, and a payload that is not serializable **fails silently** — the
 exception is caught per session and logged on the server.
 

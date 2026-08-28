@@ -18,14 +18,14 @@ JDK 21 is not optional: the server uses virtual threads, and the build targets r
 
 ```bash
 git clone https://github.com/ZeroZ4j/zerozstack.git
-cd zeroz4j
+cd zerozstack
 mvn clean install -DskipTests
 ```
 
 Expect a couple of minutes with a warm Maven cache, and considerably longer on the first run while
 dependencies download.
-The build compiles the framework, runs the annotation processor, compiles all ten example clients
-with TeaVM, and installs everything into your local repository.
+The build compiles the framework, runs the annotation processor, compiles all eleven example
+clients with TeaVM, and installs everything into your local repository.
 
 !!! warning "Always include `clean`"
     Each example server copies its dependencies into `target/libs`, and that directory is never
@@ -58,10 +58,13 @@ Every example has a port of its own, so you can leave several running side by si
 somewhere else, add `--port 9000` to the command, or pass the number to `run.bat`:
 `run.bat 9000`.
 
-!!! note
-    There is no executable jar. `java -jar …-server.jar` and `mvn exec:java` do not work: the build
-    configures neither a shade/assembly plugin nor `exec-maven-plugin`. The classpath invocation above
-    is the supported way, and it is what `run.bat` does.
+!!! note "`mvn exec:java` never works, and most examples have no runnable jar"
+    There is no `exec-maven-plugin` anywhere, so `mvn exec:java` fails in every module. Seven of the
+    eleven examples also have no runnable jar — `todo-signals`, `chat-events`, `chat-livesync`,
+    `job-monitor`, `form-signup`, `inventory-crud` and `components-showcase` — because no shade or
+    assembly plugin is configured for them. For those seven, the classpath command above is the way,
+    and it is what `run.bat` does. The four added in 0.6.0 — `routing-tour`, `oidc-login`,
+    `scoped-signals` and `pwa-install` — do build one, so `java -jar …-server.jar` works for those.
 
 **What you should see.** Weld and Helidon start up, and the last lines report the server listening.
 The console stays open; stop it with `Ctrl+C`.
@@ -119,6 +122,10 @@ differences between the three propagation examples are the point.
 | `job-monitor` | A shared signal driven from a server-side virtual thread |
 | `chat-livesync` | LiveSync — a synced object driving an `Effect` directly |
 | `components-showcase` | The component library gallery |
+| `routing-tour` | `@Route` views, nested layouts, typed parameters, loaders |
+| `scoped-signals` | One signal value per tenant, user or browser |
+| `pwa-install` | Installing the application, and a manifest built per request |
+| `oidc-login` | Signing in against a real Keycloak with OpenID Connect |
 
 ## Next steps
 
@@ -126,6 +133,9 @@ differences between the three propagation examples are the point.
   the wrong propagation mechanism is the most common source of trouble in ZeroZ Stack applications.
 - [Troubleshooting](../guides/troubleshooting.md) — if something does not work, and especially if
   nothing at all happens.
+- [Declaring the types that cross the wire](../guides/data-models.md) — the first thing you write in
+  a new application: a class, a record, or a sealed family.
+- [Testing an application](../guides/testing.md) — start a server inside a test, in one process.
 - [Limitations](../reference/limitations.md) — what this version does not do.
 
 ## Starting your own project
@@ -137,7 +147,7 @@ Helidon already wired up.
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=0.7.0 \
+  -DarchetypeVersion=0.8.0 \
   -DgroupId=com.example \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT
@@ -158,3 +168,8 @@ java -cp "target/classes;target/libs/*" com.example.myapp.server.ServerApp
 You should get a page at <http://localhost:8080> reading "Zeroz4j App is running!". The generated
 client is a deliberately minimal hello-world that writes to the DOM directly; to see idiomatic use of
 `zerozstack-ui-components`, signals and RMI, read the examples above.
+
+**The generated page is unstyled**, because it does not yet pull in the two stylesheets the
+components need. Copy the two `<script>` and `<link>` lines from any example's `index.html` — they
+are listed and explained in
+[Where the styles come from](../UI_COMPONENTS.md#where-the-styles-come-from).

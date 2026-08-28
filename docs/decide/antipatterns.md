@@ -29,7 +29,7 @@ Pushing a growing collection through a shared signal instead of publishing event
 
 ```java
 // WRONG — resends the entire history on every message, and `equals` deduplication
-// makes the behaviour hard to predict as the list grows.
+// makes the behavior hard to predict as the list grows.
 CHAT_HISTORY.update(list -> append(list, msg));
 ```
 
@@ -60,7 +60,7 @@ so `profile.getTags().add("x")` reports nothing. Reassign through the setter, or
 
 ## Operation-as-edit
 
-Modelling an operation as a `@ClientWritable` field flip.
+Modeling an operation as a `@ClientWritable` field flip.
 
 ```java
 // WRONG — "approve" has no name, no place for @Secured or @RolesAllowed, no validation point,

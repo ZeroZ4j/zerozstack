@@ -57,7 +57,7 @@ Checkbox news    = new Checkbox().withLabel("Send me the occasional release note
 ```
 
 **A caption is not a placeholder.** The single-argument constructor sets the *placeholder* — the
-grey words inside an empty box, which vanish the moment somebody types and are announced by nothing.
+gray words inside an empty box, which vanish the moment somebody types and are announced by nothing.
 That is an example of what goes in the field, never its name. The two can be used together, as the
 email field above does, and `setPlaceholder` changes one later.
 
@@ -75,7 +75,7 @@ field.setRequiredIndicatorVisible(true);       // the asterisk after the caption
 field.setErrorMessage("A port is a number between 1 and 65535.");
 ```
 
-`setErrorMessage` shows the sentence under the field, colours the control to match and marks it
+`setErrorMessage` shows the sentence under the field, colors the control to match and marks it
 invalid for assistive technology; passing `null` clears all three. A `Binder` calls it for you — see
 [Forms and binding](guides/ui-forms-and-validation.md).
 
@@ -125,7 +125,7 @@ application is styled the moment it starts.
 Every screen has text, and no component owns it. So text is the thing applications describe over
 and over instead of asking for it — and because it is described rather than named, it comes out
 slightly different every time. One application built on this library wrote out its own idea of
-"quiet supporting text" a dozen times and ended up with three sizes and four degrees of grey, on
+"quiet supporting text" a dozen times and ended up with three sizes and four degrees of gray, on
 pages sitting next to each other.
 
 There are five sizes of text, by name, in `com.zeroz4j.ui.theme.TextStyle`:
@@ -150,6 +150,10 @@ TextStyle.CAPTION.applyTo(existingComponent);   // on something you already have
 `span` makes inline text, `paragraph` makes a block that starts on its own line, and `applyTo`
 styles a component you already built and returns it. Applying a second size replaces the first
 rather than fighting it.
+
+**Quiet is a fade, not a color.** The two quiet sizes fade whatever color they inherit instead of
+naming one. The same words are therefore right on a page, on a tinted notice, on a colored card
+and on a dark background, without anybody choosing per surface — and two grays that were meant to
 
 **Quiet is a fade, not a colour.** Quiet text fades whatever colour it has inherited instead of
 naming one. The same words are therefore right on a page, on a tinted notice, on a coloured card
@@ -188,9 +192,9 @@ TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);      // there, and out of t
 `applyTo`, `span` and `paragraph` all take an `Emphasis` as a second argument. Passing none, or
 passing `null`, uses the size's own.
 
-Loudness is a fade rather than a colour, for the same reason the sizes are. Never write
-`text-base-content/60` and its neighbours: that names a colour, so it goes wrong the moment the
-surface underneath is a tinted notice or a coloured card, and two pieces of quiet text that were
+Loudness is a fade rather than a color, for the same reason the sizes are. Never write
+`text-base-content/60` and its neighbors: that names a color, so it goes wrong the moment the
+surface underneath is a tinted notice or a colored card, and two pieces of quiet text that were
 meant to match drift apart.
 
 ## Swapping what is inside something
@@ -393,7 +397,14 @@ Full explanation, including how to slot a layer of your own in between two of th
 
 ## Component Reference
 
-The framework provides a rich set of 106 UI components, broken down into the following functional categories:
+Everything the library provides, grouped by what it is for. The list below is the whole of
+`com.zeroz4j.ui` — components, layouts, charts, the base classes they extend and the small styling
+vocabulary they share.
+
+!!! note "There is deliberately no count here"
+    This page used to open with a number. It was wrong twice, in the same direction both times: the
+    number was written once and the library kept growing under it. A number nobody updates is worse
+    than no number, so the list is the answer. If you want a count, count the entries.
 
 ### Layout Components
 Used for structuring the application and organizing other components.
@@ -451,8 +462,8 @@ Components that trigger actions or navigate between views.
 - **Pagination**: Controls for navigating through paginated datasets.
 - **Swap**: A component that toggles between two different states or icons on click.
 - **Tab**: One heading in a row of tabs. It is a real `<button>`, so the keyboard reaches it and
-  Enter presses it; `setSelected(true)` colours it and says it is the one showing, in one call,
-  so the colour and the announcement cannot drift apart. **Changed in 0.8.0** — it used to be an
+  Enter presses it; `setSelected(true)` colors it and says it is the one showing, in one call,
+  so the color and the announcement cannot drift apart. **Changed in 0.8.0** — it used to be an
   `<a>` with nowhere to go, which the browser leaves out of the tab order entirely.
 - **Link**: A hyperlink. **Give it a destination** — `new Link("Read the guide", "/docs/guide")`,
   or `setHref` / `withHref` later. An `<a>` with no address is not a link: the browser leaves it
@@ -465,11 +476,11 @@ Components that trigger actions or navigate between views.
 Components used to present data, alerts, and content to the user.
 - **Accordion**: An expandable/collapsible list of panels for dense content.
 - **Alert**: The tinted notice — a strip of prose the reader is meant to act on. Pick it by what
-  you are saying rather than by a colour: `Alert.info`, `Alert.success`, `Alert.caution`,
+  you are saying rather than by a color: `Alert.info`, `Alert.success`, `Alert.caution`,
   `Alert.danger`. A notice can carry a short bold heading and one button:
   `Alert.danger("Nothing was saved.").withHeading("The upload failed").withAction("Try again",
   e -> upload())`. It shows a small mark for its tone, so the four are told apart by somebody who
-  cannot separate the colours (`setIconVisible(false)` removes it); it announces itself to a screen
+  cannot separate the colors (`setIconVisible(false)` removes it); it announces itself to a screen
   reader as a notice; and long text wraps instead of running off the side. `setThemeColor` and
   `new Alert(text, "alert-info")` still work and are deprecated — they spell out a stylesheet class,
   which nothing checks and no reader understands.
@@ -515,6 +526,10 @@ Components used to present data, alerts, and content to the user.
   page rather than over it. The panel sits on `Layer.OVERLAY`.
 - **EmptyState**: A placeholder view shown when there is no data to display.
 - **Footer**: A standard page footer element.
+- **Login**: A username-and-password sign-in card. It collects the two values and hands them to a
+  `LoginListener`; how they are checked is the application's business. It disables itself when
+  submitted, and `showError("...")` reports a failed attempt, re-enables the form and speaks the
+  message to a screen reader as well as showing it.
 - **Hero**: A large, prominent banner often used at the top of landing pages.
 - **Icon**: A scalable vector icon component.
 - **Indicator**: A visual marker, often attached to other elements (like badges on icons).
@@ -524,8 +539,8 @@ Components used to present data, alerts, and content to the user.
 - **KeyedList**: An optimized list component that efficiently manages DOM nodes based on keys.
 - **KpiTile**: A dashboard stat tile: label, big value with an optional unit, a computed movement
   line (absolute change, percentage and direction arrow) and a trend sparkline. `setDirection`
-  decides whether a rise is coloured as good news — falling free memory is bad, falling latency is
-  good, and that is a judgement rather than arithmetic.
+  decides whether a rise is colored as good news — falling free memory is bad, falling latency is
+  good, and that is a judgment rather than arithmetic.
 - **LaneTimeline**: A timeline view segmented into multiple lanes. The name column is measured
   from the longest lane name, between 90 and 260 pixels; hovering a name shows it whole however
   narrow the column had to be. `setLabelWidth(px)` pins the column for lining several timelines up
@@ -538,6 +553,8 @@ Components used to present data, alerts, and content to the user.
 - **MarkdownView**: Renders Markdown text safely into HTML.
 - **Mask**: A component for shaping or clipping elements (e.g., circular images).
 - **PhoneMockup / BrowserMockup / WindowMockup / CodeMockup**: Decorative containers that frame content within stylized device or window borders.
+- **Artboard**: A fixed-size canvas at a common phone screen size, for showing a layout at the
+  size it will really be. Usually put inside `PhoneMockup`.
 - **Progress / RadialProgress**: A bar and a ring showing how far along something is. The ring
   announces its percentage as it changes. Neither invents a name for itself - say what is
   progressing with `withAriaLabel`, or put the words next to it.
@@ -547,19 +564,19 @@ Components used to present data, alerts, and content to the user.
 - **Resizer**: A handle you drag to resize what it sits on. **Changed in 0.8.0** - it is in the tab
   order and the arrow keys move it, so it works without a mouse. `setAriaLabel` says what it
   resizes.
-- **Skeleton**: The grey blocks standing in for content that has not arrived. They are decoration
+- **Skeleton**: The gray blocks standing in for content that has not arrived. They are decoration
   and are skipped by screen readers; put a "Loading" message on the region around them, not on
   each block.
 - **Sparkline**: A tiny inline trend chart in `AREA`, `LINE` or `BAR` mode, auto-scaled to its
-  data, with an optional baseline, min/max markers and delta colouring. Draws in `currentColor`
-  by default, so it inherits the surrounding text colour and follows the theme for free.
+  data, with an optional baseline, min/max markers and delta coloring. Draws in `currentColor`
+  by default, so it inherits the surrounding text color and follows the theme for free.
 - **SplitPane**: Two panels with a divider between them. **Changed in 0.8.0** - the divider is in
   the tab order, the arrow keys move it, Home and End send it to the ends, and it says where it
   is as it moves. `setAriaLabel` says what it divides.
 - **Stack**: A layout utility for overlapping components.
 - **Stat**: A component optimized for displaying a prominent statistic or metric.
-- **StatusDot**: A small coloured indicator representing a status. It has two pieces of text and
-  they are rarely the same one: the *state* decides the colour and the pulse, the *label* is what a
+- **StatusDot**: A small colored indicator representing a status. It has two pieces of text and
+  they are rarely the same one: the *state* decides the color and the pulse, the *label* is what a
   person reads on hover and what a screen reader announces — `new StatusDot("DISPATCHED", "Sent to
   a worker")`. Given only a state it writes the hover text itself, in ordinary language:
   `DESIGN_REVIEW` hovers as "Design review". That is a fallback and not an excuse — it can only
@@ -602,8 +619,8 @@ Components used to present data, alerts, and content to the user.
 
 ### Charts & Dashboards
 Package `com.zeroz4j.ui.chart`. Built in Java against SVG and DOM — no JavaScript charting library is
-wrapped or loaded. Series colours resolve to DaisyUI theme tokens (`var(--color-primary)`), so
-switching `data-theme` recolours every chart with no redraw and no listener.
+wrapped or loaded. Series colors resolve to DaisyUI theme tokens (`var(--color-primary)`), so
+switching `data-theme` recolors every chart with no redraw and no listener.
 
 **Charts**
 - **TimeSeriesChart**: The workhorse panel — multiple metrics over time as lines, filled areas or a
@@ -612,17 +629,17 @@ switching `data-theme` recolours every chart with no redraw and no listener.
 - **RollingChart**: Live telemetry with a sliding window. `push()` samples in; redraw is decoupled
   from data arrival, so the trace scrolls smoothly at any sample rate and a stalled feed shows as a
   growing gap rather than a frozen chart. Bounded ring buffer.
-- **Gauge**: One value against a range, coloured by threshold, with threshold arcs outside the dial.
-  Where `RadialProgress` shows a percentage, a Gauge shows a *reading* — min, max, unit and judgement.
-- **BarGauge**: A stack of labelled meters on a shared scale (`BASIC`, `LCD`, `GRADIENT`; horizontal
+- **Gauge**: One value against a range, colored by threshold, with threshold arcs outside the dial.
+  Where `RadialProgress` shows a percentage, a Gauge shows a *reading* — min, max, unit and judgment.
+- **BarGauge**: A stack of labeled meters on a shared scale (`BASIC`, `LCD`, `GRADIENT`; horizontal
   or vertical). The densest way to show one measurement across many subjects.
 - **BarChart**: Categorical bars, grouped or stacked, vertical or horizontal.
-- **Heatmap**: Histograms over time — time buckets across, value bands up, colour by count. Shows
+- **Heatmap**: Histograms over time — time buckets across, value bands up, color by count. Shows
   whether a tail moved because everything slowed or because a second mode appeared.
 - **Histogram**: Distribution of a sample set, with automatic nice-numbered bucketing.
-- **ScatterChart**: Two measurements against each other, with optional category colour and bubble
+- **ScatterChart**: Two measurements against each other, with optional category color and bubble
   size (scaled by area, not radius).
-- **DonutChart**: Composition of a whole, with the total in the centre.
+- **DonutChart**: Composition of a whole, with the total in the center.
 - **Treemap**: Proportional area via the squarified algorithm, up to two levels. For "what is taking
   up all the space".
 - **StateTimeline**: Discrete state over time as bands whose edges are the transitions.
@@ -637,20 +654,20 @@ switching `data-theme` recolours every chart with no redraw and no listener.
   hour" keeps meaning the last hour.
 - **RefreshControl**: Manual refresh, an auto-refresh interval, and the age of the current data —
   so "the number has not moved" is distinguishable from "the number has not been fetched".
-- **MetricTable**: A sortable table whose cells are measurements: threshold-coloured numbers, inline
+- **MetricTable**: A sortable table whose cells are measurements: threshold-colored numbers, inline
   sparklines, in-cell bars and state pills.
-- **LogViewer**: Level-coloured, filterable, tail-following log pane on `VirtualScroller`.
-- **ColorScaleLegend**: The key for a colour-encoded chart — a continuous ramp or discrete thresholds.
+- **LogViewer**: Level-colored, filterable, tail-following log pane on `VirtualScroller`.
+- **ColorScaleLegend**: The key for a color-encoded chart — a continuous ramp or discrete thresholds.
 
 **Supporting types**
 - **Series**: A named value array plus its draw style (filled, stepped, dashed, points, hidden).
-- **Threshold**: A value band and the colour it paints, shared by every threshold-aware component.
+- **Threshold**: A value band and the color it paints, shared by every threshold-aware component.
 - **ValueFormat**: How a number is rendered — percent, bytes, gigabytes, duration, or your own lambda.
-- **StateColor**: Maps a discrete state name to a colour; the default knows up/down, running/exited,
+- **StateColor**: Maps a discrete state name to a color; the default knows up/down, running/exited,
   healthy/unhealthy.
 - **Scales**: Nice tick selection, local-time tick alignment, and TeaVM-safe number formatting
   (`String.format` does not exist in the TeaVM classlib).
-- **Palette**: DaisyUI token series colours plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`).
+- **Palette**: DaisyUI token series colors plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`).
 - **ChartBase / CartesianChart**: Measure-then-draw lifecycle, SVG factories, tooltip, legend, empty
   state; axes, grid, threshold bands and crosshair. Extend these to add a chart type.
 
@@ -679,6 +696,9 @@ Core building blocks that other components extend or implement.
   already set. See [Stacking overlays](guides/ui-layering.md).
 - **DomListenerRegistration / EventListener / ComponentEvent / ClickEvent**: Infrastructure for DOM event handling and custom component events.
 - **Focusable**: Interface for components that can receive keyboard focus.
+- **HasColorVariants / HasSizeVariants / HasOutlineVariant / HasPositionVariant**: Package
+  `com.zeroz4j.ui.component.mixin`. The optional knobs a component may expose - a theme color, a
+  size name, an outline-only look, where it sits - each implemented once instead of per component.
 
 ### Shared Styling
 Package `com.zeroz4j.ui.theme`. Not components — the small vocabulary every component and every
@@ -686,6 +706,8 @@ screen shares, so the same thing is asked for by name rather than described agai
 - **TextStyle**: The five sizes of text, by name — see [Naming text sizes](#naming-text-sizes).
 - **Emphasis**: How loud a piece of text is, separately from how big — `FULL`, `QUIET`, `FAINT`.
   See [Small without being quiet](#small-without-being-quiet).
+- **ThemeColor**: The DaisyUI color names a component can be given, for the components that take
+
 
 - **TextStyle**: The five sizes of text, by name, and `Emphasis` for how loud each one is — see
   [Naming text sizes](#naming-text-sizes).

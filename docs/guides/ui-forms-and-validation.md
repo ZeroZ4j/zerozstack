@@ -18,7 +18,7 @@ same time.
 ## Name the fields first
 
 Before any of this, give each field a caption. `new TextField("Email address")` sets the
-*placeholder*, not a caption — it is grey text inside the empty box that disappears as soon as
+*placeholder*, not a caption — it is gray text inside the empty box that disappears as soon as
 somebody types, and no screen reader announces it. Use `withLabel`:
 
 ```java
@@ -99,7 +99,7 @@ binder.forField(confirmField)
 ### Where the messages appear
 
 You do not place them. When a check fails, the binder shows the sentence under the field that
-failed, colours that control and marks it invalid for assistive technology; when the value is fixed,
+failed, colors that control and marks it invalid for assistive technology; when the value is fixed,
 all three are cleared. `asRequired` also puts an asterisk after the field's caption, so the form
 says which fields are needed before anyone presses Save.
 
@@ -122,8 +122,8 @@ Set a message yourself — for something the server said, say — with
 
 When a check fails, four things happen at once and you write none of them:
 
-- the sentence appears under the field, in the error colour;
-- the control is coloured to match;
+- the sentence appears under the field, in the error color;
+- the control is colored to match;
 - the field is marked invalid, so a screen reader says "invalid" when the reader reaches it;
 - the sentence becomes the field's description, so the same screen reader reads it out.
 

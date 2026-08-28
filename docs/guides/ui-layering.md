@@ -119,7 +119,7 @@ furniture without you having to check.
 
 **They are a hundred apart.** If your application really does have a layer of its own — a loading
 veil over the whole page, say — there are ninety-nine free values between any two of these. Read the
-neighbours with `getZIndex()` rather than guessing.
+neighbors with `getZIndex()` rather than guessing.
 
 ## Seeing which layer something is on
 
