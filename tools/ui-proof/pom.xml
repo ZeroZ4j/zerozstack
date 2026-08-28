@@ -18,7 +18,7 @@
 <!--
   Deliberately NOT part of the reactor. This is a test harness: it compiles the real component
   library to JavaScript so a real browser can be driven against it, and nobody building or
-  releasing ZeroZ Stack should pay for that. run.ps1 packages the library first and drops the
+  releasing ZeroZ Stack should pay for that. build.sh packages the library first and drops the
   jars in lib/, which is why the two dependencies below are system-scoped and version-free.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -27,10 +27,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.zeroz4j.tools</groupId>
-    <artifactId>overlay-proof</artifactId>
+    <artifactId>ui-proof</artifactId>
     <version>1</version>
     <packaging>jar</packaging>
-    <name>Overlay proof harness</name>
+    <name>UI proof harness</name>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
@@ -85,7 +85,7 @@
                         </goals>
                         <configuration>
                             <targetDirectory>${project.basedir}/web/js</targetDirectory>
-                            <mainClass>com.zeroz4j.ui.proof.OverlayProofPage</mainClass>
+                            <mainClass>com.zeroz4j.ui.proof.KeyboardProofPage</mainClass>
                             <targetType>JAVASCRIPT</targetType>
                             <minifying>false</minifying>
                             <optimizationLevel>SIMPLE</optimizationLevel>

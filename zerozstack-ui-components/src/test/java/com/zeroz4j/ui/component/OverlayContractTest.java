@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The things that make the overlays behave, checked without a browser.
  *
- * <p>The browser proof in {@code tools/overlay-proof} is what actually shows that the keyboard
+ * <p>The browser proof in {@code tools/ui-proof} is what actually shows that the keyboard
  * stays inside a dialog and that Escape closes it. It needs Chrome and about a minute, so it is
  * run by hand. This test is the tripwire that runs on every build: it reads the source of each
  * overlay and fails if the wiring the proof depends on has been taken out.</p>

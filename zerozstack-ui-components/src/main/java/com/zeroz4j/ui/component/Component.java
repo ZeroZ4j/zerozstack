@@ -83,6 +83,33 @@ public abstract class Component {
     }
     
     /**
+     * Gives this component a name for anybody who cannot see it.
+     *
+     * <p>Most controls name themselves out of the words inside them: a button that says "Save" is
+     * announced as "Save". This is for the ones that cannot — an icon on its own, a splitter, a
+     * canvas, a spinner. Without it a screen reader says "button" and stops, which tells the
+     * listener nothing at all.</p>
+     *
+     * <p>Prefer visible words wherever there is room for them. A name only a screen reader can
+     * hear is the fallback, not the goal, and one that disagrees with the visible label is worse
+     * than none — somebody using voice control says what they can see.</p>
+     *
+     * @param label the words, or null to take the name away again
+     */
+    public void setAriaLabel(String label) {
+        if (label == null || label.isEmpty()) {
+            element.removeAttribute("aria-label");
+        } else {
+            element.setAttribute("aria-label", label);
+        }
+    }
+
+    /** The name set with {@link #setAriaLabel(String)}, or null when it has none. */
+    public String getAriaLabel() {
+        return element.getAttribute("aria-label");
+    }
+
+    /**
      * Sets the HTML {@code id} attribute of the underlying DOM element.
      *
      * @param id element identifier string

@@ -51,6 +51,10 @@ public class Rating extends AbstractField<Rating, Integer> implements
             radio.setAttribute("name", groupName);
             radio.setAttribute("class", "mask mask-star-2 bg-orange-400");
             radio.setValue(String.valueOf(i + 1));
+            // A star drawn with a stylesheet has nothing inside it to read, so without this a
+            // screen reader announces five radio buttons called "input" and whoever is choosing
+            // has no idea which is which. The words are the ones somebody would say out loud.
+            radio.setAttribute("aria-label", (i + 1) + (i == 0 ? " star" : " stars"));
             radio.addEventListener("change", threaded(changeListener));
             radios[i] = radio;
             getElement().appendChild(radio);

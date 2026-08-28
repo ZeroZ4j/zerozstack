@@ -57,17 +57,26 @@ public final class CodeBlock extends Div {
             + "text-xs text-base-content/60");
         Span langChip = new Span(lang.isEmpty() ? "text" : lang);
         langChip.addClassName("font-mono");
-        Div copy = new Div();
-        copy.addClassName("flex items-center gap-1 cursor-pointer hover:text-primary");
-        copy.add(Icon.of("copy", "w-3.5 h-3.5"));
-        Span copyLabel = new Span("copy");
-        copy.getElement().appendChild(copyLabel.getElement());
-        copy.getElement().addEventListener("click", threaded(e -> {
+        // A real <button>, not a styled box. The browser puts a button in the tab order and
+        // presses it on Enter and Space for nothing; a div with a click handler can only ever be
+        // used with a mouse. The class list is the one the box had, minus the "btn" a Button adds
+        // for itself, so it still reads as a quiet word in the header rather than a chunky button.
+        Button copyButton = new Button();
+        copyButton.setClassName("flex items-center gap-1 cursor-pointer hover:text-primary");
+        copyButton.getElement().setAttribute("type", "button");
+        copyButton.getElement().appendChild(Icon.of("copy", "w-3.5 h-3.5").getElement());
+        Span copyLabel = new Span("Copy");
+        // The word changes to "Copied" after the copy, and that is the only sign it worked. A
+        // polite live region means somebody using a screen reader is told, instead of being left
+        // wondering whether anything happened.
+        copyLabel.getElement().setAttribute("aria-live", "polite");
+        copyButton.getElement().appendChild(copyLabel.getElement());
+        copyButton.getElement().addEventListener("click", threaded(e -> {
             Js.copyToClipboard(code);
-            copyLabel.setText("copied!");
+            copyLabel.setText("Copied");
         }));
         header.getElement().appendChild(langChip.getElement());
-        header.add(copy);
+        header.add(copyButton);
         add(header);
 
         Div scroll = new Div();

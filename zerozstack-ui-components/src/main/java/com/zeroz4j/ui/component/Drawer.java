@@ -403,12 +403,23 @@ public class Drawer extends Component implements HasComponents, HasStyle, HasSiz
         super.onDetach();
     }
 
-    /** The hidden checkbox the stylesheet watches to decide whether the panel is in or out. */
+    /**
+     * The hidden checkbox the stylesheet watches to decide whether the panel is in or out.
+     *
+     * <p>It is plumbing, not a control. A person opens a drawer with the button the application
+     * gave them, never with this - but a checkbox is in the tab order by default, so the keyboard
+     * used to stop on it, and it has no words, so a screen reader announced nothing at all. Taking
+     * it out of the tab order and hiding it from assistive technology costs nothing: the
+     * stylesheet reads the checkbox itself, which still works, and the drawer is still opened and
+     * closed from code.</p>
+     */
     private static final class Toggle extends Component {
         private Toggle() {
             super("input");
             getElement().setAttribute("type", "checkbox");
             getElement().setClassName("drawer-toggle");
+            getElement().setAttribute("tabindex", "-1");
+            getElement().setAttribute("aria-hidden", "true");
         }
     }
 

@@ -73,6 +73,61 @@ public abstract class ComponentShowcase extends VerticalLayout {
         add(new DescParagraph(text));
     }
 
+    /**
+     * The short "try this, and this would be broken" note the hard pages carry under their title.
+     * One style, defined once, so six pages do not each invent a tinted box of their own.
+     *
+     * @param heading  what the reader is being asked to do
+     * @param points   one sentence per thing to try or to watch for
+     */
+    protected void addWhatToCheck(String heading, String... points) {
+        Div box = new Div();
+        box.addClassName("rounded-box border border-warning/40 bg-warning/10 p-4 mb-2");
+
+        class BoxHeading extends Component implements HasStyle {
+            BoxHeading(String t) {
+                super("p");
+                getElement().setTextContent(t);
+                addClassName("font-semibold mb-2");
+            }
+
+            @Override
+            public Component getComponent() {
+                return this;
+            }
+        }
+        box.add(new BoxHeading(heading));
+
+        class Bullets extends Component implements HasStyle {
+            Bullets() {
+                super("ul");
+                addClassName("list-disc pl-5 space-y-1 text-sm");
+            }
+
+            @Override
+            public Component getComponent() {
+                return this;
+            }
+        }
+        class Bullet extends Component implements HasStyle {
+            Bullet(String t) {
+                super("li");
+                getElement().setTextContent(t);
+            }
+
+            @Override
+            public Component getComponent() {
+                return this;
+            }
+        }
+        Bullets list = new Bullets();
+        for (String point : points) {
+            list.getElement().appendChild(new Bullet(point).getElement());
+        }
+        box.add(list);
+        add(box);
+    }
+
     protected void addSection(String title, Component... components) {
         Card sectionCard = new Card();
         sectionCard.addClassName("p-6");

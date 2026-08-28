@@ -97,9 +97,17 @@ public final class DiffView extends Div {
         Div section = new Div();
         section.addClassName("rounded-lg border border-base-300 overflow-hidden");
 
-        Div header = new Div();
-        header.addClassName("flex items-center gap-2 px-3 py-1.5 bg-base-200 cursor-pointer "
-            + "hover:bg-base-300/60 text-sm");
+        // The header opens and shuts the file, so it is a real <button>: Tab reaches it, Enter and
+        // Space press it, and it announces itself as a button without a line of extra code. It
+        // keeps the class list the old box had, plus a full width and left alignment, because a
+        // button is centred and only as wide as its contents unless told otherwise.
+        Button header = new Button();
+        header.setClassName("flex items-center gap-2 px-3 py-1.5 bg-base-200 cursor-pointer "
+            + "hover:bg-base-300/60 text-sm w-full text-left");
+        header.getElement().setAttribute("type", "button");
+        // Its name is the file path shown inside it, so it is read out as "src/Main.java, button,
+        // expanded". The diff starts open, so it starts expanded.
+        header.getElement().setAttribute("aria-expanded", "true");
         Icon chevron = Icon.of("chevron-down", "w-3.5 h-3.5 transition-transform");
         Span path = new Span(file.path());
         path.addClassName("font-mono text-xs flex-1 truncate");
@@ -107,7 +115,7 @@ public final class DiffView extends Div {
         addBadge.addClassName("text-success text-xs font-mono");
         Span delBadge = new Span("−" + file.dels());
         delBadge.addClassName("text-error text-xs font-mono");
-        header.add(chevron);
+        header.getElement().appendChild(chevron.getElement());
         header.getElement().appendChild(path.getElement());
         header.getElement().appendChild(addBadge.getElement());
         header.getElement().appendChild(delBadge.getElement());
@@ -138,6 +146,8 @@ public final class DiffView extends Div {
         header.getElement().addEventListener("click", e -> {
             boolean visible = !"none".equals(body.getElement().getStyle().getPropertyValue("display"));
             body.setVisible(!visible);
+            // Says out loud whether the file is open or shut, so it is not only the arrow that tells.
+            header.getElement().setAttribute("aria-expanded", visible ? "false" : "true");
             chevron.setStyle("transform", visible ? "rotate(-90deg)" : "rotate(0deg)");
         });
 

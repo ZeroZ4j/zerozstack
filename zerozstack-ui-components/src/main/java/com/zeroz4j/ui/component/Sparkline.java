@@ -71,6 +71,9 @@ public final class Sparkline extends Div {
         this.width = width;
         this.height = height;
         addClassName("inline-block align-middle");
+        // A sparkline sits beside the number it illustrates, so reading it out would only repeat
+        // what has just been said. setAriaLabel takes it back off the hidden list.
+        getElement().setAttribute("aria-hidden", "true");
         svg = SvgCanvas.el("svg",
             "width", String.valueOf(width),
             "height", String.valueOf(height),
@@ -128,6 +131,36 @@ public final class Sparkline extends Div {
     public Sparkline setColor(String cssColor) {
         this.color = cssColor;
         redraw();
+        return this;
+    }
+
+    /**
+     * Names the chart, for the rare sparkline that stands alone.
+     *
+     * <p>These are hidden from screen readers by default, because one nearly always sits next to
+     * the number it draws. Where it does not - where the shape of the trend is the only thing on
+     * show - give it words and it stops being hidden.</p>
+     *
+     * @param label the words, or null to hide it again
+     */
+    @Override
+    public void setAriaLabel(String label) {
+        super.setAriaLabel(label);
+        if (label == null || label.isEmpty()) {
+            getElement().setAttribute("aria-hidden", "true");
+        } else {
+            getElement().removeAttribute("aria-hidden");
+        }
+    }
+
+    /**
+     * {@link #setAriaLabel(String)}, for building a chart in one expression.
+     *
+     * @param label the words, or null to hide it again
+     * @return this chart
+     */
+    public Sparkline withAriaLabel(String label) {
+        setAriaLabel(label);
         return this;
     }
 

@@ -122,6 +122,17 @@ public class FileUpload extends Div {
                 + "transition-colors duration-150 hover:border-primary hover:bg-base-200/50");
         dropZone.add(inner);
         dropZone.getElement().appendChild(input);
+        // The box is a place to drop files onto as well as something to press, so it stays a plain
+        // box rather than becoming a button. That means building the keyboard side of a button by
+        // hand, and all three parts are needed: it says what it is, it is in the tab order, and it
+        // answers Enter and Space in wireUp() exactly as it answers a click. Two of the three give
+        // something that can be reached and not pressed, or pressed and never reached.
+        //
+        // No button is put inside the box on purpose. A control inside a control is not read out
+        // properly by screen readers, and this box is already the control.
+        dropZone.getElement().setAttribute("role", "button");
+        dropZone.getElement().setAttribute("tabindex", "0");
+        describeDropZone();
 
         list = new Div();
         list.addClassName("flex flex-col gap-2");
@@ -141,6 +152,7 @@ public class FileUpload extends Div {
      */
     public FileUpload setTitle(String title) {
         titleLabel.setText(title);
+        describeDropZone();
         return this;
     }
 
@@ -152,7 +164,26 @@ public class FileUpload extends Div {
      */
     public FileUpload setSubtitle(String subtitle) {
         subtitleLabel.setText(subtitle);
+        describeDropZone();
         return this;
+    }
+
+    /**
+     * Gives the box its spoken name, out of the same two lines it shows.
+     *
+     * <p>Somebody who cannot see the box hears only its name, so the name has to be the wording on
+     * it. Redone whenever that wording changes, or the name would be the old words.</p>
+     */
+    private void describeDropZone() {
+        String title = titleLabel.getText() == null ? "" : titleLabel.getText().trim();
+        String subtitle = subtitleLabel.getText() == null ? "" : subtitleLabel.getText().trim();
+        String spoken;
+        if (title.isEmpty()) {
+            spoken = subtitle.isEmpty() ? "Add files" : subtitle;
+        } else {
+            spoken = subtitle.isEmpty() ? title : title + ", " + subtitle;
+        }
+        dropZone.getElement().setAttribute("aria-label", spoken);
     }
 
     /**
@@ -229,6 +260,18 @@ public class FileUpload extends Div {
         // treat as script opening a picker on its own and refuse.
         dropZone.getElement().addEventListener("click", (Event event) ->
                 UploadBrowser.openPicker(input));
+
+        // Enter and Space are what a button answers, so the box answers them too. Raw and not
+        // threaded for the same reason as the click above: the picker has to open while this key
+        // press is still being handled. Space is stopped from doing its usual job, which is
+        // scrolling the page down.
+        dropZone.getElement().addEventListener("keydown", (Event event) -> {
+            String key = Js.eventKey(event);
+            if ("Enter".equals(key) || " ".equals(key) || "Spacebar".equals(key)) {
+                event.preventDefault();
+                UploadBrowser.openPicker(input);
+            }
+        });
 
         input.addEventListener("change", (Event event) -> {
             File[] chosen = toArray(UploadBrowser.inputFiles(input));

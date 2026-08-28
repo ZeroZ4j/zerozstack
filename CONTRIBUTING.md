@@ -22,6 +22,21 @@ If you have an idea for an enhancement, please submit an issue to our GitHub Rep
 5. Make sure your code follows the existing formatting. All new source files should include the Apache 2.0 license header.
 6. Issue that pull request!
 
+## Every control works from the keyboard, and has a name
+
+If your change makes something in `zerozstack-ui-components` clickable, it has to be reachable with
+Tab and pressed with Enter, and it has to have words that say what it does.
+
+`KeyboardAndNamingContractTest` enforces that on every build. It reads the source of every
+component, works out which element each listener was put on and what tag that element is, and fails
+the build when something can only be used with a mouse or is announced as nothing. It also requires
+every control to appear on the browser proof page in `tools/ui-proof`, where real key presses are
+sent at it.
+
+The whole rule, and how to satisfy it, is on one page:
+[Keyboard and naming](docs/guides/ui-keyboard-and-naming.md). The short version is that almost
+every failure is a click listener on a `Div`, and almost every fix is a `Button`.
+
 ## Save every file as UTF-8
 
 Every file in this repository is UTF-8. That includes source files, resource files and anything

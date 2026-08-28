@@ -28,27 +28,48 @@ public class RangeShowcase extends ComponentShowcase {
         addTitle("Range");
         addDescription("Range slider is used to select a value from a range.");
 
+        addWhatToCheck("Try this",
+                "Tab onto every field below, including the read-only one. The disabled one must be "
+                        + "skipped and the read-only one must not.",
+                "Read the caption of each field. A field with no caption has no name.",
+                "The one marked wrong has to say why, under the field, in words.",
+                "The required ones have to show that they are required by something other than colour.",
+                "The last one has a caption of 140 characters. It should wrap, not push the page out.",
+                "Broken looks like: a red border with no sentence, a required field with no mark, "
+                        + "or a disabled field that Tab still stops on.");
+
         // Basic Range
         Range basicRange = new Range();
+        basicRange.withLabel("Volume");
         basicRange.setValue(40.0);
         addSection("Basic Range", basicRange);
 
+        addSection("Every state a slider really has", allStates());
+
         // Colors
         Range rangePrimary = new Range().setThemeColor(ThemeColor.PRIMARY);
+        rangePrimary.withLabel("Primary");
         rangePrimary.setValue(20.0);
         Range rangeSecondary = new Range().setThemeColor(ThemeColor.SECONDARY);
+        rangeSecondary.withLabel("Secondary");
         rangeSecondary.setValue(30.0);
         Range rangeAccent = new Range().setThemeColor(ThemeColor.ACCENT);
+        rangeAccent.withLabel("Accent");
         rangeAccent.setValue(40.0);
         Range rangeNeutral = new Range().setThemeColor(ThemeColor.NEUTRAL);
+        rangeNeutral.withLabel("Neutral");
         rangeNeutral.setValue(50.0);
         Range rangeInfo = new Range().setThemeColor(ThemeColor.INFO);
+        rangeInfo.withLabel("Info");
         rangeInfo.setValue(60.0);
         Range rangeSuccess = new Range().setThemeColor(ThemeColor.SUCCESS);
+        rangeSuccess.withLabel("Success");
         rangeSuccess.setValue(70.0);
         Range rangeWarning = new Range().setThemeColor(ThemeColor.WARNING);
+        rangeWarning.withLabel("Warning");
         rangeWarning.setValue(80.0);
         Range rangeError = new Range().setThemeColor(ThemeColor.ERROR);
+        rangeError.withLabel("Error");
         rangeError.setValue(90.0);
         
         addSection("Colors", 
@@ -58,12 +79,16 @@ public class RangeShowcase extends ComponentShowcase {
 
         // Sizes
         Range rangeXs = new Range().setThemeSize(ThemeSize.XS);
+        rangeXs.withLabel("Extra small");
         rangeXs.setValue(10.0);
         Range rangeSm = new Range().setThemeSize(ThemeSize.SM);
+        rangeSm.withLabel("Small");
         rangeSm.setValue(30.0);
         Range rangeMd = new Range().setThemeSize(ThemeSize.MD);
+        rangeMd.withLabel("Medium");
         rangeMd.setValue(50.0);
         Range rangeLg = new Range().setThemeSize(ThemeSize.LG);
+        rangeLg.withLabel("Large");
         rangeLg.setValue(70.0);
 
         addSection("Sizes",
@@ -73,9 +98,56 @@ public class RangeShowcase extends ComponentShowcase {
         // Data Binding Demo
         ValueSignal<Double> signal = new ValueSignal<>(50.0);
         Range component = new Range();
+        component.withLabel("Move this and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
         addSection("Data Binding Demo", component, output);
+    }
+
+    private static Div allStates() {
+        Range plain = new Range();
+        plain.withLabel("Brightness");
+        plain.setValue(60.0);
+
+        Range helped = new Range();
+        helped.withLabel("Monthly budget");
+        helped.setHelperText("Between nothing and five hundred euros.");
+        helped.setValue(180.0);
+
+        Range required = new Range();
+        required.withLabel("How likely are you to recommend us?");
+        required.setRequiredIndicatorVisible(true);
+        required.setValue(0.0);
+
+        Range wrong = new Range();
+        wrong.withLabel("Monthly budget");
+        wrong.setValue(0.0);
+        wrong.setErrorMessage("Move the slider above zero.");
+
+        Range disabled = new Range();
+        disabled.withLabel("Bandwidth cap (fixed by your plan)");
+        disabled.setValue(75.0);
+        disabled.setEnabled(false);
+        disabled.setHelperText("Disabled: Tab skips it and it is not read out.");
+
+        Range readOnly = new Range();
+        readOnly.withLabel("How full the disk is");
+        readOnly.setValue(88.0);
+        FieldStates.readOnly(readOnly);
+        readOnly.setHelperText("Read only: Tab still reaches it, so it can still be read out.");
+
+        Range longCaption = new Range();
+        longCaption.withLabel(FieldStates.LONG_CAPTION);
+        longCaption.setValue(50.0);
+
+        return FieldStates.stack(
+            FieldStates.labelled("Caption only", plain),
+            FieldStates.labelled("Caption and helper text", helped),
+            FieldStates.labelled("Required", required),
+            FieldStates.labelled("Wrong, and saying why", wrong),
+            FieldStates.labelled("Disabled", disabled),
+            FieldStates.labelled("Read only", readOnly),
+            FieldStates.labelled("A very long caption", longCaption));
     }
 }

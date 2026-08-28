@@ -28,6 +28,17 @@ import java.util.function.Function;
  * so 10k-event transcripts scroll at full speed in TeaVM. Supports follow-tail mode for
  * live streams — sticks to the bottom until the user scrolls up.
  *
+ * <p>The box is in the tab order, because a scrolling area that cannot be focused cannot be
+ * scrolled from a keyboard at all - Page Down and the arrow keys go wherever the focus is, and
+ * that is never here. Name it with {@link #setAriaLabel(String)} so somebody who tabs onto it is
+ * told what they have arrived at.</p>
+ *
+ * <p>It is deliberately not marked up as a list. The rows are whatever the caller's renderer
+ * returns, and they sit two boxes further in, inside the spacer that gives the scrollbar its
+ * length. Calling this a list would promise list items underneath it that this component has no
+ * way to deliver. Only the caller knows whether the rows really are a list, and the renderer is
+ * where that would be said.</p>
+ *
  * @param <T> item type
  */
 public final class VirtualScroller<T> extends Div {
@@ -45,6 +56,7 @@ public final class VirtualScroller<T> extends Div {
         this.rowHeight = rowHeightPx;
         this.renderer = renderer;
         addClassName("relative overflow-y-auto flex-1 min-h-0");
+        getElement().setAttribute("tabindex", "0");
         spacer.addClassName("relative w-full");
         window.setStyle("position", "absolute");
         window.setStyle("left", "0");
@@ -56,6 +68,17 @@ public final class VirtualScroller<T> extends Div {
             followTail = isAtBottom();
             renderWindow(false);
         });
+    }
+
+    /**
+     * Names the scrolling area for anybody who cannot see it - "Event log", "Search results".
+     *
+     * @param label the words, or null to take the name away again
+     * @return this scroller
+     */
+    public VirtualScroller<T> withAriaLabel(String label) {
+        setAriaLabel(label);
+        return this;
     }
 
     public void setItems(List<T> newItems) {

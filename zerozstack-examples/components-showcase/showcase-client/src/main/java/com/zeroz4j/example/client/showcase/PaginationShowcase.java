@@ -17,38 +17,160 @@
  */
 package com.zeroz4j.example.client.showcase;
 
-import com.zeroz4j.ui.component.*;
-import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
+import com.zeroz4j.ui.component.Button;
+import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.component.Pagination;
+import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.layout.Span;
 
+/**
+ * Three pages fit on one line and prove nothing. Two hundred and forty-seven do not, so the
+ * control has to leave some out — and that is the case worth looking at.
+ */
 public class PaginationShowcase extends ComponentShowcase {
+
+    /** How many pages there really are. */
+    private static final int PAGES = 247;
+
+    private int currentPage = 1;
+
+    private final Pagination control = new Pagination();
+    private final Div readout = new Div();
 
     public PaginationShowcase() {
         super();
         addTitle("Pagination");
-        addDescription("Pagination is a group of buttons to navigate through multi-page content, built on top of the Join component.");
+        addDescription("A row of page numbers. With more pages than fit on a line, the middle is "
+                + "left out and shown as a gap, which is where this control gets interesting.");
 
-        // Showcase 1: Default Pagination
-        Pagination p1 = new Pagination();
-        Button prev1 = new Button("«"); prev1.addClassName("join-item");
-        Button page1_1 = new Button("1"); page1_1.addClassName("join-item");
-        Button page1_2 = new Button("2"); page1_2.addClassName("join-item"); page1_2.addClassName("btn-active");
-        Button page1_3 = new Button("3"); page1_3.addClassName("join-item");
-        Button next1 = new Button("»"); next1.addClassName("join-item");
-        p1.add(prev1, page1_1, page1_2, page1_3, next1);
+        addWhatToCheck("Try this",
+                "Tab along the row. Every number takes its turn; the gaps do not, because there is "
+                        + "nothing to press.",
+                "Go to page 1. Back and first should be unpressable, not merely grey.",
+                "Go to the last page. Next and last should be unpressable in the same way.",
+                "Walk to the middle and watch the gaps move.",
+                "Check the page you are on is announced as the current page, not only coloured in.",
+                "Broken looks like: a gap that Tab stops on, an unpressable button that Tab still "
+                        + "stops on, or nothing saying which page you are on beyond the colour.");
 
-        addSection("Standard Pagination", p1);
+        control.setId("pagination-control");
+        control.addClassName("flex-wrap");
+        readout.setId("pagination-readout");
+        readout.addClassName("text-sm text-base-content/70");
 
-        // Showcase 2: Small Pagination (btn-sm)
-        Pagination p2 = new Pagination();
-        Button prev2 = new Button("«"); prev2.addClassName("join-item"); prev2.addClassName("btn-sm");
-        Button page2_1 = new Button("1"); page2_1.addClassName("join-item"); page2_1.addClassName("btn-sm");
-        Button page2_2 = new Button("2"); page2_2.addClassName("join-item"); page2_2.addClassName("btn-sm"); page2_2.addClassName("btn-active");
-        Button page2_3 = new Button("3"); page2_3.addClassName("join-item"); page2_3.addClassName("btn-sm");
-        Button next2 = new Button("»"); next2.addClassName("join-item"); next2.addClassName("btn-sm");
-        p2.add(prev2, page2_1, page2_2, page2_3, next2);
+        render();
 
-        addSection("Small Size (using btn-sm on items)", p2);
+        addSection("Two hundred and forty-seven pages", control);
+        addSection("Where you are", readout);
+        addSection("Jump straight to an edge", jumpButtons());
+        addSection("Three pages, for comparison", smallControl());
+    }
+
+    // ------------------------------------------------------------------ the control
+
+    private void render() {
+        control.removeAll();
+        control.add(step("« First", 1, currentPage > 1));
+        control.add(step("‹ Back", currentPage - 1, currentPage > 1));
+        int previous = 0;
+        for (int page : pagesToShow()) {
+            if (previous != 0 && page > previous + 1) {
+                control.add(gap());
+            }
+            control.add(pageButton(page));
+            previous = page;
+        }
+        control.add(step("Next ›", currentPage + 1, currentPage < PAGES));
+        control.add(step("Last »", PAGES, currentPage < PAGES));
+
+        readout.setText("Page " + currentPage + " of " + PAGES
+                + ". Showing results " + ((currentPage - 1) * 20 + 1)
+                + " to " + Math.min(currentPage * 20, PAGES * 20) + ".");
+    }
+
+    /** First, last, and a window of two either side of where you are. */
+    private int[] pagesToShow() {
+        java.util.TreeSet<Integer> pages = new java.util.TreeSet<>();
+        pages.add(1);
+        pages.add(PAGES);
+        for (int page = currentPage - 2; page <= currentPage + 2; page++) {
+            if (page >= 1 && page <= PAGES) {
+                pages.add(page);
+            }
+        }
+        int[] result = new int[pages.size()];
+        int i = 0;
+        for (int page : pages) {
+            result[i++] = page;
+        }
+        return result;
+    }
+
+    private Button pageButton(int page) {
+        Button button = new Button(String.valueOf(page));
+        button.addClassName("join-item btn-sm");
+        button.setId("pagination-page-" + page);
+        if (page == currentPage) {
+            button.addClassName("btn-active");
+            // The colour is not enough on its own; this is the part a screen reader reads.
+            button.getElement().setAttribute("aria-current", "page");
+            button.withAriaLabel("Page " + page + ", the page you are on");
+        } else {
+            button.withAriaLabel("Go to page " + page);
+        }
+        button.addClickListener(e -> goTo(page));
+        return button;
+    }
+
+    private Button step(String label, int target, boolean enabled) {
+        Button button = new Button(label);
+        button.addClassName("join-item btn-sm");
+        button.setEnabled(enabled);
+        button.addClickListener(e -> goTo(target));
+        return button;
+    }
+
+    /** The gap where pages were left out. It is not a control, so nothing can press it. */
+    private static Component gap() {
+        Span dots = new Span("…");
+        dots.addClassName("join-item btn btn-sm btn-disabled pointer-events-none");
+        dots.getElement().setAttribute("aria-hidden", "true");
+        return dots;
+    }
+
+    private void goTo(int page) {
+        currentPage = Math.max(1, Math.min(PAGES, page));
+        render();
+    }
+
+    // ------------------------------------------------------------------ the rest
+
+    private Component jumpButtons() {
+        Div host = new Div();
+        host.addClassName("flex flex-wrap gap-2 w-full");
+        host.add(jump("Page 1", 1), jump("Page 2", 2), jump("Page 124", 124),
+                jump("Page 246", 246), jump("Page 247", PAGES));
+        return host;
+    }
+
+    private Button jump(String label, int page) {
+        Button button = new Button(label, e -> goTo(page));
+        button.addClassName("btn-sm btn-outline");
+        return button;
+    }
+
+    private static Component smallControl() {
+        Pagination small = new Pagination();
+        small.setId("pagination-small");
+        for (int page = 1; page <= 3; page++) {
+            Button button = new Button(String.valueOf(page));
+            button.addClassName("join-item btn-sm");
+            if (page == 2) {
+                button.addClassName("btn-active");
+                button.getElement().setAttribute("aria-current", "page");
+            }
+            small.add(button);
+        }
+        return small;
     }
 }
