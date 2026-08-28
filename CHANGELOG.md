@@ -178,6 +178,12 @@ first published, and repairs to the two components whose labels an application c
   260 pixels, hovering a name always shows it whole, and `setLabelWidth` pins the column where a
   fixed one is wanted.
 
+## [Unreleased] — 0.8.0
+
+Work in progress. This section is filled as features land; each entry says what changes and, for a
+breaking change, what to do about it.
+
+
 ## [0.7.0] — 2026-08-20
 
 File upload, plus a round of work on the live connection, the binary wire format, the HTTP addresses
