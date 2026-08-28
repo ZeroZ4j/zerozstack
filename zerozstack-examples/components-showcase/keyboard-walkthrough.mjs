@@ -600,8 +600,15 @@ async function walkPage(page, label) {
         if (where.isBody) break;
     }
 
-    // 5. Enter and Space on everything the keyboard could reach, up to a sensible number.
+    // 5. Does the keyboard stay where it was put, with nobody touching anything? This comes
+    //    before the pressing below, because pressing things on a page whose whole subject is a
+    //    list that keeps moving can press the button that stops it moving.
+    await page.evaluate((sel) => window.__kw.stamp(sel), CONTENT);
+    await focusSurvival(page);
+
+    // 6. Enter and Space on everything the keyboard could reach, up to a sensible number.
     await settle(page);
+    await page.evaluate((sel) => window.__kw.stamp(sel), CONTENT);
     const probeable = await page.evaluate(() => window.__kw.controls
         .filter((c) => !c.disabled
             // Links are left out on purpose: following a link is the browser's job, and a link to
@@ -624,16 +631,7 @@ async function walkPage(page, label) {
     }
     await settle(page);
 
-    // 6. Does the keyboard stay where it was put, with nobody touching anything?
-    await page.evaluate((sel) => window.__kw.stamp(sel), CONTENT);
-    await page.evaluate(() => window.__kw.focusRoot());
-    for (let i = 0; i < 3; i++) {
-        await page.keyboard.press('Tab');
-        await page.evaluate(() => window.__kw.here());
-    }
-    await focusSurvival(page);
-
-    // 7. Anything that pushed the page sideways.
+    // 7. Anything that reached past the right-hand edge.
     const overflow = await page.evaluate(() => window.__kw.horizontalOverflow());
     if (overflow > 2) {
         const worst = await page.evaluate(() => window.__kw.widestOverflowingElement());
