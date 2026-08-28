@@ -109,6 +109,16 @@ implementations).
    `new TextField().withLabel("Email address")`. `setHelperText`, `setRequiredIndicatorVisible` and
    `setErrorMessage` carry the other three things a field says, and a `Binder` sets the last of them
    for you. Every input in the library has all four.
+12. **Ask for a text size by name; never write out your own** (0.8.0+). Five in
+   `com.zeroz4j.ui.theme.TextStyle` - `PAGE_TITLE`, `SECTION_TITLE`, `BODY`, `SECONDARY`, `CAPTION` -
+   used as `TextStyle.SECONDARY.paragraph("...")`, `TextStyle.CAPTION.span("...")` or
+   `TextStyle.CAPTION.applyTo(existingComponent)`. How loud is a *separate* question,
+   `com.zeroz4j.ui.theme.Emphasis` - `FULL`, `QUIET`, `FAINT` - passed as a second argument only
+   where the text disagrees with its size, such as an error line that is small but must be read.
+   Never write `text-sm text-base-content/60` or any hand-picked fade: that names a color, and it
+   goes wrong on a tinted notice or a dark page. Text drawn *inside* a chart has its own four names,
+   `com.zeroz4j.ui.chart.PlotText` - `FIGURE`, `LABEL`, `CAPTION`, `MESSAGE` - because class names do
+   not reach a drawing; a test fails the build if a chart draws text without naming a role.
 
 ## Persistence and transactions
 

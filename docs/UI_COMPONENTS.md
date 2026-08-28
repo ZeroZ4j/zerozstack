@@ -151,13 +151,9 @@ TextStyle.CAPTION.applyTo(existingComponent);   // on something you already have
 styles a component you already built and returns it. Applying a second size replaces the first
 rather than fighting it.
 
-**Quiet is a fade, not a color.** The two quiet sizes fade whatever color they inherit instead of
+**Quiet is a fade, not a color.** Quiet text fades whatever color it has inherited instead of
 naming one. The same words are therefore right on a page, on a tinted notice, on a colored card
 and on a dark background, without anybody choosing per surface — and two grays that were meant to
-
-**Quiet is a fade, not a colour.** Quiet text fades whatever colour it has inherited instead of
-naming one. The same words are therefore right on a page, on a tinted notice, on a coloured card
-and on a dark background, without anybody choosing per surface — and two greys that were meant to
 be the same one cannot drift apart.
 
 Five is deliberate. A scale nobody can hold in their head is one that gets ignored and typed out
@@ -189,13 +185,58 @@ TextStyle.CAPTION.applyTo(errorLine, Emphasis.FULL);      // small, and nothing 
 TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);      // there, and out of the way
 ```
 
-`applyTo`, `span` and `paragraph` all take an `Emphasis` as a second argument. Passing none, or
-passing `null`, uses the size's own.
+`applyTo`, `span`, `paragraph` and `getClassNames` all take an `Emphasis`. Leaving it out means
+"whatever this size usually is", which is right nearly every time. `getNaturalEmphasis()` says what
+that is, and `TextStyle.clear(component)` takes a size back off again.
+
+**There is exactly one quiet in the whole library.** `SECONDARY` and `CAPTION` fade by the same
+amount as each other, as a chart's axis labels do, and as anything you ask for quietly does. The
+number is defined once, on `Emphasis`, and both mechanisms read it — the class names the browser
+applies, and the number a chart draws with. Two fades that were meant to look the same are the drift
+all of this exists to stop.
 
 Loudness is a fade rather than a color, for the same reason the sizes are. Never write
 `text-base-content/60` and its neighbors: that names a color, so it goes wrong the moment the
 surface underneath is a tinted notice or a colored card, and two pieces of quiet text that were
 meant to match drift apart.
+
+**Reach for the second question, not for a smaller size.** Picking `SECONDARY` or `CAPTION` because
+you wanted something smaller, and putting up with a fade you did not want, is the exact habit this
+axis exists to end. Say the size you mean and then say the strength you mean.
+
+### Inside a chart, where there are no class names
+
+A chart is a drawn picture, and text inside a picture carries its size and its fade as numbers on
+the element rather than as class names — so the scale above cannot reach it. It stopped at the edge
+of the drawing, and the drawing drifted the same way everything else had: the twenty-four labels in
+the chart package were written at two sizes and seven different degrees of fade.
+
+There is a matching set of four names for that, `com.zeroz4j.ui.chart.PlotText`. It is deliberately
+the same idea with the same vocabulary, so somebody who has learned one can guess the other:
+
+| Name | For | Comes at |
+|---|---|---|
+| `FIGURE` | the one big number in the middle of a dial or a ring — the reading the panel exists to give | full strength |
+| `LABEL` | the words that name a position: tick values, category names, axis titles, row names | quiet |
+| `CAPTION` | a number printed inside the plot beside the mark it measures, or at the end of a scale | quiet |
+| `MESSAGE` | the sentence a panel shows when it has nothing to draw — "No data for the selected range" | quiet |
+
+`FIGURE` is sized by the hole it has to fit, so a caller always passes a size for it; the others
+have one of their own. `MESSAGE` is a step *larger* than a label, not smaller, because it is the one
+piece of prose a chart writes and somebody has to actually read it.
+
+`ChartBase` draws them for you:
+
+```java
+add(text(PlotText.LABEL, x, y, "Monday", "middle"));                 // the usual case
+add(monoText(PlotText.CAPTION, x, y, "41", "start"));                // a number on a bar
+add(monoText(PlotText.FIGURE, dialSize, cx, cy, "96 %", "middle"));  // the space picks the size
+add(text(PlotText.CAPTION, Emphasis.FULL, x, y, name, "middle"));    // words on a colored block
+```
+
+`Emphasis` is the same second question here, answered by the same enum, so the fade on an axis label
+and the fade on the legend underneath it are one number in one place. You only need any of this if
+you are writing a chart of your own on top of `ChartBase`; the shipped charts already ask by name.
 
 ## Swapping what is inside something
 
@@ -269,49 +310,6 @@ itself added to another is started once, not twice. `isAttached()` says which st
   `dispose()` it from your `onDetach`.
 - A build-time test reads every Java file in the checkout and fails if anything writes an empty
   string into an element's HTML, or takes every child out of one in a loop of its own.
-
-### How loud, as well as how big
-
-Each of the five sizes comes with the strength it almost always wants. A page title is never faded;
-supporting words almost always are. So most of the time you say nothing about strength.
-
-They are still two separate questions, and a few places answer them differently — a measurement in a
-dense table, a reading in a chart, the sentence on an error line. All of those are small, and none of
-them is quiet. Say so:
-
-```java
-add(TextStyle.CAPTION.span("96 %", Emphasis.FULL));          // small, but a measurement
-add(TextStyle.BODY.span("Not saved yet", Emphasis.QUIET));   // ordinary size, kept back
-```
-
-`Emphasis` has two values and no others: `FULL` and `QUIET`. Every one of `span`, `paragraph`,
-`applyTo` and `getClassNames` takes one, and leaving it out means "whatever this size usually is".
-
-**There is exactly one quiet in the whole library.** `SECONDARY` and `CAPTION` fade by the same
-amount as each other, as a chart's axis labels do, and as anything you ask for quietly does. Two
-fades that were meant to look the same are the drift all of this exists to stop.
-
-Use the second question only when the words really are not what you would expect at that size.
-Reaching for `SECONDARY` or `CAPTION` just to get something smaller, and putting up with a fade you
-did not want, is the habit it is here to end.
-
-### Inside a chart, where there are no class names
-
-A chart is a drawn picture, and text inside a picture carries its size and its fade as numbers on the
-element rather than as class names — so the scale above cannot reach it. There is a matching set of
-four names for that, `com.zeroz4j.ui.chart.PlotText`, and it is the same idea with the same second
-question:
-
-| Name | For |
-|---|---|
-| `FIGURE` | the one big number in the middle of a dial or a ring |
-| `LABEL` | the words that name a position: ticks, categories, axis titles, row names |
-| `CAPTION` | a number printed inside the plot beside the mark it measures |
-| `MESSAGE` | the sentence a panel shows when it has nothing to draw |
-
-`Emphasis` is shared between the two, so the fade on an axis label and the fade on the legend
-underneath it are one number in one place. You only need this if you are writing a chart of your own
-on top of `ChartBase`.
 
 ## Data Binding to POJOs
 
@@ -670,6 +668,10 @@ switching `data-theme` recolors every chart with no redraw and no listener.
 - **Palette**: DaisyUI token series colors plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`).
 - **ChartBase / CartesianChart**: Measure-then-draw lifecycle, SVG factories, tooltip, legend, empty
   state; axes, grid, threshold bands and crosshair. Extend these to add a chart type.
+- **PlotText**: The four kinds of words a chart draws inside its own picture, by name — `FIGURE`,
+  `LABEL`, `CAPTION`, `MESSAGE`. `TextStyle` is class names and a drawn picture has none, so this is
+  the same idea where the scale cannot reach. See
+  [Inside a chart, where there are no class names](#inside-a-chart-where-there-are-no-class-names).
 
 > **Constructor caveat.** A component must not read a `Signal` in its constructor. A signal read
 > registers a dependency on whichever `Effect` is currently running — and components are typically
@@ -705,12 +707,10 @@ Package `com.zeroz4j.ui.theme`. Not components — the small vocabulary every co
 screen shares, so the same thing is asked for by name rather than described again.
 - **TextStyle**: The five sizes of text, by name — see [Naming text sizes](#naming-text-sizes).
 - **Emphasis**: How loud a piece of text is, separately from how big — `FULL`, `QUIET`, `FAINT`.
-  See [Small without being quiet](#small-without-being-quiet).
+  It carries the fade twice, as class names and as a number, so text the browser styles and text a
+  chart draws fade by the same amount. See [Small without being quiet](#small-without-being-quiet).
+- **Layer**: How high above the page something floats, by name — see
+  [Overlays: what sits above what](#overlays-what-sits-above-what).
 - **ThemeColor**: The DaisyUI color names a component can be given, for the components that take
-
-
-- **TextStyle**: The five sizes of text, by name, and `Emphasis` for how loud each one is — see
-  [Naming text sizes](#naming-text-sizes).
-- **ThemeColor**: The DaisyUI colour names a component can be given, for the components that take
   one (`setThemeColor`).
 - **ThemeSize**: The size names a component can be given, for the components that take one.

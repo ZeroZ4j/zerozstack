@@ -21,9 +21,13 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
 4. Set the version. This build uses CI-friendly versioning: change `<revision>` in the root
    `pom.xml` and every module follows, with `flatten-maven-plugin` resolving it in the installed
    POMs.
-5. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
+5. **Delete the "not released yet" box in [README.md](README.md), section 5.** While a version is
+   being prepared, that box tells readers to use the *previous* version number, which is right until
+   the moment it is not. Left in place, it silently sends every new user to an older release than
+   the one you just published. Put it back, naming the next version, when the next line opens.
+6. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
    covered by `${revision}`.
-6. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
+7. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
    reads the text of everything this build publishes: the strings baked into compiled classes, the
    resource files, the generated sources, and the project template inside the archetype. It fails
    the build if it finds text that was saved as UTF-8 and then read back through a single-byte code
@@ -54,10 +58,14 @@ rather than going straight out — a published version can never be changed or r
 
 **Fourteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
 `-server-jaxrs`, `-server-jakarta`, `-server-helidon`, `-auth-oidc`, `-ui-components`,
-`-store-eclipsestore`, `-server-test` (new in 0.8.0), `-bom` and `-archetype`. The count said nine
-until 0.7.0, when it was checked against `target/central-staging` rather than against this sentence;
-the three bindings and the OIDC provider had been publishing for some time. Read the staging
-directory before believing this list.
+`-store-eclipsestore`, `-server-test` (new in 0.8.0), `-bom` and `-archetype`.
+
+**This sentence has now been wrong twice.** It said nine until 0.7.0, when somebody checked
+`target/central-staging` instead of believing it — the three server bindings and the OIDC provider
+had been publishing for some time. It then said thirteen until 0.8.0, when `-server-test` was added
+and the sentence was not. **Read `target/central-staging` after `mvn clean verify -Prelease` and
+count what is actually there.** A sentence in a document is not a manifest, and this one has a
+record.
 
 **The examples do not.** They are demonstrations rather than libraries, and
 `zerozstack-examples/pom.xml` sets `maven.deploy.skip`, `skipPublishing`, `gpg.skip`,

@@ -135,6 +135,14 @@ sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text))
 
     [Swapping what is inside something →](UI_COMPONENTS.md#swapping-what-is-inside-something)
 
+- **Text has a size and, separately, a strength**
+
+    Five named sizes instead of describing one every time, and a second answer — full, quiet,
+    faint — so a measurement can be small without being faded. Charts get four matching names for
+    the words they draw inside the picture.
+
+    [Naming text sizes →](UI_COMPONENTS.md#naming-text-sizes)
+
 </div>
 
 ## New in 0.7.0

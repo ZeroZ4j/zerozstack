@@ -43,6 +43,11 @@ Key things to know before generating ZeroZ Stack code:
 - Never empty a container by hand. `getElement().setInnerHTML("")` leaves the old screen's timers and
   effects running. Use `replaceContents(...)`, `removeAll()` or `remove(...)`, all of which run
   `onDetach` on everything leaving (0.8.0+).
+- Ask for a text size by name from `TextStyle` (`PAGE_TITLE`, `SECTION_TITLE`, `BODY`, `SECONDARY`,
+  `CAPTION`) rather than writing out sizes and fades. How loud is a separate question, `Emphasis`
+  (`FULL`, `QUIET`, `FAINT`), given only where the text disagrees with its size. Text drawn inside a
+  chart uses `PlotText` (`FIGURE`, `LABEL`, `CAPTION`, `MESSAGE`), because class names do not reach a
+  drawing.
 - Name every form field with `withLabel("...")`, not with the constructor argument — the constructor
   argument is the placeholder, which disappears the moment somebody types. Anything clickable must be
   a `Button` or a `Link` with a real `href`, never a click listener on a `Div`.

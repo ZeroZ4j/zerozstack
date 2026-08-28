@@ -16,7 +16,8 @@ closes things, and what sits above what is a named layer instead of a number som
 form field can be given a caption at last, and a refused value now says why in words the person can
 read. On the wire, a `record` and a sealed family of types are both allowed, and fields inherited
 from a base class stop vanishing. A server can be started inside a test in about a tenth of a
-second. Leaving a screen now shuts the old screen down.
+second. Leaving a screen now shuts the old screen down. And a project generated from the archetype
+now comes up styled, out of real components, instead of as black-on-white text.
 
 **Read the Breaking section before upgrading.** The three that catch most applications: a dialog now
 takes the whole page and Escape closes it; `Drawer`, `Tooltip` and `Toast` are working components
@@ -528,6 +529,37 @@ belongs to that server rather than to the whole Java process, so two servers can
     notice, on a colored card and on a dark background — and two grays that were meant to match
     cannot drift apart.
 
+    Each loudness carries that fade **twice**: as the class names the browser applies, and as a
+    plain number for text drawn into a picture, where class names do not reach. One definition, two
+    mechanisms — which is what stops a chart's axis labels and the words underneath the chart from
+    fading by two different amounts.
+
+- **The words a chart draws inside its own picture have four names.** A chart is drawn, not laid
+  out, and text inside a drawing carries its size and its fade as numbers on the element rather than
+  as stylesheet classes — so the type scale above stopped at the edge of the picture. The drawing
+  then drifted exactly as everything else had: the twenty-four labels in the chart package were
+  written at two sizes and **seven** different degrees of fade.
+
+    `com.zeroz4j.ui.chart.PlotText` is the same idea with deliberately the same vocabulary, so
+    somebody who has learned one can guess the other:
+
+    ```java
+    add(text(PlotText.LABEL, x, y, "Monday", "middle"));                 // the usual case
+    add(monoText(PlotText.CAPTION, x, y, "41", "start"));                // a number on a bar
+    add(monoText(PlotText.FIGURE, dialSize, cx, cy, "96 %", "middle"));  // the space picks the size
+    ```
+
+    `FIGURE` is the one big number in the middle of a dial or a ring, and comes at full strength.
+    `LABEL` names a position — ticks, categories, axis titles, row names. `CAPTION` is a number
+    printed inside the plot beside the mark it measures. `MESSAGE` is the sentence a panel shows when
+    it has nothing to draw, and is a step *larger* than a label rather than smaller, because it is
+    the only prose a chart writes and somebody has to read it rather than glance at it.
+
+    Strength is the same second question here, answered by the same `Emphasis`, so an axis label and
+    the legend beneath it fade by one number kept in one place. A test fails the build if a chart
+    ever draws text without naming a role. You need none of this unless you are writing a chart of
+    your own on top of `ChartBase`.
+
 - **A timeline can be given its events, instead of being handed hand-built list items.** `Timeline`
   was an empty container: it drew the line but knew nothing about what went on it, so every
   application wrote its own forty lines of markup to make one step, and the component gallery did
@@ -741,7 +773,8 @@ belongs to that server rather than to the whole Java process, so two servers can
 - **The library's own components stopped describing their text and started naming it.** Eighty
   places now ask for a size by name instead of writing out their own idea of it: thirty-five in the
   library itself — the whole chart and dashboard set, and the sign-in card — and forty-five across
-  seven of the example applications. Three examples had gone a step further and grown a private
+  seven of the example applications. Inside the charts, twenty-four hand-written labels became four
+  named roles. Three examples had gone a step further and grown a private
   helper of their own for making a piece of text with a list of style names attached; those three
   helpers are deleted.
 
@@ -1009,6 +1042,21 @@ belongs to that server rather than to the whole Java process, so two servers can
   ignored it, and the examples logged at their normal level instead. The files are now saved
   normally and the setting takes effect. Only the examples were affected; nothing in the framework
   itself read these files.
+
+- **A project generated from the archetype came up completely unstyled.** Its page did not load the
+  two stylesheets every component in this library wears, so a brand-new application opened as
+  black-on-white text with no card, no spacing and no colors — the single most-seen screen the
+  framework has, and broken, because nobody who works on the framework ever generates a fresh
+  project. The generated `index.html` now loads the same pinned, warning-free stylesheet the examples
+  do, and the generated first screen is built out of real components with its text asking for a size
+  by name. The archetype smoke test now checks that the page is styled, because the checks that were
+  there only read words and would have gone on passing.
+
+- **The generated project taught the very habit this release fixes.** Its startup code emptied the
+  page element with `setInnerHTML("")` — so every application ever generated would have started life
+  with the fault described under Breaking above, copied from the template. It now uses
+  `Component.replaceContents(appRoot, card)`, and the comment beside it says why. The detach check
+  added this release is what caught it.
 
 - **Seven examples carried a second, dead copy of their page.** Each client module held an
   `index.html` under `src/main/resources/public/`, which is never served: static files are served

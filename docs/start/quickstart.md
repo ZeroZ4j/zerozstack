@@ -165,11 +165,16 @@ cd myapp-server
 java -cp "target/classes;target/libs/*" com.example.myapp.server.ServerApp
 ```
 
-You should get a page at <http://localhost:8080> reading "Zeroz4j App is running!". The generated
-client is a deliberately minimal hello-world that writes to the DOM directly; to see idiomatic use of
-`zerozstack-ui-components`, signals and RMI, read the examples above.
+You should get a styled card at <http://localhost:8080> reading "It works". It is a small page on
+purpose, but everything in it is the real thing: the card and its text are components from
+`zerozstack-ui-components`, the words ask for a size by name from `TextStyle`, and the page is put on
+screen with `Component.replaceContents`, which is the one correct way to swap what is inside an
+element. Read the comments in the generated `ClientApp.java` — they say why each of those is what it
+is.
 
-**The generated page is unstyled**, because it does not yet pull in the two stylesheets the
-components need. Copy the two `<script>` and `<link>` lines from any example's `index.html` — they
-are listed and explained in
-[Where the styles come from](../UI_COMPONENTS.md#where-the-styles-come-from).
+The stylesheet comes from the two lines the generated `index.html` already carries, explained in
+[Where the styles come from](../UI_COMPONENTS.md#where-the-styles-come-from). **If the page comes up
+as bare black-on-white text, those two lines are not arriving** — that is the one failure this page
+can have that still looks like it started correctly.
+
+For idiomatic use of signals, RMI and the rest of the component library, read the examples above.
