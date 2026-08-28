@@ -28,6 +28,7 @@ import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -63,12 +64,12 @@ public class PwaInstallApp {
     private static void build() {
         Div root = box("flex flex-col gap-6 p-8 max-w-3xl mx-auto");
 
-        root.add(text("Installing a zeroz4j app", "text-2xl font-bold"));
-        root.add(text("Everything below is what a service worker and a manifest buy you. Nothing "
-                + "below makes the application work without a network.", "opacity-70"));
+        root.add(TextStyle.PAGE_TITLE.span("Installing a zeroz4j app"));
+        root.add(TextStyle.SECONDARY.span("Everything below is what a service worker and a manifest "
+                + "buy you. Nothing below makes the application work without a network."));
 
         // ---- install ------------------------------------------------------
-        Span installState = text("", "text-sm opacity-60");
+        Span installState = TextStyle.SECONDARY.span("");
         Button install = button("Install this app", () -> Pwa.promptInstall(outcome ->
                 installState.setText("accepted".equals(outcome)
                         ? "Installed. Launch it from your home screen or app list."
@@ -96,7 +97,7 @@ public class PwaInstallApp {
                         + "change name and colour."));
 
         // ---- push ---------------------------------------------------------
-        Span pushLine = text("", "text-sm opacity-60");
+        Span pushLine = TextStyle.SECONDARY.span("");
         Effect.create(() -> pushLine.setText(pushStatus.get()));
 
         Button subscribe = button("Subscribe to push", PwaInstallApp::subscribe);
@@ -108,8 +109,8 @@ public class PwaInstallApp {
 
         // ---- offline ------------------------------------------------------
         root.add(panel("Offline",
-                text("Stop the server and reload.", "text-lg"),
-                text("", ""),
+                TextStyle.BODY.span("Stop the server and reload."),
+                new Span(""),
                 "You get a page saying you are offline, not a broken app and not a browser error. "
                         + "That is the whole offline story here, on purpose: every view on this page "
                         + "loads its data over the WebSocket, so with no connection there is nothing "
@@ -142,10 +143,10 @@ public class PwaInstallApp {
 
     private static Component panel(String title, Component value, Component action, String note) {
         return box("flex flex-col gap-2 p-4 rounded bg-base-200",
-                text(title, "font-semibold"),
+                TextStyle.SECTION_TITLE.span(title),
                 value,
                 action,
-                text(note, "text-sm opacity-60"));
+                TextStyle.SECONDARY.span(note));
     }
 
     private static Button button(String label, Runnable action) {
@@ -166,16 +167,6 @@ public class PwaInstallApp {
             }
         }
         return div;
-    }
-
-    private static Span text(String value, String classes) {
-        Span span = new Span(value);
-        for (String cls : classes.split(" ")) {
-            if (!cls.isEmpty()) {
-                span.addClassName(cls);
-            }
-        }
-        return span;
     }
 
     @JSBody(script =

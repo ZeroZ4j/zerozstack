@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -286,7 +287,7 @@ public class TimeSeriesChart extends CartesianChart {
         Div content = new Div();
         content.addClassName("flex flex-col gap-1");
         Div when = new Div(Scales.timestamp(timestamps[index]));
-        when.addClassName("font-mono text-[10px] text-base-content/50");
+        when.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         content.add(when);
         for (int s = 0; s < series.size(); s++) {
             Series item = series.get(s);
@@ -300,7 +301,7 @@ public class TimeSeriesChart extends CartesianChart {
             swatch.addClassName("h-2 w-2 shrink-0 rounded-sm");
             swatch.setStyle("background-color", item.colorOr(s));
             Div name = new Div(item.name());
-            name.addClassName("text-base-content/70");
+            name.addClassName(TextStyle.CAPTION.getClassNames());
             Div rendered = new Div(Double.isNaN(value) ? "no data" : yFormat().format(value));
             rendered.addClassName("ml-auto pl-3 font-mono font-semibold");
             row.add(swatch, name, rendered);

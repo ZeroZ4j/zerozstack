@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -234,9 +235,9 @@ public final class StateTimeline extends CartesianChart {
         header.add(swatch, name);
 
         Div span = new Div(Scales.timestamp(band.from()) + " → " + Scales.timestamp(band.to()));
-        span.addClassName("font-mono text-[10px] text-base-content/50");
+        span.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         Div held = new Div("held for " + Scales.duration(band.to() - band.from()));
-        held.addClassName("text-base-content/70");
+        held.addClassName(TextStyle.CAPTION.getClassNames());
 
         content.add(header, span, held);
         return content;

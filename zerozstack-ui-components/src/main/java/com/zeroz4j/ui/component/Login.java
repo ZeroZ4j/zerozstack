@@ -19,6 +19,7 @@ package com.zeroz4j.ui.component;
 
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.VerticalLayout;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.dom.events.KeyboardEvent;
 
 /**
@@ -119,8 +120,7 @@ public class Login extends Card {
         errorDiv.addClassName("text-sm");
 
         hintDiv = new Div();
-        hintDiv.addClassName("text-sm");
-        hintDiv.addClassName("opacity-60");
+        TextStyle.SECONDARY.applyTo(hintDiv);
 
         layout.add(usernameField, passwordField, submitButton, errorDiv, hintDiv);
         add(layout);

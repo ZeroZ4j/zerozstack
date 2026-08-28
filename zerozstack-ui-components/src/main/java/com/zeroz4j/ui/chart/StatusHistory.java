@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -187,7 +188,7 @@ public final class StatusHistory extends CartesianChart {
                 name.addClassName("font-semibold");
                 header.add(swatch, name);
                 Div when = new Div(Scales.timestamp(times[hit.sampleIndex()]));
-                when.addClassName("font-mono text-[10px] text-base-content/50");
+                when.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
                 content.add(header, when);
                 showTooltip(x, y, content);
                 return;

@@ -32,6 +32,31 @@ import org.teavm.jso.JSBody;
  * <p>Deliberately raw DOM with inline styles, no dependency on the component library or on any
  * CSS framework: it must render identically in an application that loads no stylesheet at all,
  * and must not participate in application layout — it overlays, fixed to the top edge.
+ *
+ * <h2>Why it is a popover</h2>
+ *
+ * <p>The bar used to be an ordinary element carrying the largest stacking number a browser
+ * accepts, and it still lost to an open modal dialog. A modal dialog is drawn in the browser's
+ * own <em>top layer</em>, which sits above the whole page whatever number anything on the page
+ * carries — see {@code docs/guides/ui-layering.md}. So the one moment a user most needs telling
+ * that the connection is gone, mid-way through a dialog, was the one moment nothing was shown.
+ *
+ * <p>The only way into the top layer is to be put there, and there are exactly two ways to do
+ * that: be a modal dialog, or be a popover. A modal dialog is wrong — it would take the keyboard,
+ * dim the page and interrupt whatever was being typed. A popover in {@code manual} state does
+ * none of that: nothing outside it is blocked, and the browser only moves focus into a popover
+ * that asks for it, which this one does not (it holds one line of text and nothing focusable).
+ * Typing carries on uninterrupted.
+ *
+ * <p>Two things it costs, both accepted:</p>
+ * <ul>
+ *   <li><b>Order inside the top layer is by arrival.</b> A dialog opened <em>after</em> the bar
+ *       appears is drawn over it. The bar re-announces itself on every state change, which puts
+ *       it back on top, but between those moments a newly opened dialog can cover it.</li>
+ *   <li><b>A browser too old for popovers</b> falls back to exactly the previous behaviour — a
+ *       fixed bar with a very high stacking number, correct everywhere except under a dialog.
+ *       Support arrived in Chrome and Edge 114, Safari 17 and Firefox 125.</li>
+ * </ul>
  */
 final class ConnectionBanner {
 
@@ -47,23 +72,41 @@ final class ConnectionBanner {
         hideNative();
     }
 
+    // The inline style overrides the browser's own popover styling as well as doing the paint:
+    // a popover is centred and boxed by default, and this is a full-width strip at the top edge.
+    // Nothing here may set display, because a popover's visibility belongs to showPopover and
+    // hidePopover; an inline display would fight them.
     @JSBody(params = { "text" }, script =
         "var b = document.getElementById('zeroz4j-connection-banner');" +
         "if (!b) {" +
         "  b = document.createElement('div');" +
         "  b.id = 'zeroz4j-connection-banner';" +
         "  b.setAttribute('role', 'status');" +
-        "  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;" +
+        "  b.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:auto;" +
+        "width:auto;height:auto;max-width:none;max-height:none;margin:0;border:0;border-radius:0;" +
+        "overflow:hidden;z-index:2147483647;" +
         "background:#b91c1c;color:#ffffff;font:14px/1.4 system-ui,sans-serif;" +
         "text-align:center;padding:6px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.3);';" +
+        "  if (typeof b.showPopover === 'function') { b.setAttribute('popover', 'manual'); }" +
         "  document.body.appendChild(b);" +
         "}" +
         "b.textContent = text;" +
-        "b.style.display = 'block';")
+        "if (b.hasAttribute('popover')) {" +
+        "  try { b.hidePopover(); } catch (ignored) { }" +
+        "  try { b.showPopover(); } catch (ignored) { }" +
+        "} else {" +
+        "  b.style.display = 'block';" +
+        "}")
     private static native void showNative(String text);
 
     @JSBody(params = {}, script =
         "var b = document.getElementById('zeroz4j-connection-banner');" +
-        "if (b) { b.style.display = 'none'; }")
+        "if (b) {" +
+        "  if (b.hasAttribute('popover')) {" +
+        "    try { b.hidePopover(); } catch (ignored) { }" +
+        "  } else {" +
+        "    b.style.display = 'none';" +
+        "  }" +
+        "}")
     private static native void hideNative();
 }

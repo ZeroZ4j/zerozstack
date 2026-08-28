@@ -26,6 +26,7 @@ import com.zeroz4j.example.routing.api.TourService_Stub;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.component.TextField;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * The route that proves specificity: {@code /projects/new} is a literal, and
@@ -53,9 +54,9 @@ public class NewProjectView implements RouteView<Void> {
         });
 
         return Ui.box("flex flex-col gap-4 max-w-md",
-                Ui.text("New project", "text-2xl font-bold"),
+                Ui.text("New project", TextStyle.PAGE_TITLE.getClassNames()),
                 Ui.text("/projects/new is a literal path. /projects/:id would match it too, and "
-                        + "does not, because the more specific route wins.", "text-sm opacity-70"),
+                        + "does not, because the more specific route wins.", TextStyle.SECONDARY.getClassNames()),
                 name,
                 create);
     }

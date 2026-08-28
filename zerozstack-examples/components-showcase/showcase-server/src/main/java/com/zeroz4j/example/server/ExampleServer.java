@@ -38,6 +38,15 @@ import com.zeroz4j.server.Zeroz4jServer;
  */
 public final class ExampleServer {
 
+    /**
+     * The port this example serves on when nothing says otherwise.
+     *
+     * <p>Every example has a number of its own, so two of them started at the same time do not
+     * fight over one address. Move this one somewhere else without editing the file: put
+     * {@code --port 8100} on the command line, or start the JVM with {@code -Dzeroz.port=8100}.</p>
+     */
+    private static final int DEFAULT_PORT = 8090;
+
     private static final String DEV_LOGIN_FLAG = "--dev-login";
 
     private ExampleServer() {}
@@ -53,7 +62,7 @@ public final class ExampleServer {
             System.out.println("[zeroz4j] Sign-in is off, and this example needs it. Restart with "
                     + DEV_LOGIN_FLAG + " to enable the built-in development accounts.");
         }
-        Zeroz4jServer.start(8080, "zeroz4j Example Server").join();
+        Zeroz4jServer.start(port(args), "zeroz4j Example Server").join();
     }
 
     /** True only when the flag was passed, or the property was already set by whoever started us. */
@@ -66,5 +75,26 @@ public final class ExampleServer {
             }
         }
         return "dev".equals(System.getProperty("zeroz.security.mode"));
+    }
+
+    /**
+     * Works out which port to listen on.
+     *
+     * <p>In order: {@code --port <number>} on the command line, then the {@code zeroz.port} system
+     * property, then {@link #DEFAULT_PORT}.</p>
+     *
+     * @param args the command line this server was started with
+     * @return the port to bind
+     */
+    private static int port(String[] args) {
+        if (args != null) {
+            for (int i = 0; i + 1 < args.length; i++) {
+                if ("--port".equals(args[i])) {
+                    return Integer.parseInt(args[i + 1].trim());
+                }
+            }
+        }
+        String configured = System.getProperty("zeroz.port", "").trim();
+        return configured.isEmpty() ? DEFAULT_PORT : Integer.parseInt(configured);
     }
 }

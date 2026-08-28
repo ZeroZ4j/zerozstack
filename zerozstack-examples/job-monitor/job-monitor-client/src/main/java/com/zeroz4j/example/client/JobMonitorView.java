@@ -120,8 +120,7 @@ public class JobMonitorView extends Card {
         footerRow.addClassName("border-t");
         footerRow.addClassName("border-base-300");
 
-        messageSpan = new Span();
-        messageSpan.addClassName("text-sm");
+        messageSpan = TextStyle.SECONDARY.span("");
         messageSpan.addClassName("font-medium");
 
         startButton = new Button("Start job");

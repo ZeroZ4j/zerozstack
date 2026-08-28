@@ -26,6 +26,7 @@ import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -54,15 +55,18 @@ public class OidcLoginApp {
 
     private static void build() {
         Div root = box("flex flex-col gap-5 p-8 max-w-3xl mx-auto");
-        root.add(text("Signed in with OpenID Connect", "text-2xl font-bold"));
-        root.add(text("The browser ran an authorization-code flow with PKCE against Keycloak. The "
-                + "server verified the resulting token's signature, issuer and audience before "
-                + "accepting this connection.", "opacity-70"));
+        root.add(TextStyle.PAGE_TITLE.span("Signed in with OpenID Connect"));
+        root.add(TextStyle.SECONDARY.span("The browser ran an authorization-code flow with PKCE "
+                + "against Keycloak. The server verified the resulting token's signature, issuer "
+                + "and audience before accepting this connection."));
 
-        root.add(text("Client-side view: " + RmiSecurityContext.getUsername()
-                + " " + RmiSecurityContext.getRoles(), "font-mono text-sm opacity-60"));
+        Span identity = TextStyle.SECONDARY.span("Client-side view: "
+                + RmiSecurityContext.getUsername() + " " + RmiSecurityContext.getRoles());
+        identity.addClassName("font-mono");
+        root.add(identity);
 
-        Span output = text("", "font-mono text-sm whitespace-pre-wrap");
+        Span output = TextStyle.BODY.span("");
+        output.addClassName("font-mono whitespace-pre-wrap");
         root.add(box("flex flex-wrap gap-2",
                 call("Public call", output, service::publicGreeting),
                 call("@Secured call", output, service::whoAmI),
@@ -107,16 +111,6 @@ public class OidcLoginApp {
             }
         }
         return div;
-    }
-
-    private static Span text(String value, String classes) {
-        Span span = new Span(value);
-        for (String cls : classes.split(" ")) {
-            if (!cls.isEmpty()) {
-                span.addClassName(cls);
-            }
-        }
-        return span;
     }
 
     @JSBody(script =

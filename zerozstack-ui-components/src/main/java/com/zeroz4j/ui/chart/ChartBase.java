@@ -20,6 +20,7 @@ package com.zeroz4j.ui.chart;
 import com.zeroz4j.ui.component.Js;
 import com.zeroz4j.ui.component.SvgCanvas;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.browser.Window;
@@ -80,8 +81,8 @@ public abstract class ChartBase extends Div {
         svgHost.addClassName("w-full");
         tooltip.addClassName("pointer-events-none absolute z-30 hidden max-w-xs rounded-md border "
             + "border-base-300 bg-base-100/95 px-2 py-1.5 text-xs leading-snug shadow-lg backdrop-blur-sm");
-        legendHost.addClassName("flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs "
-            + "text-base-content/70");
+        legendHost.addClassName("flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 "
+            + TextStyle.CAPTION.getClassNames());
         plotHost.add(svgHost, tooltip);
         add(plotHost, legendHost);
 
@@ -386,7 +387,7 @@ public abstract class ChartBase extends Div {
             entry.add(swatch, label);
             if (item.value() != null) {
                 Div value = new Div(item.value());
-                value.addClassName("font-mono text-base-content/50");
+                value.addClassName("font-mono");
                 entry.add(value);
             }
             legendHost.add(entry);

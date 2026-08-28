@@ -21,6 +21,7 @@ import com.zeroz4j.api.Route;
 import com.zeroz4j.client.router.RouteParams;
 import com.zeroz4j.client.router.RouteView;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /** Where an unmatched path lands, registered with {@code Router.notFoundRoute}. */
 @Route(value = "/not-found", layout = AppShell.class, label = "Not found", order = 99)
@@ -29,10 +30,10 @@ public class NotFoundView implements RouteView<Void> {
     @Override
     public Component render(Void data, RouteParams params) {
         return Ui.box("flex flex-col gap-3 max-w-2xl",
-                Ui.text("No such page", "text-2xl font-bold"),
+                Ui.text("No such page", TextStyle.PAGE_TITLE.getClassNames()),
                 Ui.text("Nothing claims that path. The router replaced the history entry rather "
                         + "than pushing one, so Back returns where you actually came from.",
-                        "opacity-80"),
+                        TextStyle.SECONDARY.getClassNames()),
                 Ui.routerLink("/", "Back to the tour"));
     }
 }

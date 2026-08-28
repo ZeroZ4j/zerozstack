@@ -11,7 +11,7 @@ mvn -pl zerozstack-examples/routing-tour/routing-tour-server -am install
 java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.6.2.jar --dev-login
 ```
 
-Then open <http://localhost:8080/?user=admin&password=admin>.
+Then open <http://localhost:8091/?user=admin&password=admin>.
 
 `--dev-login` switches on the framework's built-in development accounts, so the guarded route has
 something to check: `demo`/`demo` holds `user`, `admin`/`admin` also holds `admin`. Without the flag

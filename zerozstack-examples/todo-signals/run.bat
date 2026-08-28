@@ -2,13 +2,18 @@
 setlocal
 cd /d "%~dp0todo-signals-server"
 
+rem Each example has a port of its own, so several can run at the same time.
+rem To use a different one, pass it as the first argument:  run.bat 9000
+set PORT=8084
+if not "%~1"=="" set PORT=%~1
+
 if not exist "target\classes" goto :needbuild
 if not exist "target\libs" goto :needbuild
 
 echo.
-echo Starting todo-signals on http://localhost:8080   (Ctrl+C to stop; run one example at a time)
+echo Starting todo-signals on http://localhost:%PORT%   (Ctrl+C to stop)
 echo.
-java -cp "target\classes;target\libs\*" com.zeroz4j.example.server.ExampleServer
+java -cp "target\classes;target\libs\*" com.zeroz4j.example.server.ExampleServer --port %PORT%
 exit /b %errorlevel%
 
 :needbuild

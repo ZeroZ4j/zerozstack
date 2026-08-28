@@ -208,7 +208,94 @@ first published, and repairs to the two components whose labels an application c
 - **`LaneTimeline.setLabelWrap`** — lets a lane name too long for its column run onto more lines,
   growing that lane to fit. Off by default, because lanes of one height are easier to scan.
 
+### Changed
+
+- **Every example now has a web address of its own, so you can leave several running.** Seven of
+  them all answered on `localhost:8080`, which meant starting a second one killed the first with an
+  error about the address being in use. Two people lost an afternoon to that in one week; one of
+  them ended up writing a throwaway program just to see two examples at the same time.
+
+    **If you have a bookmark to an example, it has moved.** The new numbers — and note that no
+    example uses 8080 any more, because on a working developer's machine that is the number
+    something else has already taken:
+
+    | Example | Address | Example | Address |
+    |---|---|---|---|
+    | `routing-tour` | `localhost:8091` | `job-monitor` | `localhost:8087` |
+    | `oidc-login` | `localhost:8081` | `form-signup` | `localhost:8088` |
+    | `scoped-signals` | `localhost:8082` | `inventory-crud` | `localhost:8089` |
+    | `pwa-install` | `localhost:8083` | `components-showcase` | `localhost:8090` |
+    | `todo-signals` | `localhost:8084` | | |
+    | `chat-events` | `localhost:8085` | | |
+    | `chat-livesync` | `localhost:8086` | | |
+
+    **If a number is already taken on your machine, say so when you start the example.** Every one
+    of them understands the same three ways of being told, and each prints the address it settled
+    on:
+
+    ```bash
+    run.bat 9000                                       # Windows, the seven with a script
+    java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer --port 9000
+    java -Dzeroz.port=9000 -cp "..." com.zeroz4j.example.server.ExampleServer
+    ```
+
+    Each example's own number is a constant at the top of its server file, so somebody copying an
+    example as the start of an application can see it and change it.
+
+- **The examples no longer load a stylesheet that warns about itself.** Every example page pulled
+  Tailwind CSS from `cdn.tailwindcss.com`, and that address prints "should not be used in
+  production" into the browser console on every single page load. In a framework whose examples are
+  what people copy into their own projects, shipping a line that warns against itself — with no
+  word anywhere about what to do instead — is not good enough.
+
+    The examples now load Tailwind's own browser build from a pinned address instead. It does the
+    same job, prints nothing, and is a published, versioned package rather than a preview service.
+    Nothing looks different; this was checked page by page, light and dark.
+
+    **What to do in your own application:** neither line belongs in something you ship. Both of
+    these compile your styles in the visitor's browser, every time the page opens. A real
+    application installs Tailwind once, builds one finished stylesheet, and serves that. There is a
+    new section, "Where the styles come from", in `docs/UI_COMPONENTS.md` saying so, and every
+    example page now carries the same note in a comment at the top.
+
+    Both addresses are also now pinned to an exact version. They were not before, so the day the
+    style library changed was the day the examples changed, with nothing in the repository having
+    moved.
+
+- **The library's own components stopped describing their text and started naming it.** Version
+  0.8.0 introduced five names for the five sizes of text an application has. The library was not
+  using them: its dashboard and sign-in components wrote out their own idea of "quiet supporting
+  text" thirteen different ways, in five different degrees of fade, across fifty-six places — the
+  exact habit the five names exist to end.
+
+    Eighty of those places now ask for a size by name: thirty-five in the library itself — the
+    whole chart and dashboard set, and the sign-in card — and forty-five across seven of the
+    example applications. Three examples had gone a step further and grown a private helper of
+    their own for making a piece of text with a list of style names attached; those three helpers
+    are deleted.
+
+    What you may see: a handful of labels that were 10 pixels are now 12, because the smallest
+    named size is 12 and 10 was below what anybody should be asked to read. Quiet text is now a
+    fade of the colour around it rather than a named grey, so it stays correct on a dark page, a
+    light one and a tinted panel without anybody choosing per surface.
+
 ### Fixed
+
+- **The "connection lost" bar was invisible behind an open dialog.** The bar that appears when the
+  connection to the server drops carried the largest stacking number a browser accepts — and still
+  lost to a dialog, because a dialog is drawn in a place of the browser's own that sits above the
+  whole page and that no number can reach. So the one moment a person most needs telling that their
+  work is not being saved — halfway through filling in a dialog — was the one moment they were told
+  nothing at all.
+
+    The bar is now put in that same place, as a popover rather than a dialog of its own. It appears
+    over everything, and it takes nothing: the keyboard stays where it was, half-typed text is
+    untouched, and the page behind carries on. Nothing to change in your application.
+
+    Two limits worth knowing. A dialog **opened after** the bar appears is drawn over it, because
+    inside that top place things stack in the order they arrived. And a browser older than Chrome
+    114, Safari 17 or Firefox 125 has nowhere to put it, so there the bar behaves exactly as it did
+    before — visible everywhere except under a dialog.
 
 - **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
   library.** Eight strings were stored that way, three rounds of it deep, so an application using

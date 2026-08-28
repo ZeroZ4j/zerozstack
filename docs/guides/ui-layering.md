@@ -78,6 +78,31 @@ This is what the whole list was written for. An application had picked its own n
 very large, and an overlay still came out underneath a dialog. Nothing was wrong with the number.
 The dialog was simply not playing the same game as the number.
 
+### The two ways in
+
+If something of yours genuinely has to cover a dialog, it has to be in the top layer too, and a
+browser puts exactly two kinds of thing there:
+
+- a **modal dialog** — `dialog.showModal()`. It takes the keyboard, blocks the page behind it and
+  waits for an answer. Right for a question, wrong for anything the reader is meant to glance at;
+- a **popover** — an element carrying `popover` that has been shown with `showPopover()`. It takes
+  nothing. In `manual` state it does not close on a click elsewhere, it does not block the page, and
+  the browser moves focus into it only if something inside it asks for focus. Somebody typing keeps
+  typing.
+
+The framework's own "Connection lost" bar (0.8.0+) is the second kind, for exactly that reason: a
+connection can drop while a dialog is open, and before this the bar was drawn under the dialog and
+the reader was told nothing at all. It carries one line of text and nothing focusable, so it appears
+over the dialog and changes nothing else about the moment.
+
+Two things to know if you do the same:
+
+- **Inside the top layer, later wins.** Things are drawn in the order they arrived, so a dialog
+  opened after your popover covers it. Re-showing the popover puts it back on top.
+- **A browser too old for popovers ignores the attribute.** Support arrived in Chrome and Edge 114,
+  Safari 17 and Firefox 125. Check for `showPopover` before using it and keep a plain fixed
+  position as the fallback, which is what the connection bar does.
+
 ## Where the numbers come from
 
 Each layer does put a real number on the element, and you can read it:

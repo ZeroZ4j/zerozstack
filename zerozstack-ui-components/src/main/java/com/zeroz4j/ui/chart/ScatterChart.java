@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -236,11 +237,11 @@ public final class ScatterChart extends CartesianChart {
         Div coordinates = new Div((xLabel != null ? xLabel + " " : "")
             + xFormat.format(point.x()) + "   "
             + (yLabel != null ? yLabel + " " : "") + yFormat().format(point.y()));
-        coordinates.addClassName("font-mono text-base-content/70");
+        coordinates.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         content.add(coordinates);
         if (!Double.isNaN(point.size())) {
             Div size = new Div(Scales.compact(point.size()));
-            size.addClassName("font-mono text-[10px] text-base-content/50");
+            size.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
             content.add(size);
         }
         showTooltip(x, y, content);

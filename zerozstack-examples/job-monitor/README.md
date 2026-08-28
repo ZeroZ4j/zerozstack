@@ -26,4 +26,4 @@ java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer
 ```
 
 `--dev-login` switches on the built-in development accounts; without it nothing can sign in. Open
-`http://localhost:8080` in two browser windows (log in as `demo/demo` or `admin/admin`). Click "Start job" in one window and watch both windows track progress in real time.
+`http://localhost:8087` in two browser windows (log in as `demo/demo` or `admin/admin`). Click "Start job" in one window and watch both windows track progress in real time.

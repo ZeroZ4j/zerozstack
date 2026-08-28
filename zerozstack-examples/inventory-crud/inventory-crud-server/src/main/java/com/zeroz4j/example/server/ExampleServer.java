@@ -24,7 +24,37 @@ import com.zeroz4j.server.Zeroz4jServer;
  */
 public final class ExampleServer {
 
+    /**
+     * The port this example serves on when nothing says otherwise.
+     *
+     * <p>Every example has a number of its own, so two of them started at the same time do not
+     * fight over one address. Move this one somewhere else without editing the file: put
+     * {@code --port 8099} on the command line, or start the JVM with {@code -Dzeroz.port=8099}.</p>
+     */
+    private static final int DEFAULT_PORT = 8089;
+
     public static void main(String[] args) {
-        Zeroz4jServer.start(8080, "zeroz4j Inventory CRUD Server").join();
+        Zeroz4jServer.start(port(args), "zeroz4j Inventory CRUD Server").join();
+    }
+
+    /**
+     * Works out which port to listen on.
+     *
+     * <p>In order: {@code --port <number>} on the command line, then the {@code zeroz.port} system
+     * property, then {@link #DEFAULT_PORT}.</p>
+     *
+     * @param args the command line this server was started with
+     * @return the port to bind
+     */
+    private static int port(String[] args) {
+        if (args != null) {
+            for (int i = 0; i + 1 < args.length; i++) {
+                if ("--port".equals(args[i])) {
+                    return Integer.parseInt(args[i + 1].trim());
+                }
+            }
+        }
+        String configured = System.getProperty("zeroz.port", "").trim();
+        return configured.isEmpty() ? DEFAULT_PORT : Integer.parseInt(configured);
     }
 }

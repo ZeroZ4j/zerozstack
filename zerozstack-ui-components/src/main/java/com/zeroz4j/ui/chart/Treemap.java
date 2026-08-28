@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -332,7 +333,7 @@ public final class Treemap extends ChartBase {
                 name.addClassName("font-semibold");
                 Div value = new Div(format.format(tile.node().weight())
                     + "  ·  " + Scales.fixed(tile.node().weight() / total() * 100, 1) + "%");
-                value.addClassName("font-mono text-base-content/70");
+                value.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
                 content.add(name, value);
                 showTooltip(x, y, content);
                 return;
