@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
@@ -209,7 +210,7 @@ public final class BarGauge extends Div {
         fill(track, row.value(), false);
 
         Div value = new Div(Double.isNaN(row.value()) ? "-" : format.format(row.value()));
-        value.addClassName("w-20 shrink-0 text-right font-mono text-xs font-semibold");
+        value.addClassName("w-20 shrink-0 text-right font-mono font-semibold " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
         value.setStyle("color", Threshold.colorFor(thresholds, row.value(), Palette.BASE_CONTENT));
 
         line.add(label, track, value);
@@ -221,7 +222,7 @@ public final class BarGauge extends Div {
         column.addClassName("flex min-w-0 flex-1 flex-col items-center gap-1");
 
         Div value = new Div(Double.isNaN(row.value()) ? "-" : format.format(row.value()));
-        value.addClassName("font-mono text-xs font-semibold");
+        value.addClassName("font-mono font-semibold " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
         value.setStyle("color", Threshold.colorFor(thresholds, row.value(), Palette.BASE_CONTENT));
 
         Div track = new Div();

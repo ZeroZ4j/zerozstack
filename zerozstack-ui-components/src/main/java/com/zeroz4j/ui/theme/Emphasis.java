@@ -15,60 +15,68 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.zeroz4j.ui.theme;
 
 /**
- * How loud a piece of text is, separately from how big it is.
+ * How loud a piece of text is, independently of how big it is.
  *
- * <p>Size and loudness are two different questions and they were being answered with one number.
- * "Small" and "quiet" arrived together in every hand-written class list, so text that had to be
- * small and <i>fully</i> present — an error under a field, a value in a table — came out faded
- * along with everything else. Fading an error is wrong: it is the one line the reader must not
- * miss.</p>
+ * <p>{@link TextStyle} answers "how big"; this answers "how strongly it speaks". Keeping the two
+ * apart is what lets a measurement be small <em>and</em> at full strength. Naming sizes alone could
+ * not express that: the smallest sizes were quiet by definition, so a gauge reading or an error
+ * line had to be styled by hand.</p>
  *
- * <p>Each size in {@link TextStyle} names one of these as its own, so asking for a size alone
- * still gives the right answer. Say one of these as well only where the text disagrees with its
- * size:</p>
+ * <p>Quiet is a fade of whatever color the text already sits on, never a named grey. The same words
+ * are then right on a page, inside a tinted notice and on a dark background, and two greys meant to
+ * match cannot drift apart.</p>
  *
- * <pre>{@code
- * TextStyle.CAPTION.applyTo(errorLine, Emphasis.FULL);     // small, but nothing is taken off it
- * TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);     // there, and out of the way
- * }</pre>
- *
- * <p><b>It is a fade, not a colour.</b> The text keeps whatever colour it inherits and simply
- * gives some of it up, so it stays right on a dark background, a light one, a tinted notice or a
- * coloured card — and two pieces of quiet text on one page cannot end up different greys. The
- * library used to write {@code text-base-content/60} and its neighbours instead, which names a
- * colour and therefore goes wrong the moment the surface underneath is not the plain page.</p>
+ * <p>Each level carries that fade twice: as class names for text the browser styles, and as a
+ * number for text drawn into a chart, where class names do not reach. One definition, two
+ * mechanisms, so a chart's labels and the words beneath it cannot disagree.</p>
  */
 public enum Emphasis {
 
-    /** As present as the words around it. Errors, values, anything that must be read. */
-    FULL(""),
+    /** Says it plainly. For anything somebody has to read: a measurement, an error, a total. */
+    FULL("", 1.0),
 
-    /** A step back from the prose: timestamps, counts, explanations. */
-    QUIET("opacity-70"),
+    /** Present, but not competing. The ordinary choice for supporting text. */
+    QUIET("opacity-70", 0.7),
 
-    /** As far back as text goes and still be text: units, hints, the words under a picture. */
-    FAINT("opacity-60");
+    /** Barely there. For text that is background until somebody goes looking for it. */
+    FAINT("opacity-60", 0.6);
 
     private final String classNames;
+    private final double opacity;
 
-    Emphasis(String classNames) {
+    Emphasis(String classNames, double opacity) {
         this.classNames = classNames;
+        this.opacity = opacity;
     }
 
     /**
-     * Returns the stylesheet classes this loudness is made of, which is nothing at all for
-     * {@link #FULL}.
+     * The class names carrying this level, for text the browser styles.
      *
-     * <p>Applications should not need this — {@link TextStyle#applyTo(com.zeroz4j.ui.component.HasStyle, Emphasis)}
-     * and its neighbours put them on for you. It is here for components inside this library that
-     * build their own elements.</p>
-     *
-     * @return the space-separated class names, possibly empty
+     * @return the class names; empty for {@link #FULL}
      */
     public String getClassNames() {
         return classNames;
+    }
+
+    /**
+     * The same level, for callers that read one class name.
+     *
+     * @return the class name; empty for {@link #FULL}
+     */
+    public String getClassName() {
+        return classNames;
+    }
+
+    /**
+     * The same level as a number, for text drawn into a chart.
+     *
+     * @return the fade; 1.0 at full strength
+     */
+    public double getOpacity() {
+        return opacity;
     }
 }

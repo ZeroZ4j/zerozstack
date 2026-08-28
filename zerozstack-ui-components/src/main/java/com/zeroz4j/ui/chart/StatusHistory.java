@@ -138,7 +138,7 @@ public final class StatusHistory extends CartesianChart {
         for (int r = 0; r < rows.size(); r++) {
             Row row = rows.get(r);
             double top = plotTop() + r * (rowHeight + rowGap);
-            add(text(marginLeft - 8, top + rowHeight / 2.0, row.label(), "end", 10, 0.65));
+            add(text(PlotText.LABEL, marginLeft - 8, top + rowHeight / 2.0, row.label(), "end"));
 
             for (int i = 0; i < times.length; i++) {
                 String state = row.states() != null && i < row.states().length ? row.states()[i] : null;

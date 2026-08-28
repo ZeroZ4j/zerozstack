@@ -4,8 +4,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zeroz4j Application</title>
+
+    <!--
+        The stylesheet. ZeroZ Stack ships no CSS of its own: the components wear Tailwind and
+        daisyUI class names, and this page is what supplies them. Without these two lines your
+        application still works and looks like a 1994 web page.
+
+        Both are pinned to an exact version, so your application cannot change appearance
+        overnight because somebody else published something.
+
+        Tailwind is doing its work here in the browser, as the page loads. That is right while you
+        are building - nothing to install, nothing to run - and wrong for something you ship, where
+        you install Tailwind, build one finished stylesheet and serve that, so visitors download CSS
+        instead of a compiler. See "Where the styles come from" in the ZeroZ Stack documentation.
+
+        Colours come from daisyUI's light theme. Put data-theme="dark" on the body below for the
+        dark one, or any other daisyUI theme name.
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.16"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.6.14/daisyui.css" rel="stylesheet" type="text/css" />
 </head>
-<body>
+<body class="bg-base-100 text-base-content min-h-screen m-0 p-0">
     <div id="app-root">Loading&hellip;</div>
     <script type="text/javascript" charset="utf-8" src="js/classes.js"></script>
     <script type="text/javascript">

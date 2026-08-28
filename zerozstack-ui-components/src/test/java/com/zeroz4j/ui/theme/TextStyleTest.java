@@ -28,8 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The scale exists so that "quiet supporting text" is asked for by name instead of being described
- * again on every screen. These tests guard the two properties that make that work: there is
- * exactly one definition of each size, and no two sizes are the same size.
+ * again on every screen. These tests guard the properties that make that work: there is exactly
+ * one definition of each size, no two sizes are the same size, and there is exactly one quiet -
+ * which any size can be asked for, and which the charts fade by too.
  *
  * <p>They cannot run the components - a component needs a browser - so they check the definitions
  * themselves. What each size looks like on a page is a matter for a screenshot.</p>
@@ -75,16 +76,55 @@ class TextStyleTest {
     }
 
     @Test
-    void thereAreTwoQuietSizesAndTheyAreQuietByDifferentAmounts() {
-        String secondary = fadeOf(TextStyle.SECONDARY);
-        String caption = fadeOf(TextStyle.CAPTION);
-        assertFalse(secondary.isEmpty(), "SECONDARY is meant to be quieter than the prose");
-        assertFalse(caption.isEmpty(), "CAPTION is meant to be quieter than the prose");
-        assertFalse(secondary.equals(caption),
-                "SECONDARY and CAPTION fade by the same amount, so one of them is not needed");
+    void theSupportingSizesAreQuietAndTheReadingSizesAreNot() {
+        assertFalse(fadeOf(TextStyle.SECONDARY).isEmpty(), "SECONDARY supports the prose");
+        assertFalse(fadeOf(TextStyle.CAPTION).isEmpty(), "CAPTION supports the prose");
         assertEquals("", fadeOf(TextStyle.BODY), "BODY is the full-strength one");
         assertEquals("", fadeOf(TextStyle.PAGE_TITLE), "a page title is never faded");
         assertEquals("", fadeOf(TextStyle.SECTION_TITLE), "a section title is never faded");
+    }
+
+    @Test
+    void thereIsExactlyOneQuietInTheWholeScale() {
+        for (TextStyle style : TextStyle.values()) {
+            String fade = fadeOf(style);
+            if (!fade.isEmpty()) {
+                assertEquals(Emphasis.QUIET.getClassName(), fade,
+                        style + " fades by an amount of its own. Two quiets that were meant to look "
+                                + "the same are the drift this scale exists to stop");
+            }
+        }
+    }
+
+    @Test
+    void anySizeCanBeAskedForLoudOrQuiet() {
+        for (TextStyle style : TextStyle.values()) {
+            assertEquals("", fadeIn(style.getClassNames(Emphasis.FULL)),
+                    style + " is still faded when asked for at full strength, so a measurement or "
+                            + "an error line cannot be written at this size");
+            assertEquals(Emphasis.QUIET.getClassName(), fadeIn(style.getClassNames(Emphasis.QUIET)),
+                    style + " cannot be asked for quietly");
+        }
+    }
+
+    @Test
+    void askingForNothingGivesTheSizeItsUsualStrength() {
+        for (TextStyle style : TextStyle.values()) {
+            assertEquals(style.getClassNames(style.getNaturalEmphasis()), style.getClassNames(),
+                    style + " means something different depending on which way you ask for it");
+        }
+    }
+
+    @Test
+    void theTwoMechanismsAgreeOnHowQuietQuietIs() {
+        assertEquals(1.0, Emphasis.FULL.getOpacity(),
+                "full strength has to mean nothing is taken off");
+        assertEquals("", Emphasis.FULL.getClassName(),
+                "full strength has to add no class, or it would fight the size it is put beside");
+        assertEquals("opacity-" + Math.round(Emphasis.QUIET.getOpacity() * 100),
+                Emphasis.QUIET.getClassName(),
+                "the fade a chart draws and the fade a page uses have drifted apart, so an axis "
+                        + "label and the legend under it are quiet by different amounts");
     }
 
     @Test
@@ -94,7 +134,11 @@ class TextStyleTest {
     }
 
     private static String fadeOf(TextStyle style) {
-        for (String token : style.getClassNames().split(" ")) {
+        return fadeIn(style.getClassNames());
+    }
+
+    private static String fadeIn(String classNames) {
+        for (String token : classNames.split(" ")) {
             if (token.startsWith("opacity-")) {
                 return token;
             }

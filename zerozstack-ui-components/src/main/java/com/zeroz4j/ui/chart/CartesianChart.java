@@ -251,7 +251,7 @@ public abstract class CartesianChart extends ChartBase {
                 add(grid);
             }
             if (yAxisVisible) {
-                add(monoText(marginLeft - 8, y, label(tick, decimals), "end", 10, 0.5));
+                add(monoText(PlotText.LABEL, marginLeft - 8, y, label(tick, decimals), "end"));
             }
         }
 
@@ -297,11 +297,11 @@ public abstract class CartesianChart extends ChartBase {
     private void addEdgeAwareLabel(double x, double y, String rendered) {
         double halfWidth = rendered.length() * CHAR_WIDTH / 2;
         if (x + halfWidth > width() - 2) {
-            add(monoText(width() - 2, y, rendered, "end", 10, 0.5));
+            add(monoText(PlotText.LABEL, width() - 2, y, rendered, "end"));
         } else if (x - halfWidth < 2) {
-            add(monoText(2, y, rendered, "start", 10, 0.5));
+            add(monoText(PlotText.LABEL, 2, y, rendered, "start"));
         } else {
-            add(monoText(x, y, rendered, "middle", 10, 0.5));
+            add(monoText(PlotText.LABEL, x, y, rendered, "middle"));
         }
     }
 
@@ -340,7 +340,7 @@ public abstract class CartesianChart extends ChartBase {
                 continue;
             }
             double centre = plotLeft() + (i + 0.5) * bandWidth;
-            add(text(centre, plotBottom() + 13, categories.get(i), "middle", 10, 0.55));
+            add(text(PlotText.LABEL, centre, plotBottom() + 13, categories.get(i), "middle"));
         }
         drawAxisLine();
     }
