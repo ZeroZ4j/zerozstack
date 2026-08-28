@@ -81,6 +81,8 @@ public class Dropdown extends Component implements HasComponents, HasStyle, HasL
 
         getElement().appendChild(summary.getElement());
         getElement().appendChild(content.getElement());
+        own(summary);
+        own(content);
 
         setLayer(Layer.DROPDOWN);
 

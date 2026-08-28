@@ -25,6 +25,16 @@ import org.teavm.jso.dom.html.HTMLElement;
 
 public class ThemeController extends AbstractField<ThemeController, Boolean> {
 
+    /**
+     * What a screen reader says when nobody has given the control words of its own.
+     *
+     * <p>A theme controller is a tick box wearing two pictures, and pictures say nothing. Through
+     * 0.7.0 it had no name at all: a screen reader announced "checkbox" and stopped, and somebody
+     * using voice control had nothing to say to it. It sits in the side panel of every application
+     * built on this library, so that was every page of every one of them.</p>
+     */
+    private static final String DEFAULT_NAME = "Dark theme";
+
     private final HTMLInputElement checkbox;
 
     public ThemeController() {
@@ -40,6 +50,7 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
         checkbox.setAttribute("type", "checkbox");
         checkbox.setClassName("theme-controller");
         checkbox.setValue("dark");
+        checkbox.setAttribute("aria-label", DEFAULT_NAME);
         
         EventListener<Event> changeListener = evt -> {
             setModelValue(checkbox.isChecked(), true);
@@ -56,6 +67,22 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
         HTMLElement moonWrapper = Window.current().getDocument().createElement("div");
         moonWrapper.setInnerHTML("<svg aria-hidden=\"true\" class=\"swap-on " + sizeClass + " fill-current\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z\" /></svg>");
         getElement().appendChild(moonWrapper.getFirstChild());
+    }
+
+    /**
+     * Gives the control words of your own, and takes the built-in name away so the two cannot
+     * disagree. Passing null or nothing puts the built-in name back.
+     *
+     * @param label the caption to show beside the control
+     */
+    @Override
+    public void setLabel(String label) {
+        super.setLabel(label);
+        if (label == null || label.isEmpty()) {
+            checkbox.setAttribute("aria-label", DEFAULT_NAME);
+        } else {
+            checkbox.removeAttribute("aria-label");
+        }
     }
 
     /**

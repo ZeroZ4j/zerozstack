@@ -159,16 +159,112 @@ be the same one cannot drift apart.
 Five is deliberate. A scale nobody can hold in their head is one that gets ignored and typed out
 again, which is the whole problem.
 
-### What the five names do not cover
+### Small without being quiet
 
-Each of the five ties a size to how loud it is, and the two small ones are quiet by definition. So
-there is no name for **small text at full strength** — a number in a dense table, a reading in a
-chart tooltip, the words on an error line. The library's own dashboard components still write
-`text-xs` by hand in those few places, on purpose: fading a measurement or an error would be wrong,
-and inventing a sixth name is a decision for the scale, not for one component.
+How big text is and how loud it is are two questions, and for a while one name answered both — so
+"small" and "faded" always arrived together. That left nowhere for small text that has to be fully
+present: a number in a dense table, a reading in a chart tooltip, the words on an error line.
+Fading an error is exactly backwards.
 
-If you hit the same thing, keep the size class on its own and do not add a fade. Do not reach for
-`SECONDARY` or `CAPTION` to get a smaller size when the words are not meant to be quiet.
+Loudness is now its own axis, `com.zeroz4j.ui.theme.Emphasis`, with three steps:
+
+| Name | How present |
+|---|---|
+| `FULL` | as present as the words around it — errors, values, anything that must be read |
+| `QUIET` | a step back from the prose |
+| `FAINT` | as far back as text goes and still be text — units, hints |
+
+Each of the five sizes names one of these as its own, so asking for a size alone is still the whole
+answer nearly every time. Say a loudness as well only where the text disagrees with its size:
+
+```java
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
+
+TextStyle.CAPTION.applyTo(errorLine, Emphasis.FULL);      // small, and nothing taken off it
+TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);      // there, and out of the way
+```
+
+`applyTo`, `span` and `paragraph` all take an `Emphasis` as a second argument. Passing none, or
+passing `null`, uses the size's own.
+
+Loudness is a fade rather than a colour, for the same reason the sizes are. Never write
+`text-base-content/60` and its neighbours: that names a colour, so it goes wrong the moment the
+surface underneath is a tinted notice or a coloured card, and two pieces of quiet text that were
+meant to match drift apart.
+
+## Swapping what is inside something
+
+**Never empty a container by hand.** `getElement().setInnerHTML("")` takes what was inside off the
+page without telling it, so its `onDetach` never runs. Everything it started keeps running:
+timers, effects, subscriptions, listeners it put on the document. They go on changing a screen
+nobody is looking at, which — in this library's own gallery — threw the keyboard back to the top of
+the page every second and a half, and added another timer that never stopped on every visit.
+Nothing errors and nothing is logged.
+
+There is one operation for it, in two shapes:
+
+```java
+// A container that is a component — anything implementing HasComponents.
+contentArea.replaceContents(nextScreen);
+
+// A plain element — the <div id="app-root"> an application starts in.
+Component.replaceContents(appRoot, nextScreen);
+```
+
+Both take out what was there, run `onDetach` on it and on everything nested inside it, and put the
+new contents in. Pass several components to show several; pass none to leave the container empty.
+
+`removeAll()` empties a container the same way, and `remove(...)` takes named components out. Use
+those when you are emptying rather than replacing.
+
+So write `onDetach` and rely on it:
+
+```java
+public class LiveQueueView extends Div {
+
+    private int timer = -1;
+    private Disposable watching;
+
+    @Override
+    protected void onAttach() {
+        super.onAttach();
+        timer = Window.setInterval(this::refresh, 5000);
+        watching = Effect.create(() -> render(queue.get()));
+    }
+
+    @Override
+    protected void onDetach() {
+        if (timer >= 0) {
+            Window.clearInterval(timer);
+            timer = -1;
+        }
+        if (watching != null) {
+            watching.dispose();
+            watching = null;
+        }
+        super.onDetach();
+    }
+}
+```
+
+`onAttach` runs when a container puts the component in, `onDetach` when a container takes it out,
+and both reach everything inside. Both are idempotent: a component added to a container that is
+itself added to another is started once, not twice. `isAttached()` says which state it is in.
+
+### Limits
+
+- **Only components added with `add(...)` have a lifecycle.** Appending an element straight to
+  `getElement()` puts it on the page without the framework knowing there is a component there, so
+  nothing calls `onAttach` or `onDetach` for it. Add components with `add`. (The wrappers that
+  insert a part of their own by hand — `Card`, `Dialog`, `Drawer`, `Dropdown` — declare it, so
+  anything you put inside one is reached.)
+- **`Router` already does this** for you: navigating swaps the view with the same operation, so the
+  view you left is shut down.
+- **A `KeyedList` is not a component** and cannot be detached with one. Keep the object, and
+  `dispose()` it from your `onDetach`.
+- A build-time test reads every Java file in the checkout and fails if anything writes an empty
+  string into an element's HTML, or takes every child out of one in a loop of its own.
 
 ## Data Binding to POJOs
 
@@ -525,9 +621,14 @@ Core building blocks that other components extend or implement.
 - **Component**: The base class for all UI elements, wrapping a DOM node. `setAriaLabel` gives any
   component words for somebody who cannot see it - for the ones with no words of their own, such
   as an icon button, a splitter or a spinner. See
-  [Keyboard and naming](guides/ui-keyboard-and-naming.md).
+  [Keyboard and naming](guides/ui-keyboard-and-naming.md). `onAttach` and `onDetach` say when it
+  goes on the page and when it comes off; `Component.replaceContents(element, ...)` swaps what is
+  inside a plain element and shuts down what leaves. See
+  [Swapping what is inside something](#swapping-what-is-inside-something).
 - **AbstractField**: The foundational class for input components.
-- **HasComponents**: Interface for containers that can hold child components.
+- **HasComponents**: Interface for containers that can hold child components. `add`, `remove`,
+  `removeAll` and `replaceContents` are the only ways to change what is in one - each of them runs
+  the lifecycle callbacks on what goes in and what comes out.
 - **HasValue**: Interface for components that handle data binding.
 - **HasSize / HasStyle / HasText / HasEnabled**: Mixin interfaces for standard component properties.
 - **HasLayer / Layer**: How high above the page something floats, asked for by name rather than by
@@ -540,6 +641,8 @@ Core building blocks that other components extend or implement.
 Package `com.zeroz4j.ui.theme`. Not components — the small vocabulary every component and every
 screen shares, so the same thing is asked for by name rather than described again.
 - **TextStyle**: The five sizes of text, by name — see [Naming text sizes](#naming-text-sizes).
+- **Emphasis**: How loud a piece of text is, separately from how big — `FULL`, `QUIET`, `FAINT`.
+  See [Small without being quiet](#small-without-being-quiet).
 - **ThemeColor**: The DaisyUI colour names a component can be given, for the components that take
   one (`setThemeColor`).
 - **ThemeSize**: The size names a component can be given, for the components that take one.

@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.api.RmiClientExecutor;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
@@ -107,10 +109,10 @@ public class FileUpload extends Div {
         titleLabel.addClassName("font-semibold text-base-content");
 
         subtitleLabel = new Span("or click to choose from your computer");
-        subtitleLabel.addClassName("text-sm text-base-content/60");
+        subtitleLabel.addClassName(TextStyle.SECONDARY.getClassNames());
 
         hint = new Div("");
-        hint.addClassName("text-xs text-base-content/50");
+        hint.addClassName(TextStyle.CAPTION.getClassNames());
 
         Div inner = new Div();
         inner.addClassName("flex flex-col items-center justify-center gap-1 pointer-events-none");
@@ -407,9 +409,10 @@ public class FileUpload extends Div {
             addClassName("flex items-center gap-3 rounded-box bg-base-200 px-4 py-3");
 
             Span name = new Span(fileName);
-            name.addClassName("truncate font-medium text-sm");
+            name.addClassName(TextStyle.SECONDARY.getClassNames(Emphasis.FULL)
+                    + " truncate font-medium");
             Span sizeLabel = new Span(describeSize(size));
-            sizeLabel.addClassName("text-xs text-base-content/50 shrink-0");
+            sizeLabel.addClassName(TextStyle.CAPTION.getClassNames() + " shrink-0");
 
             Div heading = new Div();
             heading.addClassName("flex items-baseline justify-between gap-3");
@@ -419,7 +422,7 @@ public class FileUpload extends Div {
             bar.getElement().setAttribute("value", "0");
             bar.getElement().setAttribute("max", "100");
 
-            status.addClassName("text-xs text-base-content/60");
+            status.addClassName(TextStyle.CAPTION.getClassNames());
 
             Div body = new Div();
             body.addClassName("flex flex-col gap-1 flex-1 min-w-0");
@@ -468,7 +471,7 @@ public class FileUpload extends Div {
             bar.getElement().setAttribute("value", "100");
             bar.removeClassName("progress-primary");
             bar.addClassName("progress-success");
-            status.setClassName("text-xs text-success");
+            status.setClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL) + " text-success");
             status.setText(message);
         }
 
@@ -476,7 +479,7 @@ public class FileUpload extends Div {
             settle(false, message);
             bar.removeClassName("progress-primary");
             bar.addClassName("progress-error");
-            status.setClassName("text-xs text-error");
+            status.setClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL) + " text-error");
             status.setText(message);
         }
 

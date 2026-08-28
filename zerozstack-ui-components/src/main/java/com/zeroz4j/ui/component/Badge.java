@@ -29,6 +29,13 @@ public class Badge extends Component implements HasText, HasStyle, HasSize,
     public Badge() {
         super("div");
         addClassName("badge");
+        // A label longer than the space it has breaks rather than setting the width of the row it
+        // is in. "anywhere" rather than "break-word": only "anywhere" makes the browser count the
+        // broken word when it decides how narrow the badge may be, so only it stops one long
+        // status name taking the page sideways.
+        getElement().getStyle().setProperty("overflow-wrap", "anywhere");
+        getElement().getStyle().setProperty("min-width", "0");
+        getElement().getStyle().setProperty("max-width", "100%");
     }
 
     public Badge(String text) {

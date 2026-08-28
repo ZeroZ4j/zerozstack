@@ -17,6 +17,9 @@
  */
 package com.zeroz4j.ui.component;
 
+import java.util.ArrayList;
+import java.util.List;
+import org.teavm.jso.JSBody;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
 
@@ -37,6 +40,19 @@ import org.teavm.jso.dom.html.HTMLElement;
 public abstract class Component {
 
     private final HTMLElement element;
+
+    /**
+     * The components a container put inside this one, in the order they were added.
+     *
+     * <p>This is what makes {@link #onDetach()} reach a whole screen rather than only its outermost
+     * box. It holds what {@link HasComponents#add} put there; anything appended straight to the
+     * element with {@code getElement().appendChild(...)} is invisible to it, and gets no lifecycle
+     * call, which is one more reason to add components with {@code add}.</p>
+     */
+    private final List<Component> children = new ArrayList<>();
+
+    /** Whether a container has put this component on the page and not taken it off again. */
+    private boolean attached;
 
     /**
      * Constructs a new component wrapping a newly created HTML element with the specified tag name.
@@ -149,9 +165,144 @@ public abstract class Component {
 
     /**
      * Lifecycle callback invoked when the component is detached from the active DOM tree.
+     *
+     * <p>This is where a component stops whatever it started: timers, effects, subscriptions,
+     * listeners it put on the document. It runs when a container takes the component off the page,
+     * and it runs for everything inside that component too.</p>
      */
     protected void onDetach() {
     }
+
+    /** Whether this component has been put on the page by a container and not taken off again. */
+    public boolean isAttached() {
+        return attached;
+    }
+
+    /** The components a container has put inside this one. Maintained by {@link HasComponents}. */
+    List<Component> trackedChildren() {
+        return children;
+    }
+
+    /**
+     * Records a part this component built for itself and inserted by hand.
+     *
+     * <p>A component that wraps something - a card around its body, a dialog around its panel -
+     * inserts that part's element directly rather than through {@code add}, because {@code add} is
+     * what the application uses to put things <i>into</i> the wrapper. Saying so here is what keeps
+     * the lifecycle unbroken: without it, taking the wrapper off the page would stop the wrapper
+     * and leave everything the application put inside it running.</p>
+     *
+     * @param part the part to bring into this component's lifecycle
+     */
+    void own(Component part) {
+        if (part != null && !children.contains(part)) {
+            children.add(part);
+        }
+    }
+
+    /**
+     * Runs {@link #onAttach()} here and on everything inside, once.
+     *
+     * <p>Calling it a second time does nothing, so a component added to a container that is itself
+     * added to another container is not started twice.</p>
+     */
+    void attach() {
+        if (attached) {
+            return;
+        }
+        attached = true;
+        onAttach();
+        for (Component child : new ArrayList<>(children)) {
+            child.attach();
+        }
+    }
+
+    /**
+     * Runs {@link #onDetach()} on everything inside, innermost first, and then here.
+     *
+     * <p>Calling it on a component that is not on the page does nothing.</p>
+     */
+    void detach() {
+        if (!attached) {
+            return;
+        }
+        attached = false;
+        for (Component child : new ArrayList<>(children)) {
+            child.detach();
+        }
+        onDetach();
+    }
+
+    // ---------------------------------------------------------------- replacing what is inside
+
+    /**
+     * Puts {@code newContents} inside {@code host}, taking out and shutting down whatever was
+     * there before.
+     *
+     * <p>This is the supported way to swap one screen for another inside a plain element - the
+     * {@code <div id="app-root">} an application starts in, most often. Use it instead of
+     * {@code host.setInnerHTML("")}: emptying an element by hand takes the old screen off the page
+     * without telling it, so its timers keep ticking, its effects keep firing and its
+     * subscriptions keep arriving, all rebuilding a screen nobody is looking at any more - and
+     * throwing the keyboard off whatever the person moved on to. Every {@link #onDetach()} in the
+     * old screen runs here, including the ones deep inside it.</p>
+     *
+     * <p>A container that is itself a component has the same operation as
+     * {@link HasComponents#replaceContents(Component...)}; prefer that where you have one.</p>
+     *
+     * @param host the element to fill; nothing happens if it is null
+     * @param newContents what to put in it - none, one, or several
+     */
+    public static void replaceContents(HTMLElement host, Component... newContents) {
+        if (host == null) {
+            return;
+        }
+        List<Component> placed = hostedIn(host);
+        for (Component previous : new ArrayList<>(placed)) {
+            previous.detach();
+        }
+        placed.clear();
+        while (host.getLastChild() != null) {
+            host.removeChild(host.getLastChild());
+        }
+        if (newContents == null) {
+            return;
+        }
+        for (Component next : newContents) {
+            if (next == null) {
+                continue;
+            }
+            host.appendChild(next.getOuterElement());
+            placed.add(next);
+            next.attach();
+        }
+    }
+
+    /**
+     * What was last placed in {@code host} by {@link #replaceContents(HTMLElement, Component...)}.
+     *
+     * <p>A plain element cannot hold a Java list, so the list lives here and the element carries
+     * only its position in it. There is one of these per host element, and an application has one
+     * or two host elements, so the table does not grow with the screen.</p>
+     */
+    private static List<Component> hostedIn(HTMLElement host) {
+        int slot = hostSlot(host);
+        if (slot < 0 || slot >= HOSTED.size()) {
+            HOSTED.add(new ArrayList<>());
+            slot = HOSTED.size() - 1;
+            setHostSlot(host, slot);
+        }
+        return HOSTED.get(slot);
+    }
+
+    private static final List<List<Component>> HOSTED = new ArrayList<>();
+
+    @JSBody(params = { "element" },
+            script = "return (typeof element.__zzHosted === 'number') ? element.__zzHosted : -1;")
+    private static native int hostSlot(HTMLElement element);
+
+    @JSBody(params = { "element", "slot" }, script = "element.__zzHosted = slot;")
+    private static native void setHostSlot(HTMLElement element, int slot);
 
     /**
      * Wraps a native TeaVM DOM EventListener in a new virtual thread context.

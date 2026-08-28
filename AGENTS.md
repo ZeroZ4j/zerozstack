@@ -89,7 +89,15 @@ implementations).
    `BinaryPackableRegistrar` or `WasmRmiClient.initialize` yourself — registrars are discovered via
    `META-INF/services`.
 8. **Get an RMI stub with `new MyService_Stub()`.** There is no `WasmRmiClient.create(Class)`.
-9. **Never put a click listener on a `Div`.** A control has to be reachable with Tab and pressed
+9. **Never empty an element by hand.** `getElement().setInnerHTML("")` takes what was inside off
+   the page without telling it, so its `onDetach` never runs and its timers, effects and
+   subscriptions keep running against a screen nobody is looking at. Swap contents with
+   `container.replaceContents(next)`, or `Component.replaceContents(element, next)` for a plain
+   element such as an application's root `<div>`; empty one with `removeAll()`. Both run `onDetach`
+   on everything leaving, nested parts included. `DetachContractTest` reads every Java file in the
+   checkout on every build and fails it otherwise. Only components put in with `add(...)` get a
+   lifecycle - appending an element straight to `getElement()` does not.
+10. **Never put a click listener on a `Div`.** A control has to be reachable with Tab and pressed
    with Enter, and has to have words that say what it does. Use a `Button` - `btn-ghost` and
    `btn-link` make one look like anything. `KeyboardAndNamingContractTest` reads every component
    on every build and fails it otherwise, and every control also has to appear on the browser

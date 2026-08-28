@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.component.mixin.HasLayer;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.theme.Layer;
@@ -134,7 +135,7 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
 
         heading = new Heading();
         heading.setId("zeroz-dialog-title-" + DIALOG_ID_COUNTER.incrementAndGet());
-        heading.addClassName("text-lg font-bold");
+        heading.addClassName(TextStyle.SECTION_TITLE.getClassNames());
         heading.setVisible(false);
 
         content = new Div();
@@ -147,6 +148,7 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
         modalBox.add(modalAction);
 
         getElement().appendChild(modalBox.getElement());
+        own(modalBox);
 
         setTitle(title);
 

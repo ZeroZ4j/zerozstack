@@ -160,26 +160,31 @@ public class MainLayout extends HorizontalLayout {
         contentArea.addClassName("p-8");
         contentArea.addClassName("overflow-y-auto");
 
-        // Reactively switch content based on currentViewSignal
+        // Reactively switch content based on currentViewSignal.
+        //
+        // replaceContents, never setInnerHTML(""). Emptying the element by hand took the old page
+        // off the screen without telling it, so its timers and effects kept running and kept
+        // rebuilding it underneath whoever had moved on - which threw the keyboard back to the
+        // page body every couple of seconds. replaceContents runs onDetach on the page being left
+        // and on everything inside it.
         Effect.create(() -> {
-            contentArea.getElement().setInnerHTML(""); // clear
             ViewType view = currentViewSignal.get();
             if (view == ViewType.DASHBOARD) {
-                contentArea.add(dashboardView);
-
+                contentArea.replaceContents(dashboardView);
             } else if (view == ViewType.SHOWCASE) {
-                contentArea.add(showcaseView);
+                contentArea.replaceContents(showcaseView);
             } else if (view == ViewType.ADMIN) {
-                contentArea.add(adminView);
+                contentArea.replaceContents(adminView);
             } else if (view == ViewType.PROFILE) {
-                contentArea.add(profileView);
+                contentArea.replaceContents(profileView);
             } else if (view == ViewType.HTML_EXAMPLE) {
-                contentArea.add(htmlExampleView);
+                contentArea.replaceContents(htmlExampleView);
             } else if (view == ViewType.UI_COMPONENTS) {
                 Component showcase = ShowcaseRegistry.createShowcase(currentComponentSignal.get());
-                if (showcase != null) {
-                    contentArea.add(showcase);
-                }
+                contentArea.replaceContents(showcase == null ? new Component[0]
+                        : new Component[] { showcase });
+            } else {
+                contentArea.replaceContents();
             }
         });
 

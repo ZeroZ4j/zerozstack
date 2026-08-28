@@ -19,6 +19,7 @@ package com.zeroz4j.example.client.showcase;
 
 import com.zeroz4j.ui.component.Alert;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.theme.TextStyle;
 
 public class TextStyleShowcase extends ComponentShowcase {
@@ -57,6 +58,22 @@ public class TextStyleShowcase extends ComponentShowcase {
                 + "so the same words are right on a page, on a tinted notice and on a dark "
                 + "background."));
         addSection("Quiet text is a fade, not a colour", onTint);
+
+        Div loudness = new Div();
+        loudness.addClassName("flex flex-col gap-2 w-full");
+        loudness.add(TextStyle.BODY.paragraph(
+            "How big text is and how loud it is are two questions. Each size names its own "
+                + "loudness, so asking for a size alone is usually the whole answer. Say a "
+                + "loudness as well where the words disagree with their size - a small error line "
+                + "that must not be faded, a count that should be further out of the way."));
+        for (Emphasis emphasis : Emphasis.values()) {
+            Div line = TextStyle.CAPTION.paragraph(
+                "Emphasis." + emphasis.name() + " - the same small size, this much of it",
+                emphasis);
+            line.addClassName("font-mono");
+            loudness.add(line);
+        }
+        addSection("Small without being quiet", loudness);
     }
 
     private Div sample(TextStyle style) {

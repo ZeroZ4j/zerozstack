@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.api.validation.FieldRule;
 import com.zeroz4j.signals.Signal;
 import com.zeroz4j.signals.ValueSignal;
@@ -511,7 +513,8 @@ public abstract class AbstractField<C extends Component, T> extends Component im
 
         labelElement = Window.current().getDocument()
                 .createElement(labelTargetsControl() ? "label" : "span");
-        labelElement.setClassName("text-sm font-medium text-base-content");
+        labelElement.setClassName(
+                TextStyle.SECONDARY.getClassNames(Emphasis.FULL) + " font-medium");
         labelElement.getStyle().setProperty("display", "none");
         if (labelTargetsControl()) {
             labelElement.setAttribute("for", id);
@@ -546,14 +549,16 @@ public abstract class AbstractField<C extends Component, T> extends Component im
 
         helperElement = Window.current().getDocument().createElement("span");
         helperElement.setAttribute("id", id + "-help");
-        helperElement.setClassName("text-xs text-base-content/60");
+        helperElement.setClassName(TextStyle.CAPTION.getClassNames());
         helperElement.getStyle().setProperty("display", "none");
         box.appendChild(helperElement);
 
         errorElement = Window.current().getDocument().createElement("span");
         errorElement.setAttribute("id", id + "-error");
         errorElement.setAttribute("role", "alert");
-        errorElement.setClassName("text-xs text-error");
+        // FULL, not the size's own fade: an error is the one line the reader must not miss.
+        errorElement.setClassName(
+                TextStyle.CAPTION.getClassNames(Emphasis.FULL) + " text-error");
         errorElement.getStyle().setProperty("display", "none");
         box.appendChild(errorElement);
 

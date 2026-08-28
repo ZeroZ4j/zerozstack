@@ -47,30 +47,47 @@ import com.zeroz4j.ui.layout.Span;
  * notice or a coloured card, without the caller choosing per surface — and a page cannot end up
  * with two shades of grey that were meant to be the same one.</p>
  *
+ * <p><b>How loud is a separate question from how big.</b> Each size names its own loudness, so
+ * asking for a size alone is still the whole answer nearly every time. Where a piece of text
+ * disagrees with its size — a small error line that must not be faded, a count that should be
+ * further out of the way — say an {@link Emphasis} as well:</p>
+ *
+ * <pre>{@code
+ * TextStyle.CAPTION.applyTo(errorLine, Emphasis.FULL);
+ * TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);
+ * }</pre>
+ *
  * <p>Five is deliberate. A scale nobody can hold in their head is a scale that gets ignored and
  * typed out again, which is the problem this exists to end.</p>
  */
 public enum TextStyle {
 
     /** The name of the screen. One per page, at the top. */
-    PAGE_TITLE("text-3xl font-bold leading-tight"),
+    PAGE_TITLE("text-3xl font-bold leading-tight", Emphasis.FULL),
 
     /** The heading over a group of things — a card, a panel, a block of a form. */
-    SECTION_TITLE("text-lg font-semibold leading-snug"),
+    SECTION_TITLE("text-lg font-semibold leading-snug", Emphasis.FULL),
 
     /** Ordinary prose: the words the reader is here to read. */
-    BODY("text-base leading-relaxed"),
+    BODY("text-base leading-relaxed", Emphasis.FULL),
 
     /** Supporting words, a step quieter than the prose. Timestamps, counts, explanations. */
-    SECONDARY("text-sm leading-normal opacity-70"),
+    SECONDARY("text-sm leading-normal", Emphasis.QUIET),
 
     /** The smallest label there is: units, hints, the words under a picture. */
-    CAPTION("text-xs leading-normal opacity-60");
+    CAPTION("text-xs leading-normal", Emphasis.FAINT);
 
-    private final String classNames;
+    private final String sizeClasses;
+    private final Emphasis ownEmphasis;
 
-    TextStyle(String classNames) {
-        this.classNames = classNames;
+    TextStyle(String sizeClasses, Emphasis ownEmphasis) {
+        this.sizeClasses = sizeClasses;
+        this.ownEmphasis = ownEmphasis;
+    }
+
+    /** How loud this size is when nobody says otherwise. */
+    public Emphasis getEmphasis() {
+        return ownEmphasis;
     }
 
     /**
@@ -82,7 +99,18 @@ public enum TextStyle {
      * @return the space-separated class names
      */
     public String getClassNames() {
-        return classNames;
+        return getClassNames(ownEmphasis);
+    }
+
+    /**
+     * Returns the stylesheet classes this size is made of, at a loudness of your choosing.
+     *
+     * @param emphasis how present the text should be; null means this size's own
+     * @return the space-separated class names
+     */
+    public String getClassNames(Emphasis emphasis) {
+        String fade = (emphasis == null ? ownEmphasis : emphasis).getClassNames();
+        return fade.isEmpty() ? sizeClasses : sizeClasses + " " + fade;
     }
 
     /**
@@ -95,11 +123,24 @@ public enum TextStyle {
      * @return the same component
      */
     public <C extends HasStyle> C applyTo(C target) {
+        return applyTo(target, ownEmphasis);
+    }
+
+    /**
+     * Puts this size on a component at a loudness of your choosing, taking any other size and any
+     * other loudness off it first.
+     *
+     * @param target the component to style
+     * @param emphasis how present the text should be; null means this size's own
+     * @param <C> the component's own type, so the call can be chained
+     * @return the same component
+     */
+    public <C extends HasStyle> C applyTo(C target, Emphasis emphasis) {
         if (target == null) {
             return null;
         }
         clear(target);
-        target.addClassName(classNames);
+        target.addClassName(getClassNames(emphasis));
         return target;
     }
 
@@ -113,7 +154,10 @@ public enum TextStyle {
             return;
         }
         for (TextStyle style : values()) {
-            target.removeClassName(style.classNames);
+            target.removeClassName(style.sizeClasses);
+        }
+        for (Emphasis emphasis : Emphasis.values()) {
+            target.removeClassName(emphasis.getClassNames());
         }
     }
 
@@ -124,8 +168,19 @@ public enum TextStyle {
      * @return a new {@link Span}
      */
     public Span span(String text) {
+        return span(text, ownEmphasis);
+    }
+
+    /**
+     * Creates a piece of inline text in this size, at a loudness of your choosing.
+     *
+     * @param text the words to show
+     * @param emphasis how present the text should be; null means this size's own
+     * @return a new {@link Span}
+     */
+    public Span span(String text, Emphasis emphasis) {
         Span span = new Span(text);
-        span.addClassName(classNames);
+        span.addClassName(getClassNames(emphasis));
         return span;
     }
 
@@ -136,8 +191,19 @@ public enum TextStyle {
      * @return a new {@link Div}
      */
     public Div paragraph(String text) {
+        return paragraph(text, ownEmphasis);
+    }
+
+    /**
+     * Creates a paragraph in this size, at a loudness of your choosing.
+     *
+     * @param text the words to show
+     * @param emphasis how present the text should be; null means this size's own
+     * @return a new {@link Div}
+     */
+    public Div paragraph(String text, Emphasis emphasis) {
         Div div = new Div(text);
-        div.addClassName(classNames);
+        div.addClassName(getClassNames(emphasis));
         return div;
     }
 }

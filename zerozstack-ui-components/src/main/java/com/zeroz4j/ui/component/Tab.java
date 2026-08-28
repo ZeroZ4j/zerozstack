@@ -43,6 +43,13 @@ public class Tab extends Component implements HasText, HasComponents, HasStyle, 
         // A row of tabs is a set of choices, and only one of them is showing. Saying so is what
         // lets a screen reader read "tab 2 of 4, selected" instead of four unrelated buttons.
         getElement().setAttribute("role", "tab");
+        // A heading longer than the row it is in breaks rather than setting the row's width.
+        // "anywhere" rather than "break-word": only "anywhere" makes the browser count the broken
+        // word when it works out how narrow the tab may be, so only it stops one long heading
+        // taking the whole page sideways.
+        getElement().getStyle().setProperty("overflow-wrap", "anywhere");
+        getElement().getStyle().setProperty("min-width", "0");
+        getElement().getStyle().setProperty("max-width", "100%");
         setSelected(false);
     }
 

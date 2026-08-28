@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 
@@ -65,16 +67,21 @@ public final class KpiTile extends Div {
     public KpiTile(String label) {
         addClassName("rounded-xl border border-base-300 bg-base-200/50 p-4 flex flex-col gap-1 "
             + "min-w-[10rem]");
+        // A metric's name and its value both break rather than setting the tile's width. A metric
+        // named after a path or an identifier has no spaces in it, and without this one tile made
+        // the whole page scroll sideways.
+        getElement().getStyle().setProperty("overflow-wrap", "anywhere");
+        getElement().getStyle().setProperty("max-width", "100%");
         Div labelDiv = new Div(label);
-        labelDiv.addClassName("text-xs uppercase tracking-wide text-base-content/50");
+        labelDiv.addClassName(TextStyle.CAPTION.getClassNames() + " uppercase tracking-wide");
 
         valueRow.addClassName("flex items-baseline gap-1");
         valueText.addClassName("text-2xl font-bold font-mono");
-        unitText.addClassName("text-sm text-base-content/50");
+        unitText.addClassName(TextStyle.SECONDARY.getClassNames(Emphasis.FAINT));
         unitText.addClassName("hidden");
         valueRow.add(valueText, unitText);
 
-        delta.addClassName("text-xs text-base-content/60");
+        delta.addClassName(TextStyle.CAPTION.getClassNames());
         trendWrap.addClassName("text-primary mt-1");
         trendWrap.add(trend);
         add(labelDiv, valueRow, delta, trendWrap);
@@ -116,7 +123,8 @@ public final class KpiTile extends Div {
     /** Movement text you have already composed. {@code positive} chooses success or error. */
     public KpiTile delta(String text, boolean positive) {
         delta.setText(text);
-        delta.setClassName("text-xs " + (positive ? "text-success" : "text-error"));
+        delta.setClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL) + " "
+                + (positive ? "text-success" : "text-error"));
         return this;
     }
 
@@ -138,7 +146,8 @@ public final class KpiTile extends Div {
             text.append(" (").append(fixed(Math.abs(change / previous) * 100, 1)).append("%)");
         }
         delta.setText(text.toString());
-        delta.setClassName("text-xs " + colorClassFor(change));
+        delta.setClassName(TextStyle.CAPTION.getClassNames(emphasisFor(change)) + " "
+                + colorClassFor(change));
         return this;
     }
 
@@ -149,7 +158,7 @@ public final class KpiTile extends Div {
     /** Removes the movement line — for a tile with no comparison point yet. */
     public KpiTile clearDelta() {
         delta.setText("");
-        delta.setClassName("text-xs text-base-content/60");
+        delta.setClassName(TextStyle.CAPTION.getClassNames());
         return this;
     }
 
@@ -179,10 +188,15 @@ public final class KpiTile extends Div {
 
     private String colorClassFor(double change) {
         if (change == 0 || direction == Direction.NEUTRAL) {
-            return "text-base-content/60";
+            return "";
         }
         boolean good = direction == Direction.UP_IS_GOOD ? change > 0 : change < 0;
         return good ? "text-success" : "text-error";
+    }
+
+    /** Movement with no direction to it is quiet; a rise or a fall the reader should see is not. */
+    private Emphasis emphasisFor(double change) {
+        return change == 0 || direction == Direction.NEUTRAL ? Emphasis.FAINT : Emphasis.FULL;
     }
 
     /** {@code String.format} does not exist under TeaVM, so round by hand. */

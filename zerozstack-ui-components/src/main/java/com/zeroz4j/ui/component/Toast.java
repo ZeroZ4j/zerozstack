@@ -118,6 +118,19 @@ public class Toast extends Component implements HasComponents, HasText, HasStyle
     }
 
     /**
+     * Puts the message on the page, in the corner it was told to sit in.
+     *
+     * <p>Use this rather than appending the element yourself. A message that arrives on the page
+     * without the component being told is a message that never starts: Escape did not close it,
+     * because the key listener is registered when the message starts. Every toast in this
+     * library's own gallery was raised the other way, and Escape did nothing on any of them.</p>
+     */
+    public void show() {
+        Window.current().getDocument().getBody().appendChild(getElement());
+        attach();
+    }
+
+    /**
      * Takes the message off the page. Safe to call more than once, and safe to call on one that was
      * never added.
      */
@@ -125,7 +138,7 @@ public class Toast extends Component implements HasComponents, HasText, HasStyle
         if (getElement().getParentNode() != null) {
             getElement().getParentNode().removeChild(getElement());
         }
-        onDetach();
+        detach();
     }
 
     @Override

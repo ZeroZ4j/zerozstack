@@ -530,11 +530,42 @@ class PublishedArtifactTextTest {
                 current = next;
                 rounds++;
             }
-            if (rounds > 0) {
+            if (rounds > 0 && couldBeSomethingAWriterTyped(current)) {
                 return current;
             }
         }
         return null;
+    }
+
+    /**
+     * Whether the repaired text is something a person could have written.
+     *
+     * <p>The reversal is arithmetic, so any two bytes that happen to form valid UTF-8 come back as
+     * "the original". Real Spanish is the case that catches this: {@code Íñ} in a name like
+     * {@code Íñigo} is the byte pair CD F1, which reads back as U+05A4 — a Hebrew accent that
+     * attaches to a letter and cannot stand alone. Nobody typed that, so nothing was misread.</p>
+     *
+     * <p>Every corruption this test was written for repaired to ordinary text: dashes, curly
+     * quotes, umlauts, the play and pause marks. So a repair made only of marks that attach to
+     * another character, or of characters with no printed form at all, is arithmetic rather than
+     * evidence, and is not reported.</p>
+     */
+    private static boolean couldBeSomethingAWriterTyped(String repaired) {
+        for (int i = 0; i < repaired.length(); i++) {
+            int type = Character.getType(repaired.charAt(i));
+            boolean attachesToAnother = type == Character.NON_SPACING_MARK
+                    || type == Character.COMBINING_SPACING_MARK
+                    || type == Character.ENCLOSING_MARK;
+            boolean hasNoPrintedForm = type == Character.CONTROL
+                    || type == Character.FORMAT
+                    || type == Character.UNASSIGNED
+                    || type == Character.PRIVATE_USE
+                    || type == Character.SURROGATE;
+            if (!attachesToAnother && !hasNoPrintedForm) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The run written out in one code page and read back as UTF-8, or null if either step refuses. */

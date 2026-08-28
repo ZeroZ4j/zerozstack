@@ -213,7 +213,7 @@ public class JobMonitorView extends Card {
             String currentPhase = status.getPhase();
             boolean isFailed = "Failed".equals(currentPhase);
 
-            steps.getElement().setInnerHTML("");
+            steps.removeAll();
 
             int activeIndex = -1;
             for (int i = 0; i < PIPELINE_PHASES.length; i++) {

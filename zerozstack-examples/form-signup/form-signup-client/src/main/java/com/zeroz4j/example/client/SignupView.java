@@ -68,7 +68,7 @@ public class SignupView extends Card {
 
         disposables.add(Effect.create(() -> {
             String msg = statusMessage.get();
-            statusDiv.getElement().setInnerHTML("");
+            statusDiv.removeAll();
             if (msg != null && !msg.trim().isEmpty()) {
                 Alert alert = Boolean.TRUE.equals(statusSuccess.get())
                         ? Alert.success(msg)
@@ -282,7 +282,7 @@ public class SignupView extends Card {
     }
 
     private void renderTable(Div container) {
-        container.getElement().setInnerHTML("");
+        container.removeAll();
         List<Registration> list = registrations.get();
         if (list == null || list.isEmpty()) {
             Span emptySpan = TextStyle.SECONDARY.span("No registrations yet.");

@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import org.teavm.jso.browser.Window;
@@ -110,11 +112,14 @@ public final class DiffView extends Div {
         header.getElement().setAttribute("aria-expanded", "true");
         Icon chevron = Icon.of("chevron-down", "w-3.5 h-3.5 transition-transform");
         Span path = new Span(file.path());
-        path.addClassName("font-mono text-xs flex-1 truncate");
+        path.addClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL)
+                + " font-mono flex-1 truncate");
         Span addBadge = new Span("+" + file.adds());
-        addBadge.addClassName("text-success text-xs font-mono");
+        addBadge.addClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL)
+                + " text-success font-mono");
         Span delBadge = new Span("−" + file.dels());
-        delBadge.addClassName("text-error text-xs font-mono");
+        delBadge.addClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL)
+                + " text-error font-mono");
         header.getElement().appendChild(chevron.getElement());
         header.getElement().appendChild(path.getElement());
         header.getElement().appendChild(addBadge.getElement());
@@ -134,7 +139,7 @@ public final class DiffView extends Div {
             } else if (line.startsWith("-")) {
                 cls = "px-3 bg-error/10 text-error";
             } else {
-                cls = "px-3 text-base-content/70";
+                cls = "px-3 " + Emphasis.QUIET.getClassNames();
             }
             row.setClassName(cls);
             row.appendChild(Window.current().getDocument()

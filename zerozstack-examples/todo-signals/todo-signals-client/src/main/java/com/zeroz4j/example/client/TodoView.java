@@ -180,7 +180,7 @@ public class TodoView extends Card {
     }
 
     private void renderTasks(Div container) {
-        container.getElement().setInnerHTML(""); // Clear
+        container.removeAll();
         for (Task task : visibleTasks.get()) {
             HorizontalLayout rowLayout = new HorizontalLayout();
             rowLayout.addClassName("items-center");

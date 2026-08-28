@@ -159,11 +159,17 @@ Object.assign(window.__kw, {
         if (style.display === 'none' || style.visibility === 'hidden') return false;
         if (el.closest('[aria-hidden="true"]')) return false;
         if (el.getAttribute('tabindex') === '-1') return false;
-        // Inside a folded-away section. The browser still gives these a size in some stylesheets,
-        // so the rectangle alone does not catch them.
-        const details = el.closest('details');
-        if (details && !details.open && el.tagName !== 'SUMMARY' && !el.contains(details)) {
-            const summary = details.querySelector(':scope > summary');
+        // Inside a folded-away section. Every <details> above the element is checked, not only
+        // the nearest one: a folding section nested inside another is shut away with its parent,
+        // and its own handle goes with it. Chrome still gives everything inside a shut section a
+        // rectangle - it lays the content out and then declines to paint or focus it - so the
+        // size test alone does not catch any of this. Reading only the nearest <details> made the
+        // walkthrough report a nested section's handle as unreachable on every run, which was the
+        // browser behaving correctly.
+        for (let d = el.closest('details'); d;
+             d = d.parentElement && d.parentElement.closest('details')) {
+            if (d.open) continue;
+            const summary = d.querySelector(':scope > summary');
             if (!summary || !summary.contains(el)) return false;
         }
         if (el.closest('[hidden]')) return false;

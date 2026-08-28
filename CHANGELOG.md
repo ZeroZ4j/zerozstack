@@ -868,6 +868,41 @@ framework's own classes may be.
     around a button now works instead of printing the words beside it. **If you were relying on
     `getText()` returning the wrapper's text**, it returns the tip's words now.
 
+- **Taking something off the page now tells it.** Until now, `onDetach` almost never ran. Emptying a
+  container by hand — `getElement().setInnerHTML("")` — is how every screen in every example was
+  swapped for the next one, and it takes the old screen off the page without a word to it. So the
+  screen you had just left kept working: its timer kept firing, its effect kept running, and both
+  kept rebuilding a list nobody was looking at. In this library's own gallery that threw the
+  keyboard back to the top of the page every second and a half, and every visit to that page added
+  another timer that never stopped. Nothing errored and nothing was logged.
+
+    There is now one way to swap what is inside something, and it runs `onDetach` on everything
+    leaving, however deeply nested:
+
+    ```java
+    contentArea.replaceContents(nextScreen);                    // a container component
+    Component.replaceContents(appRootElement, nextScreen);      // a plain element
+    ```
+
+    `removeAll()` and `remove(...)` on a container now do the same telling, and `add(...)` runs
+    `onAttach` on everything it puts in rather than only the outermost part.
+
+    **If you wrote `onDetach` and found it never ran, it runs now.** Read it again before you
+    upgrade: code that was quietly dead is about to execute. **If you empty a container by hand
+    anywhere, change it to `replaceContents` or `removeAll`** — a test now reads every Java file in
+    the checkout on every build and fails it if anything writes an empty string into an element's
+    HTML or takes every child out in a loop of its own.
+
+- **A keyed list must be disposed.** `KeyedList` watches a signal for as long as it exists, and it
+  never handed you anything to stop it with, so every one ever built is still watching. It now
+  implements `Disposable`. **Keep the object you get back from `new KeyedList<>(...)` and call
+  `dispose()` on it when the screen leaves**, normally from `onDetach`.
+
+- **A message is put on the page with `show()`.** `Toast` had no way to appear, so every caller
+  appended the element itself — which meant the component was never started, and so Escape never
+  closed a message, including in this library's own gallery. **Replace
+  `body.appendChild(toast.getElement())` with `toast.show()`.**
+
 ### Added
 
 - **Overlays are put on a named layer instead of a number.** A stacking number is a bid, and the
@@ -938,6 +973,29 @@ framework's own classes may be.
   `node tools/ui-proof/drive.mjs`. It found five faults that the gallery, which draws all these
   components correctly, showed no sign of.
 
+- **Text can now be small without being quiet.** How big a piece of text is and how loud it is were
+  answered by one name, so "small" and "faded" always arrived together. That left nowhere to put
+  small text that must be fully present — an error line under a field, a value in a dense table —
+  and the library went on writing those out by hand. There is now a second axis,
+  `com.zeroz4j.ui.theme.Emphasis`, with three steps: `FULL` (as present as the words around it),
+  `QUIET` (a step back) and `FAINT` (as far back as text goes and still be text).
+
+    Each of the five sizes names one of these as its own, so asking for a size alone is unchanged
+    and still right nearly every time. Say a loudness as well only where the text disagrees with
+    its size:
+
+    ```java
+    import com.zeroz4j.ui.theme.Emphasis;
+    import com.zeroz4j.ui.theme.TextStyle;
+
+    TextStyle.CAPTION.applyTo(errorLine, Emphasis.FULL);      // small, and nothing taken off it
+    TextStyle.SECONDARY.span("3 of 12", Emphasis.FAINT);      // there, and out of the way
+    ```
+
+    Loudness is a fade, never a colour, for the same reason the sizes are: faded text stays right
+    on a page, a tinted notice, a coloured card and a dark background without anybody choosing per
+    surface.
+
 ### Fixed
 
 - **A dialog given a width hung off both edges of a narrow window.** `setWidth` capped the panel at
@@ -954,6 +1012,54 @@ framework's own classes may be.
 
 - **A right-click menu carried a hand-written 1000,** which is exactly the guess the layer scale
   replaces, and which lost to an open dialog anyway. It is now on `Layer.DROPDOWN`.
+
+- **The theme switch had no name.** `ThemeController` is a tick box wearing two pictures, and
+  pictures say nothing, so a screen reader announced "checkbox" and stopped and voice control had
+  nothing to say to it. It sits in the side panel of nearly every application built on this
+  library, so that was every page of every one of them. It is now called "Dark theme" by default.
+  Give it a caption of your own with `setLabel("...")` and that replaces the built-in name, so the
+  two cannot disagree.
+
+- **One long word pushed the whole page sideways, in five components.** Words in a menu entry, a
+  tab heading, a step name, a badge and the name of a metric have nowhere to break, and each
+  control's width follows its words — so one German compound noun, long file path or email address
+  made the whole page scroll sideways. 2,773 pixels of it, in this library's own gallery, in a
+  window the width of a telephone. `Menu` (entries and section titles), `Tab`, `Steps`, `Badge` and
+  `KpiTile` now let a long word break and never grow wider than what they were put in. A trail of
+  steps still scrolls inside itself when the steps genuinely do not fit, which is what it was
+  always meant to do.
+
+- **A tooltip whose words had no spaces in them drew 2,719 pixels wide.** The tip is capped at
+  20rem and wraps, but only where the words give it somewhere to wrap — so a long address, file
+  path or stack frame ignored the cap and took the page sideways. It now breaks a word that has no
+  break in it. A tip is still drawn on the side it was told to sit on, so one placed against the
+  right-hand edge of the window is still partly off it.
+
+- **A replay timeline was drawn at least 600 pixels wide whatever it was put in,** so on a
+  telephone-width panel it hung out past the edge and took the page with it. It is now drawn as
+  wide as it is given, down to a name column plus 160 pixels, and scrolls inside itself below that.
+  Its row of play-speed buttons wraps onto a second line instead of sticking out.
+
+- **The keyboard walkthrough reported a nested folding section as unreachable, and it was not.** The
+  gallery's walkthrough looked only at the nearest `<details>` above a control when deciding whether
+  it was folded away. Chrome lays out everything inside a shut section and then declines to paint or
+  focus it, so a section nested inside a shut one still has a size — and its handle was reported as
+  a control Tab could not reach, on every run, at all three widths. It now checks every folding
+  section above the control. Nothing in the component library was wrong.
+
+- **The published-text check called a Spanish name corruption.** It reverses the misreading
+  arithmetically, so any two bytes that happen to form valid UTF-8 come back looking like "the
+  original" — and `Íñ`, in a name like `Íñigo`, comes back as a Hebrew accent that attaches to a
+  letter and cannot stand on its own. Nobody typed that, so nothing was misread. The check now
+  ignores a repair made only of marks that attach to another character, or of characters with no
+  printed form. Every corruption it was written for repaired to ordinary text — dashes, curly
+  quotes, umlauts, the play and pause marks — so nothing it was catching stops being caught.
+
+- **Seven examples carried a second, dead copy of their page.** Each client module held an
+  `index.html` under `src/main/resources/public/`, which is never served: static files are served
+  from `META-INF/resources`, and each example's server module already supplies one there. The dead
+  copies had drifted — they still carried the old light-grey body the served page stopped using —
+  so anyone reading them was reading the wrong file. They are gone.
 
 
 ## [0.7.0] — 2026-08-20

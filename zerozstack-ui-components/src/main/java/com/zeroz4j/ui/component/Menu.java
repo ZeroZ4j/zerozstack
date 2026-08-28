@@ -34,6 +34,10 @@ public class Menu extends Component implements HasComponents, HasStyle {
         addClassName("bg-base-200");
         addClassName("w-56");
         addClassName("rounded-box");
+        // A menu never grows past what it was put in. Without this a single long word - a German
+        // compound noun, a file path, an address - made the whole page scroll sideways, because a
+        // menu entry's words have no place to break and the entry's own width follows them.
+        getElement().getStyle().setProperty("max-width", "100%");
     }
 
     @Override
@@ -79,7 +83,11 @@ public class Menu extends Component implements HasComponents, HasStyle {
         }
         
         class Summary extends Component implements HasText {
-            public Summary(String t) { super("summary"); setText(t); }
+            public Summary(String t) {
+                super("summary");
+                setText(t);
+                wrapLongWords(getElement());
+            }
             @Override public Component getComponent() { return this; }
         }
         details.add(new Summary(text));
@@ -104,10 +112,25 @@ public class Menu extends Component implements HasComponents, HasStyle {
             public SpanText(String t) { super("span"); getElement().setTextContent(t); }
             @Override public Component getComponent() { return this; }
         }
-        title.add(new SpanText(text));
+        SpanText titleText = new SpanText(text);
+        wrapLongWords(titleText.getElement());
+        title.add(titleText);
         add(title);
     }
     
+    /**
+     * Lets a word longer than the menu break, and stops it setting the menu's width.
+     *
+     * <p>{@code anywhere} rather than {@code break-word}: only {@code anywhere} makes the browser
+     * count the broken word when it works out how narrow the entry is allowed to be. With
+     * {@code break-word} the entry still claims the width of the whole unbroken word, which is
+     * what pushed a page 2,773 pixels sideways in this library's own gallery.</p>
+     */
+    private static void wrapLongWords(org.teavm.jso.dom.html.HTMLElement element) {
+        element.getStyle().setProperty("overflow-wrap", "anywhere");
+        element.getStyle().setProperty("min-width", "0");
+    }
+
     /**
      * One entry in a menu.
      *
@@ -148,6 +171,7 @@ public class Menu extends Component implements HasComponents, HasStyle {
                 control.setAttribute("href", href);
             }
             control.setTextContent(text);
+            wrapLongWords(control);
             getElement().appendChild(control);
         }
 

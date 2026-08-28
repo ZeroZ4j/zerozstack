@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.component.mixin.HasLayer;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.theme.Layer;
@@ -133,7 +134,7 @@ public class Drawer extends Component implements HasComponents, HasStyle, HasSiz
 
         heading = new Heading();
         heading.setId(toggleId + "-title");
-        heading.addClassName("text-lg font-bold mb-2");
+        heading.addClassName(TextStyle.SECTION_TITLE.getClassNames() + " mb-2");
         heading.setVisible(false);
         panel.add(heading);
 
@@ -143,6 +144,9 @@ public class Drawer extends Component implements HasComponents, HasStyle, HasSiz
         getElement().appendChild(toggle.getElement());
         getElement().appendChild(page.getElement());
         getElement().appendChild(side.getElement());
+        own(toggle);
+        own(page);
+        own(side);
 
         setTitle(title);
 

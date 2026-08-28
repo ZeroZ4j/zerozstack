@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 
@@ -45,7 +46,8 @@ public final class TokenMeter extends Div {
         bar.addClassName("h-full rounded-full bg-success transition-all duration-300");
         bar.setStyle("width", "0%");
         track.add(bar);
-        label.addClassName("text-xs text-base-content/60 font-mono whitespace-nowrap");
+        label.addClassName(TextStyle.CAPTION.getClassNames()
+                + " font-mono whitespace-nowrap");
         add(track, label);
     }
 

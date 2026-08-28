@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.VerticalLayout;
 import com.zeroz4j.ui.theme.TextStyle;
@@ -117,7 +118,9 @@ public class Login extends Card {
 
         errorDiv = new Div();
         errorDiv.addClassName("text-error");
-        errorDiv.addClassName("text-sm");
+        // FULL, not the size's own fade: fading the one line that says what went wrong is
+        // exactly backwards.
+        errorDiv.addClassName(TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
         // A sign-in that failed has to be heard, not only seen. An alert is read out the moment
         // the message appears, wherever the person's attention happens to be at the time.
         errorDiv.getElement().setAttribute("role", "alert");

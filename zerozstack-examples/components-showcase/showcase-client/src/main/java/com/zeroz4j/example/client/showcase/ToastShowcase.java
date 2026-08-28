@@ -177,7 +177,7 @@ public class ToastShowcase extends ComponentShowcase {
         }
         toast.add(alert);
 
-        Window.current().getDocument().getBody().appendChild(toast.getElement());
+        toast.show();
         if (closeOnEsc) {
             Window.setTimeout(toast::close, 6000);
         }

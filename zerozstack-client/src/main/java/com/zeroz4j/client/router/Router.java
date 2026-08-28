@@ -273,7 +273,7 @@ public final class Router {
                         chain.get(i));
             }
 
-            RouterBrowser.mount(containerId, rendered.getElement());
+            RouterBrowser.mount(containerId, rendered);
             currentPath = path;
             for (NavigationListener listener : listeners) {
                 listener.onNavigated(params);

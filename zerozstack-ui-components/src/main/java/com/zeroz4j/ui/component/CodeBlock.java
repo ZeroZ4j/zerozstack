@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import org.teavm.jso.browser.Window;
@@ -54,7 +56,7 @@ public final class CodeBlock extends Div {
 
         Div header = new Div();
         header.addClassName("flex items-center justify-between px-3 py-1 bg-base-300/50 "
-            + "text-xs text-base-content/60");
+            + TextStyle.CAPTION.getClassNames());
         Span langChip = new Span(lang.isEmpty() ? "text" : lang);
         langChip.addClassName("font-mono");
         // A real <button>, not a styled box. The browser puts a button in the tab order and
@@ -89,7 +91,8 @@ public final class CodeBlock extends Div {
             HTMLElement lineEl = Window.current().getDocument().createElement("div");
             if (lineNumbers) {
                 HTMLElement num = Window.current().getDocument().createElement("span");
-                num.setClassName("inline-block w-8 pr-3 text-right select-none opacity-30");
+                num.setClassName("inline-block w-8 pr-3 text-right select-none "
+                + Emphasis.FAINT.getClassNames());
                 num.appendChild(Window.current().getDocument().createTextNode(String.valueOf(i + 1)));
                 lineEl.appendChild(num);
             }
@@ -99,6 +102,13 @@ public final class CodeBlock extends Div {
         scroll.getElement().appendChild(pre);
         add(scroll);
     }
+
+    /**
+     * A comment is the one token in a code block that is quiet rather than coloured - strings,
+     * numbers and keywords all name a colour - so it asks for the quietest step on the emphasis
+     * scale instead of naming a faded colour of its own.
+     */
+    private static final String COMMENT_STYLE = Emphasis.FAINT.getClassNames() + " italic";
 
     /** Tokenizes one line into styled spans; returns whether a block comment is still open. */
     private static boolean renderLine(HTMLElement parent, String line, String lang, boolean inBlockComment) {
@@ -111,16 +121,16 @@ public final class CodeBlock extends Div {
                 int end = line.indexOf("*/", i);
                 if (end < 0) {
                     emit(parent, plain);
-                    token(parent, line.substring(i), "text-base-content/40 italic");
+                    token(parent, line.substring(i), COMMENT_STYLE);
                     return true;
                 }
                 emit(parent, plain);
-                token(parent, line.substring(i, end + 2), "text-base-content/40 italic");
+                token(parent, line.substring(i, end + 2), COMMENT_STYLE);
                 i = end + 2;
                 inBlockComment = false;
             } else if (c == '/' && i + 1 < n && line.charAt(i + 1) == '/' && isCodeLang(lang)) {
                 emit(parent, plain);
-                token(parent, line.substring(i), "text-base-content/40 italic");
+                token(parent, line.substring(i), COMMENT_STYLE);
                 return false;
             } else if (c == '/' && i + 1 < n && line.charAt(i + 1) == '*' && isCodeLang(lang)) {
                 emit(parent, plain);
@@ -128,7 +138,7 @@ public final class CodeBlock extends Div {
             } else if (c == '#' && (lang.equals("yaml") || lang.equals("yml") || lang.equals("sh")
                     || lang.equals("bash") || lang.equals("properties"))) {
                 emit(parent, plain);
-                token(parent, line.substring(i), "text-base-content/40 italic");
+                token(parent, line.substring(i), COMMENT_STYLE);
                 return false;
             } else if (c == '"' || c == '\'') {
                 emit(parent, plain);

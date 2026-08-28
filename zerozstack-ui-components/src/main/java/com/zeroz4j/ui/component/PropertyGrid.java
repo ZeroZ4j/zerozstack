@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.component.Component;
@@ -28,7 +30,8 @@ import com.zeroz4j.ui.component.Component;
 public final class PropertyGrid extends Div {
 
     public PropertyGrid() {
-        addClassName("grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm items-baseline");
+        addClassName("grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 items-baseline "
+            + TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
     }
 
     /**
@@ -42,9 +45,10 @@ public final class PropertyGrid extends Div {
      */
     public PropertyGrid row(String key, String value) {
         Span keySpan = new Span(key);
-        keySpan.addClassName("text-base-content/60 whitespace-nowrap");
+        keySpan.addClassName(Emphasis.FAINT.getClassNames() + " whitespace-nowrap");
         Span valueSpan = new Span(value == null ? "—" : value);
-        valueSpan.addClassName("font-mono text-xs break-all");
+        valueSpan.addClassName(TextStyle.CAPTION.getClassNames(Emphasis.FULL)
+                + " font-mono break-all");
 
         Button copyButton = new Button(Icon.of("copy", "w-3 h-3"), "Copy " + key);
         copyButton.setClassName("btn btn-ghost btn-xs btn-circle shrink-0 opacity-40 "
@@ -65,7 +69,7 @@ public final class PropertyGrid extends Div {
     /** A row whose value is an arbitrary component (badges, dots, meters). */
     public PropertyGrid row(String key, Component value) {
         Span keySpan = new Span(key);
-        keySpan.addClassName("text-base-content/60 whitespace-nowrap");
+        keySpan.addClassName(Emphasis.FAINT.getClassNames() + " whitespace-nowrap");
         Div holder = new Div();
         holder.add(value);
         add(keySpan, holder);

@@ -55,6 +55,13 @@ fault: the two dialogs that ignore Escape on purpose are reported the same way a
 it by accident, and the page itself is what says which is which. Treat its output as a list of
 places to look, not a verdict.
 
+It also cannot always tell what is on the screen. A folding section that is shut still has a size
+in Chrome — the browser lays its contents out and then declines to paint them or let the keyboard
+into them — so anything the walkthrough decides by measuring a rectangle has to be checked against
+the folding sections above it as well. It does that now, after a run in which it reported a
+nested section's handle as unreachable at all three widths and the browser had been right all
+along.
+
 ## What it demonstrates
 
 - **The component catalogue** — 80 showcase panels, one per component, registered in
@@ -69,7 +76,13 @@ places to look, not a verdict.
   gallery renders identically on every load and can be screenshot-tested.
 - **Signal-driven navigation** — `MainLayout` holds `ValueSignal<ViewType> currentViewSignal` and
   `ValueSignal<String> currentComponentSignal`; an `Effect` swaps the content area when either
-  changes. No router is involved (`@Route` is not implemented).
+  changes, with `contentArea.replaceContents(view)`. No router is involved (`@Route` is not
+  implemented).
+- **A page that shuts itself down when you leave it** — *A list that moves* starts a timer, an
+  effect and a keyed list, and stops all three in `onDetach`. That is the half an application has
+  to write; `replaceContents` is the half the framework supplies. Emptying the content area by hand
+  instead — which is what this example did until 0.8.0 — left two timers running per visit, for as
+  long as the page was open.
 - **`bindText` with `Computed`** — the "Current value:" readouts under the input components derive
   their text from the field's signal, so they cannot drift from what the field holds.
 - **Role-gated UI** — the Admin menu item is only added when

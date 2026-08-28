@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
@@ -60,6 +61,14 @@ public final class LaneTimeline extends Div {
     private static final double LABEL_CHAR_W = 6.1;
     private static final int LABEL_GAP = 10;
     private static final int AXIS_H = 18;
+    /**
+     * The narrowest the drawn part of the run may be. The strip used to be drawn at least 600
+     * pixels wide whatever it was put in, so on a telephone-width panel it hung out past the edge
+     * and took the whole page sideways with it. The floor is now the name column plus this, which
+     * is the least a bar can be and still be a bar; anything narrower than that scrolls inside the
+     * strip rather than pushing the page.
+     */
+    private static final int MIN_PLOT_W = 160;
 
     private final Div svgHost = new Div();
     private List<Lane> lanes = List.of();
@@ -75,9 +84,9 @@ public final class LaneTimeline extends Div {
     private String ariaLabel = "Replay timeline";
 
     public LaneTimeline() {
-        addClassName("flex flex-col border-t border-base-300 bg-base-200/40 shrink-0");
+        addClassName("flex flex-col border-t border-base-300 bg-base-200/40 shrink-0 min-w-0");
         add(controls());
-        svgHost.addClassName("px-3 pb-2 overflow-x-auto");
+        svgHost.addClassName("px-3 pb-2 overflow-x-auto min-w-0");
         add(svgHost);
     }
 
@@ -157,9 +166,15 @@ public final class LaneTimeline extends Div {
 
     private Div controls() {
         Div bar = new Div();
-        bar.addClassName("flex items-center gap-1.5 px-3 py-1.5 text-xs");
+        // flex-wrap: on a narrow panel the play speeds drop onto a second line instead of
+        // sticking out past the right-hand edge of the page.
+        bar.addClassName("flex flex-wrap items-center gap-1.5 px-3 py-1.5 text-xs min-w-0");
         Span title = new Span("REPLAY");
-        title.addClassName("font-bold tracking-wider text-[10px] text-base-content/40 mr-2");
+        // The 10-pixel size is deliberate and stays off the scale: the name column is measured
+        // in characters at that size (LABEL_CHAR_W), so changing it would move the drawing.
+        // Only the fade goes on the scale.
+        title.addClassName("font-bold tracking-wider text-[10px] mr-2 "
+                + Emphasis.FAINT.getClassNames());
         bar.getElement().appendChild(title.getElement());
 
         bar.add(speedButton(bar, "▶ 1×", 1));
@@ -182,7 +197,8 @@ public final class LaneTimeline extends Div {
         bar.add(pause, live);
 
         Span time = new Span("");
-        time.addClassName("ml-auto font-mono text-[10px] text-base-content/50");
+        time.addClassName("ml-auto font-mono text-[10px] "
+                + Emphasis.FAINT.getClassNames());
         Effect.create(() -> {
             Long at = cursor.get();
             time.setText(at == null ? "live" : offset(at));
@@ -228,7 +244,8 @@ public final class LaneTimeline extends Div {
     private void redraw() {
         svgHost.removeAll();
         labelColumn = measureLabelColumn();
-        int width = Math.max(600, getElement().getClientWidth() - 24);
+        int width = Math.max(labelColumn + LABEL_GAP + MIN_PLOT_W,
+                getElement().getClientWidth() - 24);
         int plotW = width - labelColumn - LABEL_GAP;
         int[] tops = new int[lanes.size()];
         int[] heights = new int[lanes.size()];

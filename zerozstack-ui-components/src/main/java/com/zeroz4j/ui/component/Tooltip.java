@@ -73,6 +73,12 @@ public class Tooltip extends Component implements HasComponents, HasText, HasSty
         super("div");
         addClassName("tooltip");
         getElement().setAttribute("role", "tooltip");
+        // The tip is capped at 20rem wide and wraps - but only where the words give it somewhere
+        // to wrap. A long address, a file path or a stack frame has no spaces in it, so the cap
+        // did nothing and one tip drew 2,719 pixels wide, taking the page sideways with it.
+        // overflow-wrap is inherited, so setting it here reaches the tip, which is drawn by the
+        // stylesheet and has no element of its own to set anything on.
+        getElement().getStyle().setProperty("overflow-wrap", "anywhere");
 
         // Escape is listened for on the whole page, not on the tooltip. A tip usually shows because
         // the pointer is over it, and the pointer being over something does not put the keyboard on

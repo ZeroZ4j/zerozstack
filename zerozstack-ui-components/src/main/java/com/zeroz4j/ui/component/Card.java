@@ -32,6 +32,7 @@ public class Card extends Component implements HasComponents, HasSize, HasStyle 
         body = new Div();
         body.addClassName("card-body");
         getElement().appendChild(body.getElement());
+        own(body);
     }
 
     @Override

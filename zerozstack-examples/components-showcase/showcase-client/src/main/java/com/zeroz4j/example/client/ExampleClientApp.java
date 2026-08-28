@@ -18,6 +18,7 @@
 package com.zeroz4j.example.client;
 
 import com.zeroz4j.client.Zeroz4jClient;
+import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.component.Login;
 import com.zeroz4j.api.RmiSecurityContext;
 import org.teavm.jso.JSBody;
@@ -44,8 +45,9 @@ public class ExampleClientApp {
                         return;
                     }
                     started = true;
-                    appRoot.setInnerHTML("");
-                    appRoot.appendChild(new MainLayout().getElement());
+                    // replaceContents, never setInnerHTML(""): the sign-in card leaves the
+                    // page properly, so anything it started stops.
+                    Component.replaceContents(appRoot, new MainLayout());
                 }).start());
                 // The server says so outright, so there is nothing to infer and nothing to wait for.
                 RmiSecurityContext.onAuthenticationFailed(() ->
@@ -53,7 +55,7 @@ public class ExampleClientApp {
             });
         });
         loginHolder[0].setHint("Demo users: demo / demo · admin / admin (admin unlocks the Admin view)");
-        appRoot.appendChild(loginHolder[0].getElement());
+        Component.replaceContents(appRoot, loginHolder[0]);
     }
 
     @JSBody(params = {"value"}, script = "return encodeURIComponent(value);")

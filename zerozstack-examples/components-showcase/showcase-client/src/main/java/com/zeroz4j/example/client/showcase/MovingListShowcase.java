@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.example.client.showcase;
 
+import com.zeroz4j.api.Disposable;
 import com.zeroz4j.signals.Computed;
 import com.zeroz4j.signals.Effect;
 import com.zeroz4j.signals.ValueSignal;
@@ -62,6 +63,10 @@ public class MovingListShowcase extends ComponentShowcase {
     private boolean expectingFocusChange;
 
     private int timerHandle = -1;
+    private int reportHandle = -1;
+    private EventListener<Event> focusListener;
+    /** Everything this page started, so leaving the page can stop all of it. */
+    private final List<Disposable> started = new ArrayList<>();
     private int tick;
     private int nextId = 1;
 
@@ -135,13 +140,14 @@ public class MovingListShowcase extends ComponentShowcase {
     private Component[] rebuiltList() {
         Div host = scrollHost("moving-list-rebuilt");
         Computed<List<Job>> visible = new Computed<>(this::visibleJobs);
-        Effect.create(() -> {
+        started.add(visible::dispose);
+        started.add(Effect.create(() -> {
             List<Job> current = visible.get();
             host.removeAll();
             for (Job job : current) {
                 host.add(row(job, "rebuilt"));
             }
-        });
+        }));
         return new Component[] { host };
     }
 
@@ -149,7 +155,8 @@ public class MovingListShowcase extends ComponentShowcase {
     private Component[] keyedList() {
         Div host = scrollHost("moving-list-keyed");
         Computed<List<Job>> visible = new Computed<>(this::visibleJobs);
-        new KeyedList<>(host, visible, Job::id, job -> row(job, "keyed"),
+        started.add(visible::dispose);
+        started.add(new KeyedList<>(host, visible, Job::id, job -> row(job, "keyed"),
                 (existing, job) -> {
                     // In place: only the words that changed, so the button keeps the keyboard.
                     HTMLElement state = existing.getElement().querySelector(".job-state");
@@ -160,7 +167,7 @@ public class MovingListShowcase extends ComponentShowcase {
                     if (progress != null) {
                         progress.setTextContent(job.progress() + " %");
                     }
-                });
+                }));
         return new Component[] { host };
     }
 
@@ -274,10 +281,37 @@ public class MovingListShowcase extends ComponentShowcase {
      * is counted separately, because that is the fault.
      */
     private void watchFocus() {
-        EventListener<Event> listener = evt -> report();
-        Window.current().getDocument().addEventListener("focusin", listener);
-        Window.current().getDocument().addEventListener("focusout", listener);
-        Window.setInterval(this::report, 500);
+        focusListener = evt -> report();
+        Window.current().getDocument().addEventListener("focusin", focusListener);
+        Window.current().getDocument().addEventListener("focusout", focusListener);
+        reportHandle = Window.setInterval(this::report, 500);
+    }
+
+    /**
+     * Leaving the page stops everything the page started.
+     *
+     * <p>This is what the framework's {@code replaceContents} exists to make possible. Before it,
+     * the container was emptied by hand, this method was never called, and the timer above went on
+     * changing a list nobody was looking at - taking the keyboard off whatever the person had
+     * moved on to, every second and a half, for as long as the application was open.</p>
+     */
+    @Override
+    protected void onDetach() {
+        stopTimer();
+        if (reportHandle >= 0) {
+            Window.clearInterval(reportHandle);
+            reportHandle = -1;
+        }
+        if (focusListener != null) {
+            Window.current().getDocument().removeEventListener("focusin", focusListener);
+            Window.current().getDocument().removeEventListener("focusout", focusListener);
+            focusListener = null;
+        }
+        for (Disposable d : started) {
+            d.dispose();
+        }
+        started.clear();
+        super.onDetach();
     }
 
     private void report() {

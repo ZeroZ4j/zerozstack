@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.component.mixin.HasLayer;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
@@ -77,7 +79,7 @@ public final class ContextMenu {
 
     public ContextMenu() {
         menu.addClassName("menu bg-base-200 rounded-box shadow-xl border border-base-300 "
-            + "w-56 p-1 text-sm");
+            + "w-56 p-1 " + TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
         menu.setStyle("position", "fixed");
         HasLayer.applyTo(menu, Layer.DROPDOWN);
         menu.getElement().setAttribute("role", "menu");

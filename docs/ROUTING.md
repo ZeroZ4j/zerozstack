@@ -111,9 +111,16 @@ fetching it separately.
 3. Every `@RequiresRole` in that chain is checked.
 4. Each level's `load` runs, outermost first, so a nested route can rely on what its layout fetched.
 5. Only then are components built, innermost first, each layout wrapping its child.
-6. The container's contents are replaced in one go.
+6. The container's contents are replaced in one go, and the view being left is shut down: its
+   `onDetach` runs, and so does the `onDetach` of everything inside it.
 
 Nothing reaches the screen until every loader has returned.
+
+Step 6 is where a view stops whatever it started. Put a timer, an `Effect` or a `ServerEvents`
+subscription on the screen in `onAttach` and stop it in `onDetach`, and navigating away really does
+stop it — before 0.8.0 the container was emptied by hand and `onDetach` never ran, so the screen
+somebody had left went on working. See
+[Swapping what is inside something](UI_COMPONENTS.md#swapping-what-is-inside-something).
 
 ### Loaders run in sequence, not in parallel
 

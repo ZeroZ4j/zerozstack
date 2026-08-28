@@ -105,7 +105,8 @@ public class ChatView extends Card {
 
         // Re-render messages when signal updates
         disposables.add(Effect.create(() -> {
-            messageListContainer.getElement().setInnerHTML(""); // Clear
+            // removeAll, not setInnerHTML(""): every message row leaves the page properly.
+            messageListContainer.removeAll();
             String currentUser = RmiSecurityContext.getUsername();
             for (ChatMessage msg : messagesSignal.get()) {
                 Div msgDiv = new Div();

@@ -154,7 +154,8 @@ public class ChatView extends Card {
     private void render() {
         countBadge.setText(messages.size() + " messages");
 
-        messageListContainer.getElement().setInnerHTML(""); // Clear
+        // removeAll, not setInnerHTML(""): every message row leaves the page properly.
+        messageListContainer.removeAll();
         String currentUser = RmiSecurityContext.getUsername();
         for (ChatMessage msg : messages) {
             Div msgDiv = new Div();
