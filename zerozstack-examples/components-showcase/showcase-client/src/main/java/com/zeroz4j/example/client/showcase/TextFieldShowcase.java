@@ -29,6 +29,16 @@ public class TextFieldShowcase extends ComponentShowcase {
         addTitle("TextField");
         addDescription("TextField is a standard text input component.");
 
+        addWhatToCheck("Try this",
+                "Tab onto every field, including the read-only one. The disabled one must be "
+                        + "skipped and the read-only one must not.",
+                "Click the words of a caption. The keyboard should land in the field they name.",
+                "The one marked wrong has to say why, under the field, in words.",
+                "The last one has a caption of 140 characters. It should wrap, not push the page out.",
+                "Type in the field that only has a placeholder and watch its only name disappear.",
+                "Broken looks like: a red border with no sentence, a required field with no mark, "
+                        + "or a disabled field that Tab still stops on.");
+
         // Basic TextField
         TextField basicTextField = new TextField("Enter text...");
         addSection("Basic TextField", basicTextField);
@@ -69,6 +79,8 @@ public class TextFieldShowcase extends ComponentShowcase {
         formHost.addClassName("w-full");
         formHost.add(form);
         addSection("A form: captions, required marks, explanations and a message", formHost);
+
+        addSection("Every state a text field really has", allStates());
 
         // Colors
         TextField tfPrimary = new TextField("Primary").setThemeColor(ThemeColor.PRIMARY);
@@ -113,5 +125,42 @@ public class TextFieldShowcase extends ComponentShowcase {
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
         addSection("Data Binding Demo", component, output);
+    }
+
+    /** The seven states, so none of them is met for the first time inside an application. */
+    private static Div allStates() {
+        TextField plain = new TextField().withLabel("Town");
+
+        TextField helped = new TextField().withLabel("Post code")
+            .withHelperText("Five digits, no spaces.");
+
+        TextField required = new TextField().withLabel("Street and number");
+        required.setRequiredIndicatorVisible(true);
+
+        TextField wrong = new TextField().withLabel("Post code");
+        wrong.setValue("ABC");
+        wrong.setRequiredIndicatorVisible(true);
+        wrong.setErrorMessage("A post code is five digits, like 10827.");
+
+        TextField disabled = new TextField().withLabel("Customer number (we set this)");
+        disabled.setValue("KD-4711-2026");
+        disabled.setEnabled(false);
+        disabled.setHelperText("Disabled: Tab skips it and it is not read out.");
+
+        TextField readOnly = FieldStates.readOnly(new TextField().withLabel("Your account number"));
+        readOnly.setValue("DE89 3704 0044 0532 0130 00");
+        readOnly.setHelperText("Read only: Tab still reaches it, so it can still be read out.");
+
+        TextField longCaption = new TextField().withLabel(FieldStates.LONG_CAPTION);
+        longCaption.setHelperText("A caption of 140 characters.");
+
+        return FieldStates.stack(
+            FieldStates.labelled("Caption only", plain),
+            FieldStates.labelled("Caption and helper text", helped),
+            FieldStates.labelled("Required", required),
+            FieldStates.labelled("Wrong, and saying why", wrong),
+            FieldStates.labelled("Disabled", disabled),
+            FieldStates.labelled("Read only", readOnly),
+            FieldStates.labelled("A very long caption", longCaption));
     }
 }

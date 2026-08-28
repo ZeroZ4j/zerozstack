@@ -17,63 +17,121 @@
  */
 package com.zeroz4j.example.client.showcase;
 
-import com.zeroz4j.ui.component.*;
-import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
+import com.zeroz4j.ui.component.Button;
+import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.component.Link;
+import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.ThemeColor;
 
+/**
+ * Every link on this page has somewhere to go, which is the whole point of the page: a link with
+ * no destination is not a link, and the keyboard cannot reach it at all.
+ */
 public class LinkShowcase extends ComponentShowcase {
+
+    /** Somewhere real to go that does not leave the gallery. */
+    private static final String HERE = "#link-showcase";
 
     public LinkShowcase() {
         super();
+        setId("link-showcase");
         addTitle("Link");
-        addDescription("Link is an anchor tag styled with theme colors and hover animations.");
+        addDescription("A link is words you can go somewhere from. Give every one a destination "
+                + "when you make it — a link without one is invisible to the keyboard.");
 
-        // Section 1: Default Link
-        Link defaultLink = new Link();
-        defaultLink.setText("Default Link");
-        defaultLink.getElement().setAttribute("href", "javascript:void(0)");
+        addWhatToCheck("Try this",
+                "Press Tab over and over. Every link on this page has to take its turn.",
+                "A link you cannot Tab to has no destination. That is the fault, not the styling.",
+                "The last section has one link with no destination on purpose, so the difference "
+                        + "is visible. Tab past it and see that it is skipped.",
+                "Broken looks like: a word that looks like a link, is coloured like a link, and "
+                        + "that Tab walks straight past.");
 
-        Link hoverLink = new Link();
-        hoverLink.setText("Hover Underline Only");
-        hoverLink.addClassName("link-hover");
-        hoverLink.getElement().setAttribute("href", "javascript:void(0)");
+        addSection("The two ways to give a link a destination",
+                new Link("Written in the constructor", HERE),
+                withHrefAfterwards(),
+                setHrefAfterwards());
 
-        addSection("Basic Link Options", defaultLink, hoverLink);
+        Link plain = new Link("Underlined all the time", HERE);
+        Link onHover = new Link("Underlined only when pointed at", HERE);
+        onHover.addClassName("link-hover");
+        addSection("Underlining", plain, onHover);
 
-        // Section 2: Colors
-        Link primary = new Link().setThemeColor(ThemeColor.PRIMARY);
-        primary.setText("Primary Link");
-        primary.getElement().setAttribute("href", "javascript:void(0)");
+        addSection("Colours",
+                coloured("Primary", ThemeColor.PRIMARY),
+                coloured("Secondary", ThemeColor.SECONDARY),
+                coloured("Accent", ThemeColor.ACCENT),
+                coloured("Neutral", ThemeColor.NEUTRAL),
+                coloured("Info", ThemeColor.INFO),
+                coloured("Success", ThemeColor.SUCCESS),
+                coloured("Warning", ThemeColor.WARNING),
+                coloured("Error", ThemeColor.ERROR));
 
-        Link secondary = new Link().setThemeColor(ThemeColor.SECONDARY);
-        secondary.setText("Secondary Link");
-        secondary.getElement().setAttribute("href", "javascript:void(0)");
+        addSection("Where it goes",
+                new Link("Somewhere on this page", HERE),
+                new Link("Another page of the gallery", "#dialog"),
+                openInANewTab(),
+                new Link("An email address", "mailto:nobody@example.com"),
+                new Link("A telephone number", "tel:+493012345678"));
 
-        Link accent = new Link().setThemeColor(ThemeColor.ACCENT);
-        accent.setText("Accent Link");
-        accent.getElement().setAttribute("href", "javascript:void(0)");
+        addSection("Longer than the line it is on", longLink());
 
-        Link neutral = new Link().setThemeColor(ThemeColor.NEUTRAL);
-        neutral.setText("Neutral Link");
-        neutral.getElement().setAttribute("href", "javascript:void(0)");
+        addSection("A link with no destination, kept on purpose so the fault can be seen",
+                brokenOnPurpose());
+    }
 
-        Link info = new Link().setThemeColor(ThemeColor.INFO);
-        info.setText("Info Link");
-        info.getElement().setAttribute("href", "javascript:void(0)");
+    // ------------------------------------------------------------------ pieces
 
-        Link success = new Link().setThemeColor(ThemeColor.SUCCESS);
-        success.setText("Success Link");
-        success.getElement().setAttribute("href", "javascript:void(0)");
+    private static Component withHrefAfterwards() {
+        Link link = new Link();
+        link.setText("Chained with withHref");
+        return link.withHref(HERE);
+    }
 
-        Link warning = new Link().setThemeColor(ThemeColor.WARNING);
-        warning.setText("Warning Link");
-        warning.getElement().setAttribute("href", "javascript:void(0)");
+    private static Component setHrefAfterwards() {
+        Link link = new Link();
+        link.setText("Destination set by a later call");
+        link.setHref(HERE);
+        return link;
+    }
 
-        Link error = new Link().setThemeColor(ThemeColor.ERROR);
-        error.setText("Error Link");
-        error.getElement().setAttribute("href", "javascript:void(0)");
+    private static Link coloured(String text, ThemeColor colour) {
+        Link link = new Link(text + " link", HERE);
+        link.setThemeColor(colour);
+        return link;
+    }
 
-        addSection("Color Variants", primary, secondary, accent, neutral, info, success, warning, error);
+    private static Component openInANewTab() {
+        // A link that leaves the page says so, because the browser will not.
+        Link link = new Link("The project website (opens in a new tab)", "https://www.zeroz4j.com");
+        link.getElement().setAttribute("target", "_blank");
+        link.getElement().setAttribute("rel", "noopener noreferrer");
+        return link;
+    }
+
+    private static Component longLink() {
+        Div host = new Div();
+        host.addClassName("w-full max-w-sm rounded-box border border-base-300 p-3");
+        Link link = new Link("Read the whole section about how the persistence layer decides "
+                + "which objects to keep in memory and which to write out again", HERE);
+        link.addClassName("break-words");
+        host.add(link);
+        return host;
+    }
+
+    private static Component brokenOnPurpose() {
+        Div host = new Div();
+        host.addClassName("flex flex-wrap items-center gap-4 w-full");
+
+        Link broken = new Link();
+        broken.setText("This has no destination — Tab cannot reach it");
+        broken.setId("link-with-no-destination");
+
+        Button fix = new Button("Give it a destination", e -> broken.setHref(HERE));
+        fix.setId("link-fix");
+        fix.addClassName("btn-sm");
+
+        host.add(broken, fix);
+        return host;
     }
 }

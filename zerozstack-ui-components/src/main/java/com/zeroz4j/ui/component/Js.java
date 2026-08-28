@@ -79,13 +79,24 @@ public final class Js {
     @JSBody(params = {"key", "value"}, script = "window.localStorage.setItem(key, value);")
     public static native void localSet(String key, String value);
 
-    /** Copies text to the clipboard (execCommand fallback works in every embedded browser). */
+    /**
+     * Copies text to the clipboard, and puts the keyboard back where it was.
+     *
+     * <p>The copying is done by making a text box, selecting it, and asking the browser to copy
+     * the selection - which works in every embedded browser, unlike the newer clipboard call.
+     * Selecting that box takes the keyboard off whatever was just pressed, and removing the box
+     * leaves the keyboard on nothing at all. So anybody who pressed a Copy button with the
+     * keyboard was dumped to the top of the page and had to Tab all the way back down. Both Copy
+     * buttons in this library did that, and the browser proof caught it.</p>
+     */
     @JSBody(params = {"text"}, script =
-        "var ta = document.createElement('textarea');"
+        "var was = document.activeElement;"
+        + "var ta = document.createElement('textarea');"
         + "ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';"
         + "document.body.appendChild(ta); ta.select();"
         + "try { document.execCommand('copy'); } catch (e) {}"
-        + "document.body.removeChild(ta);")
+        + "document.body.removeChild(ta);"
+        + "if (was && was.focus) { try { was.focus(); } catch (e) {} }")
     public static native void copyToClipboard(String text);
 
     @JSBody(params = {"theme"}, script = "document.body.setAttribute('data-theme', theme);")

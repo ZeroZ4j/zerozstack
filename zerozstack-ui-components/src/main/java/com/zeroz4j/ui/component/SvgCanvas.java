@@ -21,6 +21,7 @@ import com.zeroz4j.ui.layout.Div;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.events.Event;
 import org.teavm.jso.dom.events.EventListener;
+import org.teavm.jso.dom.events.KeyboardEvent;
 import org.teavm.jso.dom.events.MouseEvent;
 import org.teavm.jso.dom.events.WheelEvent;
 import org.teavm.jso.dom.xml.Element;
@@ -30,10 +31,25 @@ import org.teavm.jso.dom.xml.Element;
  * zooms (wheel, anchored at the cursor). Consumers draw into {@link #viewport()} using
  * {@link #el(String)} to create namespaced SVG elements. Foundation for GraphView,
  * LaneTimeline, and the chart set.
+ *
+ * <p>A mouse is not required. The surface sits in the tab order, and once the keyboard is on
+ * it the arrow keys move the picture (Shift moves it further), plus and minus zoom in and out,
+ * and 0 puts it back where it started. Those keys are taken over while the keyboard is here,
+ * which is why the surface tells a screen reader it is an application: without that a reader
+ * would keep the arrow keys for reading the page and the picture would never move.</p>
  */
 public class SvgCanvas extends Div {
 
     public static final String SVG_NS = "http://www.w3.org/2000/svg";
+
+    /** How far one arrow key press moves the picture, in screen pixels. */
+    private static final double PAN_STEP = 40;
+
+    /** How far Shift and an arrow key move it, for crossing a big drawing quickly. */
+    private static final double PAN_BIG_STEP = 160;
+
+    /** How much closer one press of plus gets, and how much further one press of minus. */
+    private static final double ZOOM_STEP = 1.12;
 
     private final Element svg;
     private final Element viewport;
@@ -75,17 +91,63 @@ public class SvgCanvas extends Div {
         getElement().addEventListener("mouseleave", stop);
         getElement().addEventListener("wheel", (EventListener<WheelEvent>) e -> {
             e.preventDefault();
-            double factor = e.getDeltaY() < 0 ? 1.12 : 1 / 1.12;
-            double newScale = Math.max(0.15, Math.min(4.0, scale * factor));
             // Zoom anchored at the cursor: keep the world point under it fixed.
             var rect = getElement().getBoundingClientRect();
-            double mx = e.getClientX() - rect.getLeft();
-            double my = e.getClientY() - rect.getTop();
-            panX = mx - (mx - panX) * (newScale / scale);
-            panY = my - (my - panY) * (newScale / scale);
-            scale = newScale;
+            zoomAt(e.getDeltaY() < 0 ? ZOOM_STEP : 1 / ZOOM_STEP,
+                e.getClientX() - rect.getLeft(), e.getClientY() - rect.getTop());
+        });
+
+        getElement().setAttribute("role", "application");
+        getElement().setAttribute("tabindex", "0");
+        setAriaLabel("Drawing you can move and zoom");
+
+        getElement().addEventListener("keydown", (EventListener<KeyboardEvent>) e -> {
+            String key = Js.eventKey(e);
+            double step = e.isShiftKey() ? PAN_BIG_STEP : PAN_STEP;
+            if ("ArrowLeft".equals(key)) {
+                panX += step;
+            } else if ("ArrowRight".equals(key)) {
+                panX -= step;
+            } else if ("ArrowUp".equals(key)) {
+                panY += step;
+            } else if ("ArrowDown".equals(key)) {
+                panY -= step;
+            } else if ("+".equals(key) || "=".equals(key)) {
+                zoomBy(ZOOM_STEP);
+                e.preventDefault();
+                return;
+            } else if ("-".equals(key) || "_".equals(key)) {
+                zoomBy(1 / ZOOM_STEP);
+                e.preventDefault();
+                return;
+            } else if ("0".equals(key)) {
+                panX = 0;
+                panY = 0;
+                scale = 1.0;
+                applyTransform();
+                e.preventDefault();
+                return;
+            } else {
+                return;   // not ours - leave it to the page
+            }
+            // Only now, once a key is known to be one we act on: otherwise Tab would be
+            // swallowed and the keyboard could never leave the drawing.
+            e.preventDefault();
             applyTransform();
         });
+    }
+
+    /**
+     * Says what this particular drawing shows, for somebody who cannot see it.
+     *
+     * <p>The default, "Drawing you can move and zoom", says what can be done to it and nothing
+     * about what it is. An application should replace it with the subject - "Run graph for
+     * last night's build" - because that is the only part a listener cannot work out.</p>
+     *
+     * @param label short, plain words for what this drawing shows
+     */
+    public void setAriaLabel(String label) {
+        getElement().setAttribute("aria-label", label);
     }
 
     /** The pannable/zoomable group all content goes into. */
@@ -137,6 +199,24 @@ public class SvgCanvas extends Div {
         scale = Math.max(0.15, fitScale);
         panX = (w - contentWidth * scale) / 2;
         panY = (h - contentHeight * scale) / 2;
+        applyTransform();
+    }
+
+    /** Zooms about the middle of the visible area, which is where a key press has to aim. */
+    private void zoomBy(double factor) {
+        zoomAt(factor, getElement().getOffsetWidth() / 2.0, getElement().getOffsetHeight() / 2.0);
+    }
+
+    /**
+     * Zooms by {@code factor}, keeping the point of the drawing that is under (ax, ay) exactly
+     * where it is. The wheel aims at the pointer, a key press aims at the middle; the arithmetic
+     * is the same either way, and lives here once so the two cannot drift apart.
+     */
+    private void zoomAt(double factor, double ax, double ay) {
+        double newScale = Math.max(0.15, Math.min(4.0, scale * factor));
+        panX = ax - (ax - panX) * (newScale / scale);
+        panY = ay - (ay - panY) * (newScale / scale);
+        scale = newScale;
         applyTransform();
     }
 

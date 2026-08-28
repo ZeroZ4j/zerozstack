@@ -243,24 +243,42 @@ All of these carry a caption, an explanation, a required mark and a message line
 - **Rating**: An interactive star-based rating selector.
 - **Toggle**: A switch component, often used as an alternative to a checkbox.
 - **FileInput**: A control for selecting files from the user's system. It reports the chosen file's name and sends nothing anywhere.
-- **FileUpload**: A drop-or-pick box that sends files to the server, several at once, with a progress bar and a cancel button for each. Set the wording with `setTitle` / `setSubtitle`, limit the picker with `setAccept("image/*")`, allow or forbid several files with `setMultiple`, and hear each outcome with `addUploadListener((name, accepted, message) -> …)`. On the server one `@ApplicationScoped` class implementing `FileUploadHandler` is handed each finished file. See [Accepting file uploads](guides/file-uploads.md).
+- **FileUpload**: A drop-or-pick box that sends files to the server, several at once, with a progress bar and a cancel button for each. Set the wording with `setTitle` / `setSubtitle`, limit the picker with `setAccept("image/*")`, allow or forbid several files with `setMultiple`, and hear each outcome with `addUploadListener((name, accepted, message) -> …)`. The drop area is a control in its own right: Tab reaches it, Enter and Space open the picker, and it
+  announces itself using the words you set. On the server one `@ApplicationScoped` class implementing
+  `FileUploadHandler` is handed each finished file. See [Accepting file uploads](guides/file-uploads.md).
 
 ### Buttons & Navigation
 Components that trigger actions or navigate between views.
-- **Button**: A standard clickable button.
+- **Button**: A standard clickable button. A button made of nothing but a picture needs words
+  of its own: `new Button(Icon.of("trash"), "Delete this row")`. The one-argument
+  `new Button(icon)` still works and is deprecated — without words it is announced as "button"
+  and nothing else, and voice control has nothing to say to press it.
 - **BottomNavigation**: A mobile-friendly navigation bar fixed to the bottom of the screen.
-- **Breadcrumbs**: Displays the current navigational hierarchy and path.
+- **Breadcrumbs**: The trail showing where in a site you are. It is a real `<nav>` named
+  "Breadcrumb", so a screen reader can jump straight to it; `withAriaLabel` renames it.
 - **Dropdown**: A button that drops a small panel of choices open underneath it. Clicking the
   button opens it, clicking anywhere else shuts it, and Escape shuts it and puts the keyboard back
   on the button. Open and close it from code with `open()` and `close()`. The panel sits on
   `Layer.DROPDOWN`. The keyboard is not held inside — Tab walks into the panel and out the far
   side, which is right for something that does not take the page over.
-- **Menu**: A list of navigational or action items, often placed in sidebars or dropdowns.
-- **Navbar**: A standard top navigation header.
+- **Menu**: A list of entries, usually down the side of a screen or inside a dropdown. An entry
+  that *does* something is a real `<button>` — `addItem("Sign out", e -> signOut())`; an entry
+  that *goes* somewhere is a real link — `addLink("Documentation", "/docs")`, which is also what
+  lets somebody middle-click it or see where it goes first. **Changed in 0.8.0** — every entry
+  used to be an `<a>` with no address, so no menu could be reached by keyboard at all.
+- **Navbar**: The bar across the top of a page. It announces itself as navigation named "Main";
+  `withAriaLabel` renames it, which matters as soon as a page has two of them.
 - **Pagination**: Controls for navigating through paginated datasets.
 - **Swap**: A component that toggles between two different states or icons on click.
-- **Tab**: Represents individual selectable sections in a tabbed interface.
-- **Link**: A standard hyperlink for navigation.
+- **Tab**: One heading in a row of tabs. It is a real `<button>`, so the keyboard reaches it and
+  Enter presses it; `setSelected(true)` colours it and says it is the one showing, in one call,
+  so the colour and the announcement cannot drift apart. **Changed in 0.8.0** — it used to be an
+  `<a>` with nowhere to go, which the browser leaves out of the tab order entirely.
+- **Link**: A hyperlink. **Give it a destination** — `new Link("Read the guide", "/docs/guide")`,
+  or `setHref` / `withHref` later. An `<a>` with no address is not a link: the browser leaves it
+  out of the tab order, so it cannot be reached by keyboard, and a screen reader reads it as
+  ordinary text. If it does something rather than going somewhere, it is a **Button** —
+  `btn-link` makes one look exactly like a link.
 - **Steps**: A wizard-like component showing progression through a sequence of steps.
 
 ### Data Display & Content
@@ -281,7 +299,9 @@ Components used to present data, alerts, and content to the user.
 - **CardTitle / CardActions**: Sub-components for structuring content within a Card.
 - **Carousel**: A slideshow component for cycling through elements like images.
 - **ChatBubble**: Displays a single message within a conversational UI.
-- **CodeBlock**: A styled container for displaying formatted source code.
+- **CodeBlock**: Source code, shown as it was written, with a control that copies it. **Changed in
+  0.8.0** - that control is a real button, so Tab reaches it and Enter presses it, and the change
+  from "Copy" to "Copied" is announced rather than only shown.
 - **Collapse**: A generic expand/collapse container.
 - **ContextMenu**: The menu that appears where you right-click. Opening it moves the keyboard onto
   the first entry, so entries can be walked with Tab and chosen with Enter; Escape shuts it and puts
@@ -301,7 +321,9 @@ Components used to present data, alerts, and content to the user.
   moves the keyboard into the dialog and closing puts it back on whatever opened it. An open modal
   dialog is in the browser's **top layer**, so it is above everything else on the page whatever
   stacking numbers are involved — see [Stacking overlays](guides/ui-layering.md).
-- **Diff / DiffView**: Components for displaying file or text differences side-by-side.
+- **Diff / DiffView**: Two versions of a file or a piece of text, side by side. **Changed in
+  0.8.0** - the heading that folds a file open and shut is a real button carrying `aria-expanded`,
+  so it can be reached and pressed by keyboard and says whether the file is open.
 - **Divider**: A visual separator between content sections.
 - **Drawer**: A panel that slides in from the side of the window. `add` puts things in the sliding
   panel; `addToPage` puts things on the page it slides over. Open and close it with `open()` and
@@ -331,18 +353,29 @@ Components used to present data, alerts, and content to the user.
   never shortened in Java: the whole name is in the page and the browser fades out the end of it,
   so it can still be selected, searched for and read out. `setLabelWrap(true)` runs it onto more
   lines instead and grows that lane to fit.
-- **Loading**: A spinner or indicator signifying a background process is running.
+- **Loading**: The spinner that says something is happening. It announces itself as "Loading";
+  `withAriaLabel("Loading your orders")` says what, which is nearly always worth doing.
 - **MarkdownView**: Renders Markdown text safely into HTML.
 - **Mask**: A component for shaping or clipping elements (e.g., circular images).
 - **PhoneMockup / BrowserMockup / WindowMockup / CodeMockup**: Decorative containers that frame content within stylized device or window borders.
-- **Progress / RadialProgress**: Linear and circular progress bars to indicate completion percentage.
-- **PropertyGrid**: A structured grid for displaying key-value pairs or object properties.
-- **Resizer**: A drag handle component for resizable containers.
-- **Skeleton**: A placeholder skeleton screen shown while data is loading.
+- **Progress / RadialProgress**: A bar and a ring showing how far along something is. The ring
+  announces its percentage as it changes. Neither invents a name for itself - say what is
+  progressing with `withAriaLabel`, or put the words next to it.
+- **PropertyGrid**: Names and values in two columns - ids, paths, hashes. **Changed in 0.8.0** -
+  copying is a real button beside the value, named "Copy " plus the row's name, instead of a
+  click on the text itself. The value is ordinary selectable text again.
+- **Resizer**: A handle you drag to resize what it sits on. **Changed in 0.8.0** - it is in the tab
+  order and the arrow keys move it, so it works without a mouse. `setAriaLabel` says what it
+  resizes.
+- **Skeleton**: The grey blocks standing in for content that has not arrived. They are decoration
+  and are skipped by screen readers; put a "Loading" message on the region around them, not on
+  each block.
 - **Sparkline**: A tiny inline trend chart in `AREA`, `LINE` or `BAR` mode, auto-scaled to its
   data, with an optional baseline, min/max markers and delta colouring. Draws in `currentColor`
   by default, so it inherits the surrounding text colour and follows the theme for free.
-- **SplitPane**: A container with two resizable panels separated by a divider.
+- **SplitPane**: Two panels with a divider between them. **Changed in 0.8.0** - the divider is in
+  the tab order, the arrow keys move it, Home and End send it to the ends, and it says where it
+  is as it moves. `setAriaLabel` says what it divides.
 - **Stack**: A layout utility for overlapping components.
 - **Stat**: A component optimized for displaying a prominent statistic or metric.
 - **StatusDot**: A small coloured indicator representing a status. It has two pieces of text and
@@ -352,8 +385,11 @@ Components used to present data, alerts, and content to the user.
   `DESIGN_REVIEW` hovers as "Design review". That is a fallback and not an excuse — it can only
   reword the name it was given — but it stops a console full of dots shouting `DISPATCHED` at
   somebody who does not work on the code. Text that already reads like a sentence is left alone.
-- **StreamingText**: A component for displaying text that streams in dynamically (e.g., LLM responses).
-- **SvgCanvas**: A container for drawing and displaying SVG graphics.
+- **StreamingText**: Text arriving a word at a time, the way a language model answers. It is read
+  out as it arrives, and the blinking caret is not read out as a character.
+- **SvgCanvas**: A drawing surface you pan and zoom. **Changed in 0.8.0** - it is in the tab order,
+  the arrow keys pan it, `+` and `-` zoom and `0` goes back to the start. `setAriaLabel` says what
+  is drawn on it.
 - **Table**: A structured grid for displaying tabular data.
 - **ThemeController**: A component for managing and switching application themes (e.g., light/dark mode).
 - **Timeline**: Events in the order they happened, across the page or down it
@@ -370,14 +406,19 @@ Components used to present data, alerts, and content to the user.
   cannot wait. It **never takes the keyboard** — a message arriving while somebody is typing must not
   move them out of the box they are typing in. Escape removes it, and `close()` does the same from
   code; `setCloseOnEsc(false)` keeps it put. It sits on `Layer.TOAST`, above panels and menus.
-- **TokenMeter**: A specialized visualization component (e.g., for showing API token usage).
+- **TokenMeter**: How much of a budget has been used - tokens, most often. It announces the
+  percentage as a progress bar. With no cap set there is no percentage, and it now says so instead
+  of leaving the last one showing.
 - **Tooltip**: A few words that appear next to whatever the pointer is resting on. `setText` sets
   the words the tip shows; wrap the control it belongs to with `add`. It takes no keyboard focus and
   holds nothing — put nothing in one that has to be clicked, because it cannot be reached. Escape
   hides it until the pointer leaves and comes back. While the tip is showing it is on
   `Layer.TOOLTIP`, the top of the scale; the rest of the time it is ordinary page content, because
   it wraps your control and floating that over every drawer would be wrong.
-- **VirtualScroller**: An optimized list container that only renders visible items for high performance with large datasets.
+- **VirtualScroller**: A long list that only draws the rows on screen, so ten thousand of them cost
+  what ten do. **Changed in 0.8.0** - it is in the tab order, so Page Down and the arrow keys
+  scroll it; before this a keyboard could not scroll it at all. `withAriaLabel` says what the list
+  holds.
 
 ### Charts & Dashboards
 Package `com.zeroz4j.ui.chart`. Built in Java against SVG and DOM — no JavaScript charting library is
@@ -440,7 +481,10 @@ switching `data-theme` recolours every chart with no redraw and no listener.
 
 ### Base Classes & Interfaces
 Core building blocks that other components extend or implement.
-- **Component**: The base class for all UI elements, wrapping a DOM node.
+- **Component**: The base class for all UI elements, wrapping a DOM node. `setAriaLabel` gives any
+  component words for somebody who cannot see it - for the ones with no words of their own, such
+  as an icon button, a splitter or a spinner. See
+  [Keyboard and naming](guides/ui-keyboard-and-naming.md).
 - **AbstractField**: The foundational class for input components.
 - **HasComponents**: Interface for containers that can hold child components.
 - **HasValue**: Interface for components that handle data binding.

@@ -35,6 +35,11 @@ import com.zeroz4j.signals.Effect;
  * Swimlane replay timeline (design §6.5): one lane per worker session, colored by outcome,
  * with event ticks; a draggable cursor drives the {@code cursor} signal (epoch millis) that
  * the run graph time-travels on. Play at 1× / 4× / 16×; "Live" resets to now (cursor null).
+ *
+ * <p>The strip is not only draggable. It sits in the tab order and reports itself as a slider,
+ * so the left and right arrow keys step the cursor through the run, Shift and an arrow key jump
+ * a tenth of it, and Home and End go to the first and last moment. Keys and drags go through the
+ * same one method, so they can never mean two different things.</p>
  */
 public final class LaneTimeline extends Div {
 
@@ -45,6 +50,9 @@ public final class LaneTimeline extends Div {
     public final ValueSignal<Long> cursor = new ValueSignal<>(null);
 
     private static final int LANE_H = 22;
+    /** One arrow key press moves the cursor a hundredth of the run; Shift moves a tenth. */
+    private static final double STEP_FRACTION = 0.01;
+    private static final double BIG_STEP_FRACTION = 0.1;
     /** Where the automatic label column starts and stops. */
     private static final int LABEL_W_MIN = 90;
     private static final int LABEL_W_MAX = 260;
@@ -62,6 +70,9 @@ public final class LaneTimeline extends Div {
     private int labelWidth;      // 0 = measured from the lane names
     private int labelColumn = LABEL_W_MIN;
     private boolean labelWrap;   // false = one line, clipped by the browser with an ellipsis
+    /** The strip a person scrubs. Built afresh on every redraw, so it is kept here to be found. */
+    private Div scrubSurface;
+    private String ariaLabel = "Replay timeline";
 
     public LaneTimeline() {
         addClassName("flex flex-col border-t border-base-300 bg-base-200/40 shrink-0");
@@ -275,6 +286,42 @@ public final class LaneTimeline extends Div {
 
         Div wrapper = new Div();
         wrapper.getElement().appendChild(svg);
+        scrubSurface = wrapper;
+
+        // A thing you slide along a range to pick a moment is a slider, and it has to say where
+        // it is in words: a listener cannot see the blue line.
+        wrapper.getElement().setAttribute("role", "slider");
+        wrapper.getElement().setAttribute("tabindex", "0");
+        wrapper.getElement().setAttribute("aria-label", ariaLabel);
+        wrapper.getElement().setAttribute("aria-valuemin", "0");
+        wrapper.getElement().setAttribute("aria-valuemax", String.valueOf(runSeconds()));
+        wrapper.getElement().setAttribute("aria-valuenow", String.valueOf(secondsInto(at)));
+        wrapper.getElement().setAttribute("aria-valuetext", spokenTime(at));
+
+        wrapper.getElement().addEventListener("keydown", (org.teavm.jso.dom.events.EventListener<org.teavm.jso.dom.events.KeyboardEvent>) e -> {
+            String key = Js.eventKey(e);
+            double step = e.isShiftKey() ? BIG_STEP_FRACTION : STEP_FRACTION;
+            double now = cursorFraction();
+            double wanted;
+            if ("ArrowLeft".equals(key) || "ArrowDown".equals(key)) {
+                wanted = now - step;
+            } else if ("ArrowRight".equals(key) || "ArrowUp".equals(key)) {
+                wanted = now + step;
+            } else if ("Home".equals(key)) {
+                wanted = 0;
+            } else if ("End".equals(key)) {
+                wanted = 1;
+            } else {
+                return;   // not ours - Tab still leaves, and the page still scrolls
+            }
+            e.preventDefault();
+            scrubTo(wanted);
+            // Moving the cursor redraws the whole strip, which throws this element away and
+            // builds another. Without putting the keyboard back on the new one, the first
+            // arrow key would work and the second would land nowhere.
+            Js.focus(scrubSurface.getElement());
+        });
+
         final boolean[] dragging = {false};
         wrapper.getElement().addEventListener("mousedown", (org.teavm.jso.dom.events.EventListener<org.teavm.jso.dom.events.MouseEvent>) e -> {
             dragging[0] = true;
@@ -292,13 +339,65 @@ public final class LaneTimeline extends Div {
     }
 
     private void scrub(MouseEvent e, int plotW, Div wrapper) {
-        playing = false;
-        playSpeed = 0;
         var rect = wrapper.getElement().getBoundingClientRect();
         int px = e.getClientX() - rect.getLeft() - labelColumn;
-        double fraction = Math.max(0, Math.min(1, (double) px / plotW));
-        cursor.set(minTime + (long) (fraction * (maxTime - minTime)));
+        scrubTo((double) px / plotW);
+    }
+
+    /**
+     * Moves the cursor to a point in the run, given as 0 for the start and 1 for the end.
+     *
+     * <p>The one way the cursor is ever moved by hand. A drag works out the fraction from where
+     * the pointer is, a key press adds a step to where it already was, and both then come here -
+     * so there is one place that stops playback, one place that writes the signal the run graph
+     * follows, and no chance of the keyboard behaving differently from the mouse.</p>
+     */
+    private void scrubTo(double fraction) {
+        playing = false;
+        playSpeed = 0;
+        double clamped = Math.max(0, Math.min(1, fraction));
+        cursor.set(minTime + (long) (clamped * (maxTime - minTime)));
         redraw();
+    }
+
+    /** Where the cursor sits in the run, as 0 for the start and 1 for the end; live counts as the end. */
+    private double cursorFraction() {
+        Long at = cursor.get();
+        if (at == null || maxTime <= minTime) {
+            return at == null ? 1 : 0;
+        }
+        return Math.max(0, Math.min(1, (double) (at - minTime) / (maxTime - minTime)));
+    }
+
+    /**
+     * Says what this particular timeline replays, for somebody who cannot see it.
+     *
+     * <p>The default is "Replay timeline". An application with more than one on a page should
+     * say which run each one is, or they are announced as the same thing.</p>
+     *
+     * @param label short, plain words for what this timeline replays
+     */
+    public void setAriaLabel(String label) {
+        this.ariaLabel = label == null ? "" : label;
+        if (scrubSurface != null) {
+            scrubSurface.getElement().setAttribute("aria-label", this.ariaLabel);
+        }
+    }
+
+    /** How long the whole run is, in whole seconds; never zero, so a range is always a range. */
+    private long runSeconds() {
+        return Math.max(1, (maxTime - minTime) / 1000);
+    }
+
+    /** How far into the run the cursor is, in whole seconds. Live counts as the end. */
+    private long secondsInto(Long at) {
+        return at == null ? runSeconds() : Math.max(0, (at - minTime) / 1000);
+    }
+
+    /** Where the cursor is, in words a person hears rather than a number. */
+    private String spokenTime(Long at) {
+        return at == null ? "Live, showing the newest moment"
+                          : offset(at) + " from the start of the run";
     }
 
     private int x(long time, int plotW) {

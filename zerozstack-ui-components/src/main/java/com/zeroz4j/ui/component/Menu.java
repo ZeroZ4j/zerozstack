@@ -41,10 +41,21 @@ public class Menu extends Component implements HasComponents, HasStyle {
         return this;
     }
 
+    /** An entry that does something when it is pressed. */
     public void addItem(String text, EventListener<ClickEvent<MenuItem>> clickListener) {
         MenuItem item = new MenuItem(text);
         item.addClickListener(clickListener);
         add(item);
+    }
+
+    /**
+     * An entry that goes somewhere.
+     *
+     * <p>Use this rather than an entry with a listener that navigates by hand: a real address is
+     * what lets somebody middle-click it, copy it, or see where it goes before following it.</p>
+     */
+    public void addLink(String text, String href) {
+        add(new MenuItem(text, href));
     }
 
     public void setAccordion(boolean accordion) {
@@ -97,18 +108,47 @@ public class Menu extends Component implements HasComponents, HasStyle {
         add(title);
     }
     
+    /**
+     * One entry in a menu.
+     *
+     * <p>An entry that <b>does</b> something is a {@code <button>}; an entry that <b>goes</b>
+     * somewhere is an {@code <a>} with an address. Both are in the tab order and both answer
+     * Enter, which is the whole point: through 0.7.0 every entry was an {@code <a>} with no
+     * address, and the browser leaves those out of the tab order entirely. Every menu built with
+     * this library was mouse-only, including the one down the side of its own gallery.</p>
+     *
+     * <p><b>Changed in 0.8.0.</b> An entry with a listener is now a {@code <button>}. A stylesheet
+     * rule written as {@code .menu a} no longer reaches it; write {@code .menu li > *}, which is
+     * what daisyUI itself uses.</p>
+     */
     public static class MenuItem extends Component implements HasText {
-        
-        private final Component link;
 
+        private final org.teavm.jso.dom.html.HTMLElement control;
+
+        /** An entry that does something. It is a button, because pressing it is the point. */
         public MenuItem(String text) {
+            this(text, null);
+        }
+
+        /**
+         * An entry that goes somewhere, or - with a null address - one that does something.
+         *
+         * @param text the words on the entry
+         * @param href where it goes, or null for an entry you give a listener to instead
+         */
+        public MenuItem(String text, String href) {
             super("li");
-            class Link extends Component {
-                public Link() { super("a"); }
+            if (href == null) {
+                control = org.teavm.jso.browser.Window.current().getDocument()
+                        .createElement("button");
+                control.setAttribute("type", "button");
+            } else {
+                control = org.teavm.jso.browser.Window.current().getDocument()
+                        .createElement("a");
+                control.setAttribute("href", href);
             }
-            link = new Link();
-            link.getElement().setTextContent(text);
-            getElement().appendChild(link.getElement());
+            control.setTextContent(text);
+            getElement().appendChild(control);
         }
 
         @Override
@@ -118,20 +158,21 @@ public class Menu extends Component implements HasComponents, HasStyle {
 
         @Override
         public void setText(String text) {
-            link.getElement().setTextContent(text);
+            control.setTextContent(text);
         }
 
         @Override
         public String getText() {
-            return link.getElement().getTextContent();
+            return control.getTextContent();
         }
 
         public DomListenerRegistration addClickListener(EventListener<ClickEvent<MenuItem>> listener) {
-            org.teavm.jso.dom.events.EventListener<Event> domListener = evt -> {
-                listener.onComponentEvent(new ClickEvent<>(this, true));
-            };
-            link.getElement().addEventListener("click", threaded(domListener));
-            return () -> link.getElement().removeEventListener("click", threaded(domListener));
+            // One wrapper, kept. The old code built a second one to unregister with, so the
+            // registration it handed back removed nothing and the listener stayed for good.
+            org.teavm.jso.dom.events.EventListener<Event> domListener =
+                    threaded(evt -> listener.onComponentEvent(new ClickEvent<>(this, true)));
+            control.addEventListener("click", domListener);
+            return () -> control.removeEventListener("click", domListener);
         }
     }
 }

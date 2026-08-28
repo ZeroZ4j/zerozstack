@@ -117,6 +117,9 @@ public class Login extends Card {
         errorDiv = new Div();
         errorDiv.addClassName("text-error");
         errorDiv.addClassName("text-sm");
+        // A sign-in that failed has to be heard, not only seen. An alert is read out the moment
+        // the message appears, wherever the person's attention happens to be at the time.
+        errorDiv.getElement().setAttribute("role", "alert");
 
         hintDiv = new Div();
         hintDiv.addClassName("text-sm");

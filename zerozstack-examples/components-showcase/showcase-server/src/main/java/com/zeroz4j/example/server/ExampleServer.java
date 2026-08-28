@@ -40,6 +40,11 @@ public final class ExampleServer {
 
     private static final String DEV_LOGIN_FLAG = "--dev-login";
 
+    /** {@code --port 8095}, for the times something else already has 8080. */
+    private static final String PORT_FLAG = "--port";
+
+    private static final int DEFAULT_PORT = 8080;
+
     private ExampleServer() {}
 
     /**
@@ -53,7 +58,7 @@ public final class ExampleServer {
             System.out.println("[zeroz4j] Sign-in is off, and this example needs it. Restart with "
                     + DEV_LOGIN_FLAG + " to enable the built-in development accounts.");
         }
-        Zeroz4jServer.start(8080, "zeroz4j Example Server").join();
+        Zeroz4jServer.start(portFrom(args), "zeroz4j Example Server").join();
     }
 
     /** True only when the flag was passed, or the property was already set by whoever started us. */
@@ -66,5 +71,30 @@ public final class ExampleServer {
             }
         }
         return "dev".equals(System.getProperty("zeroz.security.mode"));
+    }
+
+    /**
+     * The port asked for on the command line, or 8080. Several of these examples want 8080 and a
+     * machine can only give it to one of them, so this one can be told to take another.
+     *
+     * @param args the command line
+     * @return the port to listen on
+     */
+    private static int portFrom(String[] args) {
+        if (args == null) {
+            return DEFAULT_PORT;
+        }
+        for (int i = 0; i < args.length - 1; i++) {
+            if (PORT_FLAG.equals(args[i])) {
+                try {
+                    return Integer.parseInt(args[i + 1]);
+                } catch (NumberFormatException notANumber) {
+                    System.out.println("[zeroz4j] " + PORT_FLAG + " needs a number; using "
+                            + DEFAULT_PORT + ".");
+                    return DEFAULT_PORT;
+                }
+            }
+        }
+        return DEFAULT_PORT;
     }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the overlay proof page: packages the component library, then compiles the proof page
+# Builds the UI proof page: packages the component library, then compiles the proof page
 # and the library it uses to JavaScript with TeaVM. Output lands in web/js/classes.js.
 #
 # Run it from anywhere; it finds the checkout from its own location.

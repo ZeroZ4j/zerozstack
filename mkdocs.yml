@@ -86,6 +86,7 @@ nav:
       - Logging in with OpenID Connect: guides/oidc-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
       - Stacking overlays: guides/ui-layering.md
+      - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
       - Packaging and running: guides/packaging.md
       - Testing an application: guides/testing.md

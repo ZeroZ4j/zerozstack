@@ -45,6 +45,52 @@ first published, and repairs to the two components whose labels an application c
   reached past the API for the first child element and set a width on it yourself, that code is now
   redundant and should be deleted before the two fight each other.
 
+- **A tab is now a real button.** `Tab` was an `<a>` with nowhere to go. The browser leaves those
+  out of the tab order entirely, so a row of tabs could not be reached by keyboard at all — not
+  reached with difficulty, not reached in the wrong order: not reached. It is now a `<button>`, and
+  it says which tab is showing.
+
+    **If you styled tabs with a rule written as `a.tab`, change it to `.tab`.** If you coloured the
+    selected tab by adding `tab-active` yourself, use `setSelected(true)` instead: it adds the same
+    class and tells a screen reader the same thing, so the two cannot drift apart.
+
+- **A menu entry is now a real button, or a real link.** Every entry `Menu.addItem` built was an
+  `<a>` with no address, which has the same problem: every menu built on this library was
+  mouse-only, including the one down the side of its own component gallery. An entry that *does*
+  something is now a `<button>`; an entry that *goes* somewhere is an `<a>` with a real address,
+  built with the new `addLink`.
+
+    ```java
+    menu.addItem("Sign out", e -> signOut());       // does something: a button
+    menu.addLink("Documentation", "/docs");         // goes somewhere: a link
+    ```
+
+    **If you styled menu entries with a rule written as `.menu a`, change it to `.menu li > *`**,
+    which is what daisyUI itself uses and matches both shapes.
+
+- **A link needs an address.** `Link` had no way to set one, so every link in every application
+  built on this library was blue text the keyboard could not reach. `setHref`, `withHref` and a
+  `Link(text, href)` constructor were added.
+
+- **Copying a value in a property grid is a button now, not a click on the text.** `PropertyGrid`
+  copied a value when you clicked the value itself, and its only hint was a hover tip reading "click
+  to copy" - an instruction somebody using a keyboard cannot follow. There is now a small copy
+  button beside each value, named "Copy" plus the row's name, and the value is ordinary selectable
+  text again.
+
+    **If you were selecting on the shape of a row**, note that the value cell now holds a wrapper
+    with the text and the button inside it, rather than the text on its own.
+
+- **The copy control on a code block, and the fold-open heading on a diff, are buttons now.** Both
+  were plain boxes with a click listener, so neither could be reached with Tab or pressed with
+  Enter. The code block's word changed from `copy` / `copied!` to `Copy` / `Copied`, and the change
+  is now announced as well as shown. **A stylesheet rule that named the old `div` will not match a
+  `button`.**
+
+    **Go through your links and give each one a destination.** A `Link` with nothing to go to is not
+  a link — if it does something, it is a `Button`, and `btn-link` makes a button look exactly like
+  one.
+
 ### Added
 
 - **A form field can be given a caption.** Until now the only text a field could carry was the
@@ -208,7 +254,110 @@ first published, and repairs to the two components whose labels an application c
 - **`LaneTimeline.setLabelWrap`** — lets a lane name too long for its column run onto more lines,
   growing that lane to fit. Off by default, because lanes of one height are easier to scan.
 
+- **Every component can be given a name for anybody who cannot see it.** `setAriaLabel` and
+  `getAriaLabel` are on `Component`, so they are on all of them. Most controls name themselves out
+  of the words inside them — a button that says "Save" is announced as "Save" — and this is for the
+  ones that cannot: an icon on its own, a splitter, a canvas, a spinner. Passing `null` takes the
+  name away again.
+
+- **A button made of nothing but a picture can now be given words.**
+
+    ```java
+    new Button(Icon.of("trash"), "Delete this row");
+    ```
+
+    The old one-argument `new Button(icon)` still works and is now deprecated. A button with no
+    words is announced as "button" and nothing else, and somebody using voice control has nothing to
+    say to press it.
+
+- **A keyboard and naming contract the build enforces.** `KeyboardAndNamingContractTest` reads the
+  source of every component on every build and fails it when something can be clicked and cannot be
+  used from a keyboard, when a control has no name, when a surface can only be moved by dragging it,
+  or when a link has nowhere to go.
+
+    It works out which element each listener was put on and what tag that element is, rather than
+  searching for the word "aria" — a test that searched for a word would pass while a component
+  stayed unusable, which is the fault it exists to stop. Which components count as controls is
+  derived from the code, so a new one takes on the obligation the moment it is written, and there is
+  no list to forget to update. The whole rule is written out in
+  [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md).
+
+- **One browser test harness instead of two.** Two arrived in the same week, written by two people
+  who did not know about each other. `tools/ui-proof` is the survivor: it drives a real browser with
+  real key presses, which is the only way to find out where the keyboard actually goes. It now
+  covers the form fields the other one covered, every overlay, and every control in the library.
+
+    It stays outside the Maven build on purpose — it compiles the library to JavaScript, which takes
+  about a minute, and nobody building or releasing ZeroZ Stack should pay for that. **Building
+  `zerozstack-ui-components` is faster as a result**: the retired harness compiled itself on every
+  build unless you passed `-DskipDomProof`, and that flag no longer exists because there is nothing
+  left to skip.
+
+    ```bash
+    bash tools/ui-proof/build.sh
+    node tools/ui-proof/drive.mjs
+    ```
+
+- **Four things that could only be dragged can now be worked from the keyboard.** A resize handle, a
+  splitter, a drawing you pan and zoom, and the strip you drag to replay a run at a chosen moment.
+  All four are reachable with Tab and moved with the arrow keys - a small step on its own, a large
+  step with Shift, and Home and End for the two ends. The drawing also zooms with `+` and `-` and
+  goes back to the start with `0`. Each says where it currently sits, so somebody who cannot see it
+  still knows how far it has moved, and each takes a name of its own with `setAriaLabel`, which
+  matters as soon as a page has two splitters on it.
+
+    Dragging behaves exactly as it did. The keyboard writes the new position through the same code
+    the mouse uses, so the two cannot drift apart.
+
+- **The box you drop files onto is a control.** Tab reaches it, Enter and Space open the file
+  picker, and it announces itself using the words `setTitle` and `setSubtitle` were given. Before
+  this the only way to choose a file was to click the box.
+
+- **Things that draw now say what they are.** A spinner announces itself as "Loading" and
+  `withAriaLabel("Loading your orders")` says what is loading. A percentage ring and a budget meter
+  announce their number as it changes. The trail of links at the top of a page, and the main bar
+  across it, announce themselves as navigation, so a screen reader can jump straight to either.
+  A failed sign-in is now spoken, not only shown.
+
+- **And things that are only decoration now keep quiet.** The grey blocks standing in for content
+  that has not arrived, the sun and moon on the light/dark switch, the blinking cursor in a
+  streaming answer, and the tiny trend charts beside a number are all skipped by screen readers
+  instead of being read out as noise. A trend chart that stands alone can still be named with
+  `setAriaLabel`, which brings it back.
+
+- **A long list can be scrolled without a mouse.** `VirtualScroller` was not in the tab order, so
+  Page Down and the arrow keys did nothing to it. It is now.
+
+- **Text arriving a word at a time is read as it arrives.** `StreamingText` - a language model's
+  answer, most often - is announced as it grows rather than sitting there silently.
+
 ### Fixed
+
+- **Copying something threw the keyboard away.** Both Copy buttons - the one on a code block and
+  the one beside a row of properties - copy by making an invisible text box, selecting it and
+  deleting it again. Selecting it took the keyboard off the button, and deleting it left the
+  keyboard on nothing, so anybody who pressed Copy without a mouse was dumped to the top of the
+  page and had to Tab all the way back down. The keyboard now goes back where it was. The browser
+  proof found this; no amount of looking at the screen would have.
+
+- **The five stars of a rating announced nothing.** Each star is a radio button drawn by the
+  stylesheet, so there was nothing inside it to read and a screen reader said "radio button" five
+  times. They now say "1 star", "2 stars", and so on.
+
+- **A drawer put a control in the tab order that nobody should ever reach.** The hidden checkbox
+  the stylesheet watches to decide whether the panel is in or out is plumbing, not a control, but
+  a checkbox is in the tab order by default. The keyboard stopped on it and a screen reader
+  announced nothing at all. It is now skipped.
+
+- **A budget meter kept showing a percentage after the budget was taken away.** `TokenMeter` set
+  its hover text on the branch that has a cap and returned early on the branch that does not, so
+  switching to "no limit" left the old sentence in place claiming a percentage that was no longer
+  true.
+
+- **A menu entry never let go of its listener.** `MenuItem.addClickListener` handed back something
+  that looked like a way to unregister and removed nothing: it built a second wrapper around the
+  listener and asked the browser to remove that one instead of the one it had added. A screen that
+  rebuilt its menu leaked a listener every time.
 
 - **Text that had been saved as UTF-8 and read back as Windows-1252 was published in the component
   library.** Eight strings were stored that way, three rounds of it deep, so an application using
@@ -692,12 +841,12 @@ framework's own classes may be.
   somebody is typing must not move them out of the box they are typing in. `close()` takes it away,
   and so does Escape.
 
-- **A browser proof for the overlays, in `tools/overlay-proof`.** It compiles the real component
+- **A browser proof for the overlays, in `tools/ui-proof`.** It compiles the real component
   library to JavaScript, drives a real headless Chrome against it, and checks the things a rendering
   test cannot answer: where the keyboard is, whether Tab ever reaches the page behind an open
   dialog, what Escape does, and which of two overlapping overlays is really on top. It takes a
-  screenshot of every state. Run it with `bash tools/overlay-proof/build.sh` then
-  `node tools/overlay-proof/drive.mjs`. It found five faults that the gallery, which draws all these
+  screenshot of every state. Run it with `bash tools/ui-proof/build.sh` then
+  `node tools/ui-proof/drive.mjs`. It found five faults that the gallery, which draws all these
   components correctly, showed no sign of.
 
 ### Fixed

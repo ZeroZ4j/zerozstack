@@ -29,6 +29,18 @@ public class CheckboxShowcase extends ComponentShowcase {
         addTitle("Checkbox");
         addDescription("Checkboxes allow users to select one or more options from a set.");
 
+        addWhatToCheck("Try this",
+                "Tab onto every field below, including the read-only one. The disabled one must be "
+                        + "skipped and the read-only one must not.",
+                "Read the caption of each field. A field with no caption has no name.",
+                "The one marked wrong has to say why, under the field, in words.",
+                "The required ones have to show that they are required by something other than colour.",
+                "The last one has a caption of 140 characters. It should wrap, not push the page out.",
+                "Broken looks like: a red border with no sentence, a required field with no mark, "
+                        + "or a disabled field that Tab still stops on.");
+
+        addSection("Every state a checkbox really has", allStates());
+
         // Color variants
         Checkbox primary = new Checkbox();
         primary.setValue(true);
@@ -90,5 +102,46 @@ public class CheckboxShowcase extends ComponentShowcase {
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
         addSection("Data Binding Demo", component, output);
+    }
+
+    private static Div allStates() {
+        Checkbox plain = new Checkbox();
+        plain.withLabel("Send me the occasional release note");
+
+        Checkbox helped = new Checkbox();
+        helped.withLabel("Keep me signed in");
+        helped.setHelperText("Only do this on a computer nobody else uses.");
+
+        Checkbox required = new Checkbox();
+        required.withLabel("I accept the terms");
+        required.setRequiredIndicatorVisible(true);
+
+        Checkbox wrong = new Checkbox();
+        wrong.withLabel("I accept the terms");
+        wrong.setRequiredIndicatorVisible(true);
+        wrong.setErrorMessage("The account cannot be created until you accept the terms.");
+
+        Checkbox disabled = new Checkbox();
+        disabled.withLabel("Two-factor sign-in (not on this plan)");
+        disabled.setEnabled(false);
+        disabled.setHelperText("Disabled: Tab skips it and it is not read out.");
+
+        Checkbox readOnly = new Checkbox();
+        readOnly.withLabel("Your account was verified");
+        readOnly.setValue(true);
+        FieldStates.readOnly(readOnly);
+        readOnly.setHelperText("Read only: Tab still reaches it, so it can still be read out.");
+
+        Checkbox longCaption = new Checkbox();
+        longCaption.withLabel(FieldStates.LONG_CAPTION);
+
+        return FieldStates.stack(
+            FieldStates.labelled("Caption only", plain),
+            FieldStates.labelled("Caption and helper text", helped),
+            FieldStates.labelled("Required", required),
+            FieldStates.labelled("Wrong, and saying why", wrong),
+            FieldStates.labelled("Disabled", disabled),
+            FieldStates.labelled("Read only", readOnly),
+            FieldStates.labelled("A very long caption", longCaption));
     }
 }

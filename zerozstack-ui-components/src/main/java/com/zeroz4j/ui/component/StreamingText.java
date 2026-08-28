@@ -33,7 +33,12 @@ public final class StreamingText extends Div {
 
     public StreamingText() {
         addClassName("whitespace-pre-wrap break-words");
+        // The answer arrives a few words at a time, so the text is read out as it grows. Politely:
+        // that waits for a pause instead of cutting across whatever is being said.
+        text.getElement().setAttribute("aria-live", "polite");
         caret.addClassName("animate-pulse text-primary");
+        // The caret is a drawn block showing the answer is still coming, not a letter of it.
+        caret.getElement().setAttribute("aria-hidden", "true");
         getElement().appendChild(text.getElement());
         getElement().appendChild(caret.getElement());
     }

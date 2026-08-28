@@ -89,6 +89,12 @@ implementations).
    `BinaryPackableRegistrar` or `WasmRmiClient.initialize` yourself — registrars are discovered via
    `META-INF/services`.
 8. **Get an RMI stub with `new MyService_Stub()`.** There is no `WasmRmiClient.create(Class)`.
+9. **Never put a click listener on a `Div`.** A control has to be reachable with Tab and pressed
+   with Enter, and has to have words that say what it does. Use a `Button` - `btn-ghost` and
+   `btn-link` make one look like anything. `KeyboardAndNamingContractTest` reads every component
+   on every build and fails it otherwise, and every control also has to appear on the browser
+   proof page in `tools/ui-proof`. Full rule:
+   [docs/guides/ui-keyboard-and-naming.md](docs/guides/ui-keyboard-and-naming.md).
 
 ## Persistence and transactions
 

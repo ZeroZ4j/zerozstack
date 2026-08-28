@@ -17,61 +17,161 @@
  */
 package com.zeroz4j.example.client.showcase;
 
-import com.zeroz4j.ui.component.*;
-import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
+import com.zeroz4j.ui.component.Button;
+import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.component.Dialog;
+import com.zeroz4j.ui.component.Dropdown;
+import com.zeroz4j.ui.layout.Div;
 
+/**
+ * A menu opened from a button. The interesting cases are not the six directions it can open in —
+ * they are: what happens with forty entries, what happens inside a box, and whether the keyboard
+ * can open one and get out again.
+ */
 public class DropdownShowcase extends ComponentShowcase {
+
+    /** Where the last choice landed, so pressing an entry visibly does something. */
+    private final Div readout = new Div("Nothing chosen yet.");
 
     public DropdownShowcase() {
         super();
         addTitle("Dropdown");
-        addDescription("Dropdown is a menu that toggles when clicking/hovering a summary button.");
+        addDescription("A short menu that drops out of a button. It closes when you press Escape "
+                + "or press something outside it.");
 
-        // Helper to populate items
-        Dropdown defaultDropdown = new Dropdown("Click Me");
-        addDropdownItems(defaultDropdown);
+        addWhatToCheck("Try this",
+                "Open one with the keyboard alone. Then close it again with Escape, and check the "
+                        + "keyboard comes back to the button you opened it from.",
+                "Tab through an open menu. Every entry has to take its turn.",
+                "Open the one with forty entries. It should scroll inside itself, not run off the "
+                        + "bottom of the window.",
+                "Open the one at the very bottom of the page. It should flip upwards rather than "
+                        + "opening off the screen.",
+                "Open the one inside the box. The menu must appear over the box, not behind it.",
+                "Broken looks like: a menu you can only close with the mouse, one that opens off "
+                        + "the screen, or one that appears behind the thing it was opened from.");
 
-        Dropdown hoverDropdown = new Dropdown("Hover Me");
-        hoverDropdown.addClassName("dropdown-hover");
-        addDropdownItems(hoverDropdown);
+        readout.setId("dropdown-readout");
+        readout.addClassName("text-sm font-mono");
 
-        Dropdown endDropdown = new Dropdown("Align End");
-        endDropdown.addClassName("dropdown-end");
-        addDropdownItems(endDropdown);
-
-        Dropdown topDropdown = new Dropdown("Open Top");
-        topDropdown.addClassName("dropdown-top");
-        addDropdownItems(topDropdown);
-
-        Dropdown leftDropdown = new Dropdown("Open Left");
-        leftDropdown.addClassName("dropdown-left");
-        addDropdownItems(leftDropdown);
-
-        Dropdown rightDropdown = new Dropdown("Open Right");
-        rightDropdown.addClassName("dropdown-right");
-        addDropdownItems(rightDropdown);
-
-        addSection("Default (Click to open)", defaultDropdown);
-        addSection("Hover to trigger", hoverDropdown);
-        addSection("Right Aligned (End)", endDropdown);
-        addSection("Directional Dropdowns", topDropdown, leftDropdown, rightDropdown);
+        addSection("Opened by pressing", byPressing());
+        addSection("Opened by pointing", byPointing());
+        addSection("Forty entries", manyEntries());
+        addSection("Which way it opens", directions());
+        addSection("Inside a box", insideADialog());
+        addSection("Long entry names", longNames());
+        addSection("Near the bottom of the page, where there is no room below", nearTheBottom());
+        addSection("What was chosen", readout);
     }
 
-    private void addDropdownItems(Dropdown dropdown) {
-        Div item1 = new Div("Item 1");
-        item1.addClassName("p-2");
-        item1.addClassName("hover:bg-base-200");
-        item1.addClassName("rounded");
-        item1.addClassName("cursor-pointer");
+    // ------------------------------------------------------------------ sections
 
-        Div item2 = new Div("Item 2");
-        item2.addClassName("p-2");
-        item2.addClassName("hover:bg-base-200");
-        item2.addClassName("rounded");
-        item2.addClassName("cursor-pointer");
+    private Component byPressing() {
+        Dropdown dropdown = new Dropdown("Actions");
+        dropdown.setId("dropdown-default");
+        fill(dropdown, "Rename", "Duplicate", "Move to another folder", "Delete");
+        return dropdown;
+    }
 
-        dropdown.add(item1, item2);
+    private Component byPointing() {
+        Dropdown dropdown = new Dropdown("Point at me");
+        dropdown.setId("dropdown-hover");
+        dropdown.addClassName("dropdown-hover");
+        fill(dropdown, "Open", "Open in a new tab", "Copy the address");
+        return dropdown;
+    }
+
+    private Component manyEntries() {
+        Dropdown dropdown = new Dropdown("Assign to somebody");
+        dropdown.setId("dropdown-many");
+        Div scroller = new Div();
+        scroller.addClassName("max-h-64 overflow-y-auto flex flex-col");
+        for (int i = 1; i <= 40; i++) {
+            scroller.add(entry("Person number " + i));
+        }
+        dropdown.add(scroller);
+        return dropdown;
+    }
+
+    private Component directions() {
+        Div host = new Div();
+        host.addClassName("flex flex-wrap gap-4 w-full py-8");
+        host.add(directional("Aligned to the end", "dropdown-end"),
+                directional("Opens upwards", "dropdown-top"),
+                directional("Opens leftwards", "dropdown-left"),
+                directional("Opens rightwards", "dropdown-right"));
+        return host;
+    }
+
+    private Component directional(String label, String className) {
+        Dropdown dropdown = new Dropdown(label);
+        dropdown.addClassName(className);
+        fill(dropdown, "One", "Two", "Three");
+        return dropdown;
+    }
+
+    private Component insideADialog() {
+        Dialog dialog = new Dialog("A menu inside a box");
+        dialog.setId("dropdown-dialog");
+        Dropdown inside = new Dropdown("Choose a folder");
+        inside.setId("dropdown-in-dialog");
+        fill(inside, "Inbox", "Archive", "Rechnungen 2026", "サポート");
+        dialog.add(new Div("The menu below is opened from inside a box. It has to appear over the "
+                + "box, not behind it."), inside);
+        Button close = new Button("Close", e -> dialog.close());
+        close.addClassName("btn-primary");
+        dialog.addAction(close);
+
+        Button open = new Button("Open the box");
+        open.setId("dropdown-open-dialog");
+        open.addClickListener(e -> dialog.open());
+
+        Div host = new Div();
+        host.addClassName("flex gap-3 w-full");
+        host.add(open, dialog);
+        return host;
+    }
+
+    private Component longNames() {
+        Dropdown dropdown = new Dropdown("Retention rules");
+        dropdown.setId("dropdown-long");
+        fill(dropdown,
+                "Keep everything for seven years, including deleted files",
+                "Rechnungsprüfung und automatische Freigabe nach vier Wochen",
+                "すべての添付ファイルを保持する",
+                "Keep nothing");
+        return dropdown;
+    }
+
+    private Component nearTheBottom() {
+        Div spacer = new Div("There is deliberately a lot of space above this one, so that "
+                + "opening it has to decide between opening downwards off the screen and flipping "
+                + "upwards.");
+        spacer.addClassName("text-sm text-base-content/60 mb-40");
+
+        Dropdown dropdown = new Dropdown("Open me at the bottom");
+        dropdown.setId("dropdown-bottom");
+        fill(dropdown, "One", "Two", "Three", "Four", "Five", "Six");
+
+        Div host = new Div();
+        host.addClassName("w-full");
+        host.add(spacer, dropdown);
+        return host;
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private void fill(Dropdown dropdown, String... labels) {
+        for (String label : labels) {
+            dropdown.add(entry(label));
+        }
+    }
+
+    /** An entry is a real button, so Tab reaches it and Enter and Space both work. */
+    private Button entry(String label) {
+        Button item = new Button(label);
+        item.addClassName("btn-ghost btn-sm justify-start w-full font-normal");
+        item.addClickListener(e -> readout.setText("Last chosen: " + label));
+        return item;
     }
 }
