@@ -332,6 +332,120 @@ first published, and repairs to the two components whose labels an application c
 Work in progress. This section is filled as features land; each entry says what changes and, for a
 breaking change, what to do about it.
 
+### Added
+
+- **A record can now be a wire type.** Until now every type that crossed the wire had to be a class
+  with a public no-argument constructor, a getter for each field and a setter for each field. That
+  is a lot of typing for something whose only job is to carry three values from one side to the
+  other, and it was never a design choice — it was a consequence of how the sending and receiving
+  code was written. The receiving code made an empty object and then filled it in, which needs an
+  empty constructor and needs setters.
+
+    A record cannot work that way, so the generated code was changed. It now reads all the values
+    first and builds the record last, in one go. Ten lines become one:
+
+    ```java
+    // Before
+    @DataModel
+    public class Money {
+        private long amount;
+        private String currency;
+        public Money() { }
+        public Money(long amount, String currency) {
+            this.amount = amount;
+            this.currency = currency;
+        }
+        public long getAmount() { return amount; }
+        public void setAmount(long amount) { this.amount = amount; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+    }
+
+    // Now
+    @DataModel
+    public record Money(long amount, String currency) { }
+    ```
+
+    Everything a class could carry, a record can carry: text, numbers, dates, lists, sets, maps,
+    other records, and ordinary classes. Validation annotations work the same way. It runs in the
+    browser too — the browser compiler turns a record into ordinary JavaScript, including the
+    equality and hashing it writes for you.
+
+    Two things a record cannot do. It cannot be marked `@LiveSync` or `@ClientWritable`, because
+    those are about editing an object after it exists and a record never changes — use a class.
+    And a record cannot be part of a loop: if A holds B and B holds A, one of the two has to be a
+    class. Sending a loop of records is refused with a message that says so, rather than failing
+    somewhere far away. The reason is the same one that made records possible at all: the receiver
+    cannot build a record until it has read every value inside it, and a loop needs the record to
+    exist before that has finished.
+
+- **A type can now be declared as "one of a known set".** Applications fake this today by adding a
+  kind field and casting on the other side, which the compiler cannot check and which quietly goes
+  wrong when somebody adds a new kind. Java already has the right tool — a `sealed` interface, which
+  lists every type allowed to implement it — and the framework now understands it:
+
+    ```java
+    @DataModel
+    public sealed interface Message permits Text, Ping, Attachment { }
+
+    @DataModel public record Text(String author, String body) implements Message { }
+    @DataModel public record Ping(long sentAt) implements Message { }
+    @DataModel public final class Attachment implements Message { /* ... */ }
+    ```
+
+    A field, a list, a call argument or a return value can now be a `Message`, and what comes out
+    the other end is a `Text`, a `Ping` or an `Attachment` — the real type, not a cast. A sealed
+    abstract class works the same way, and anything the base class declares travels with each
+    member.
+
+    It is also safer than the kind-field version it replaces. Because the list of allowed types is
+    fixed when the code is compiled, the receiving side knows it, and a message naming anything else
+    is turned away before that type is created at all. The refusal says which type was named and
+    which ones were allowed.
+
+- **Two new type markers on the wire**, `0x22` for a record and `0x23` for a value of a sealed type.
+  Applications never see these; they are listed in `docs/PROTOCOL.md` for anyone reading the bytes.
+
+### Fixed
+
+- **A model that extended another model silently lost the base class's fields.** Moving what several
+  models share up into a base class is the most ordinary refactor in Java. The generated code only
+  ever looked at the fields a class declared itself, so everything on the base stopped arriving —
+  no error when you compiled, no error on the wire, just missing data, and nothing pointing at
+  inheritance as the cause. Base fields now travel with the model.
+
+    An abstract model now gets no serializer and no registry entry: nothing can construct one, so it
+    exists only to hand its fields down. Declaring a field as an abstract model type still works.
+
+    Two shapes are refused when you compile, rather than losing data quietly. Extending a class that
+    is not a `@DataModel` and that has fields of its own — annotate the base, or move the fields
+    down; a base class with no fields is fine as it is. And declaring a field with a name a base
+    class already uses, where one value would overwrite the other.
+
+- **Two models that referred to each other crashed with a stack overflow.** `A` holds a `B`, `B`
+  holds an `A`, and the generated code never stopped. The same models reached through a list always
+  worked, which is why this survived: only a field declared as a model type took the broken path.
+  Such fields are now written the same way as everything else, so a loop closes on the same object it
+  started from, and the same object in two fields arrives once instead of twice.
+
+    A model nested inside a `@LiveSync` one was also being rebuilt as a plain object, so edits to it
+    were invisible. Same cause, fixed by the same change.
+
+    This makes a nested model a few bytes larger — it now carries an identifier and its type name.
+    Lists were already paying that, so the cost is set by how many model-typed fields you have, not
+    by how much data you send.
+
+- **A model class nested inside another class got a serializer that did not compile.** The generated
+  code referred to it by the wrong name. Nesting is the natural way to write a sealed family, so this
+  surfaced immediately once sealed types were supported.
+
+### Documentation
+
+- **How far object identity reaches is now written down.** The same object in two fields of one model
+  arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is
+  not a safe way to ask whether two things that came off the wire are the same one — compare by
+  identifier, or with `equals`. This was true before and stated nowhere.
+
 
 ## [0.7.0] — 2026-08-20
 

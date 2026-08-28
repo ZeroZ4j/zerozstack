@@ -146,8 +146,56 @@ public class BinarySerializer {
      * the tier's {@link LazyAdapter} so that this module needs no EclipseStore dependency.</p>
      */
     public static final byte TAG_LAZY = 0x21;
+    /**
+     * Tag byte indicating a {@code record} {@link DataModel} (0x22): an object id string, the
+     * record's class FQCN, then its components in canonical order.
+     *
+     * <p>The bytes look like {@link #TAG_OBJECT}; what differs is when the value exists. An ordinary
+     * model is created empty, registered under its id, and only then filled — so anything read
+     * afterwards can point back at it. A record's components are final and are set by its canonical
+     * constructor, so every component must be read before the record can exist, and it is
+     * registered under its id only once it does.</p>
+     *
+     * <p><b>A record therefore cannot take part in a reference cycle.</b> A cycle would need the
+     * record to already exist while its own components are still being read. Both sides refuse it
+     * with an explanation rather than quietly producing a null: the writer when a value inside a
+     * record points back at that record, the reader when a payload does the same. Two separate
+     * appearances of the same record in one payload are fine — the second is a {@link #TAG_REF},
+     * and by then the record has been built.</p>
+     */
+    public static final byte TAG_RECORD = 0x22;
+    /**
+     * Tag byte indicating a value of a sealed {@link DataModel} type (0x23): the sealed base's FQCN,
+     * followed by the value itself as an ordinary {@link #TAG_OBJECT}, {@link #TAG_RECORD} or
+     * {@link #TAG_NULL}.
+     *
+     * <p>The base name is what makes the payload checkable. {@code sealed} means the compiler knows
+     * the complete permitted set, the annotation processor writes that set into the generated
+     * registrar, and the reader looks up the named base and refuses any class the base does not
+     * permit — <i>before</i> constructing anything. A payload naming a type outside the set fails
+     * with a message saying which type it named and what the base permits.</p>
+     */
+    public static final byte TAG_SEALED = 0x23;
 
     private static final ThreadLocal<Set<Object>> seenObjects = ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
+
+    /**
+     * Records whose components are being written right now, innermost last, per thread.
+     *
+     * <p>A reference back into one of these is a cycle through a record, which the receiver could
+     * not rebuild — see {@link #TAG_RECORD}. Identity-based, because two equal records are two
+     * separate values here and only the same instance closes a loop.</p>
+     */
+    private static final ThreadLocal<Set<Object>> openRecords =
+            ThreadLocal.withInitial(() -> Collections.newSetFromMap(new IdentityHashMap<>()));
+
+    /**
+     * Object ids of records whose components are being read right now, per thread. The reader's
+     * half of {@link #openRecords}: it catches a hand-built payload that points back into a record
+     * that does not exist yet, which would otherwise silently deserialize as null.
+     */
+    private static final ThreadLocal<Set<String>> openRecordIds =
+            ThreadLocal.withInitial(LinkedHashSet::new);
 
     /**
      * How many levels of nesting {@link #readValue(ByteBuffer, ObjectMapper)} will descend before
@@ -214,30 +262,47 @@ public class BinarySerializer {
             // Only the handle goes on the wire — resolving is the receiver's decision.
             buffer.put(TAG_LAZY);
             writeString(buffer, BinaryRegistry.getLazyAdapter().handleFor(val, mapper));
-        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null || val instanceof BinaryPackable) {
+        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null
+                || BinaryRegistry.getRecordDelegate(val.getClass().getName()) != null
+                || val instanceof BinaryPackable) {
+            String className = val.getClass().getName();
             @SuppressWarnings("unchecked")
-            BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(val.getClass().getName());
+            BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
+            BinaryRecordDelegate<Object> recordDelegate = BinaryRegistry.getRecordDelegate(className);
             Set<Object> seen = seenObjects.get();
+            Set<Object> open = openRecords.get();
             boolean isRoot = seen.isEmpty();
             if (seen.add(val)) {
                 try {
                     String id = mapper.register(val);
-                    buffer.put(TAG_OBJECT);
-                    writeString(buffer, id);
-                    writeString(buffer, val.getClass().getName());
+                    writeSealedBaseIfAny(buffer, className);
                     GrowableBuffer temp = new GrowableBuffer();
-                    if (delegate != null) {
-                        delegate.write(val, temp, mapper);
+                    if (recordDelegate != null) {
+                        open.add(val);
+                        buffer.put(TAG_RECORD);
+                        writeString(buffer, id);
+                        writeString(buffer, className);
+                        recordDelegate.write(val, temp, mapper);
                     } else {
-                        ((BinaryPackable) val).writeToBuffer(temp, mapper);
+                        buffer.put(TAG_OBJECT);
+                        writeString(buffer, id);
+                        writeString(buffer, className);
+                        if (delegate != null) {
+                            delegate.write(val, temp, mapper);
+                        } else {
+                            ((BinaryPackable) val).writeToBuffer(temp, mapper);
+                        }
                     }
                     buffer.put(temp.toByteArray());
                 } finally {
+                    open.remove(val);
                     if (isRoot) {
                         seen.clear();
+                        open.clear();
                     }
                 }
             } else {
+                refuseRecordCycle(val, open);
                 String id = mapper.register(val);
                 buffer.put(TAG_REF);
                 writeString(buffer, id);
@@ -374,6 +439,98 @@ public class BinarySerializer {
     }
 
     /**
+     * Writes the {@link #TAG_SEALED} wrapper when this class belongs to a sealed wire type, so the
+     * reader learns which permitted set to check the class name against.
+     *
+     * @param buffer    the destination buffer
+     * @param className the runtime class name of the value about to be written
+     */
+    private static void writeSealedBaseIfAny(ByteBuffer buffer, String className) {
+        String sealedBase = BinaryRegistry.sealedBaseOf(className);
+        if (sealedBase != null) {
+            buffer.put(TAG_SEALED);
+            writeString(buffer, sealedBase);
+        }
+    }
+
+    /**
+     * {@link #writeSealedBaseIfAny(ByteBuffer, String)} for the growable buffer.
+     *
+     * @param buffer    the destination buffer
+     * @param className the runtime class name of the value about to be written
+     */
+    private static void writeSealedBaseIfAny(GrowableBuffer buffer, String className) {
+        String sealedBase = BinaryRegistry.sealedBaseOf(className);
+        if (sealedBase != null) {
+            buffer.put(TAG_SEALED);
+            writeString(buffer, sealedBase);
+        }
+    }
+
+    /**
+     * Refuses, at the point it happens, a value that points back at a record still being written.
+     *
+     * @param val  the value about to be written as a back-reference
+     * @param open the records whose components are being written right now
+     * @throws IllegalArgumentException if {@code val} is one of those records
+     */
+    private static void refuseRecordCycle(Object val, Set<Object> open) {
+        if (open.contains(val)) {
+            throw new IllegalArgumentException("Cannot send " + val.getClass().getName()
+                    + ": it is a record that points back at itself through this object graph. A "
+                    + "record's components are final, so the receiver cannot build it until every "
+                    + "component has been read — and a component that refers back to the record "
+                    + "needs the record to exist first. Use a class for the type that closes the "
+                    + "loop: a class is created empty and filled afterwards, so it can point back "
+                    + "at itself.");
+        }
+    }
+
+    /**
+     * Reads a value whose declared type is a sealed wire type, refusing anything that is not a
+     * member of that exact sealed family before it is built.
+     *
+     * @param buffer       the source buffer, positioned at a tag byte
+     * @param mapper       the object mapper resolving reference handles
+     * @param expectedBase the FQCN of the sealed base the reader expects
+     * @return the deserialized value, or {@code null}
+     * @throws IllegalStateException if the payload holds something other than a member of
+     *         {@code expectedBase}
+     *
+     * <p><b>Under the hood:</b> Peeks the tag and, for {@link #TAG_SEALED}, the base name written
+     * with it, then rewinds and reads normally. Called from generated serializers for a field whose
+     * declared type is a sealed base; values reached through a {@code List}, {@code Set} or
+     * {@code Map} are checked by {@link #TAG_SEALED} itself against the base named on the wire.</p>
+     */
+    public static Object readSealed(ByteBuffer buffer, ObjectMapper mapper, String expectedBase) {
+        if (buffer.remaining() < 1) {
+            throw new IllegalStateException("Binary stream ended where a value of the sealed type "
+                    + expectedBase + " was expected.");
+        }
+        int start = buffer.position();
+        byte tag = buffer.get();
+        if (tag == TAG_NULL) {
+            return null;
+        }
+        if (tag != TAG_SEALED && tag != TAG_REF) {
+            buffer.position(start);
+            throw new IllegalStateException("Expected a value of the sealed type " + expectedBase
+                    + ", but the payload carries tag 0x" + Integer.toHexString(tag & 0xFF)
+                    + ". Only a class the sealed type permits may appear here.");
+        }
+        if (tag == TAG_SEALED) {
+            String base = readString(buffer);
+            if (!expectedBase.equals(base)) {
+                buffer.position(start);
+                throw new IllegalStateException("Expected a value of the sealed type "
+                        + expectedBase + ", but the payload names " + base + ".");
+            }
+        }
+        buffer.position(start);
+        return readValue(buffer, mapper);
+    }
+
+    /**
      * Unpacks an object from the current position in the given {@link ByteBuffer}.
      *
      * @param buffer the source buffer positioned at a 1-byte type tag
@@ -433,31 +590,55 @@ public class BinarySerializer {
                 return readString(buffer);
             case TAG_REF: {
                 String id = readString(buffer);
+                if (openRecordIds.get().contains(id)) {
+                    throw new IllegalStateException("The payload points back at a record that is "
+                            + "still being read. A record's components are final, so it does not "
+                            + "exist until all of them have been read; a reference to it from "
+                            + "inside itself can never be resolved.");
+                }
                 return mapper.getObject(id);
             }
-            case TAG_OBJECT:
+            case TAG_OBJECT: {
                 String id = readString(buffer);
                 String className = readString(buffer);
-                Object obj = mapper.getObject(id);
-                boolean updatingExisting = obj != null;
-                if (obj == null) {
-                    obj = BinaryRegistry.create(className);
-                    mapper.registerWithId(id, obj);
+                return readObjectBody(buffer, mapper, id, className);
+            }
+            case TAG_RECORD: {
+                String id = readString(buffer);
+                String className = readString(buffer);
+                return readRecordBody(buffer, mapper, id, className);
+            }
+            case TAG_SEALED: {
+                String base = readString(buffer);
+                if (buffer.remaining() < 1) {
+                    throw new IllegalStateException("Binary stream ended after naming the sealed "
+                            + "type " + base + ", before the value itself.");
                 }
-                @SuppressWarnings("unchecked")
-                BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
-                if (delegate != null) {
-                    delegate.read(obj, buffer, mapper);
-                } else if (obj instanceof BinaryPackable) {
-                    ((BinaryPackable) obj).readFromBuffer(buffer, mapper);
+                byte inner = buffer.get();
+                if (inner == TAG_NULL) {
+                    return null;
                 }
-                if (updatingExisting) {
-                    // Fields of an instance the caller already holds were just replaced in place;
-                    // anything that read them needs to re-run. A freshly created instance has no
-                    // readers yet, so it is not reported.
-                    LiveMutationTracker.remoteObjectUpdated(obj);
+                if (inner == TAG_REF) {
+                    String refId = readString(buffer);
+                    if (openRecordIds.get().contains(refId)) {
+                        throw new IllegalStateException("The payload points back at a record that "
+                                + "is still being read.");
+                    }
+                    return mapper.getObject(refId);
                 }
-                return obj;
+                if (inner != TAG_OBJECT && inner != TAG_RECORD) {
+                    throw new IllegalStateException("Sealed type " + base + " is followed by tag 0x"
+                            + Integer.toHexString(inner & 0xFF) + ", which is not a model value.");
+                }
+                String id = readString(buffer);
+                String className = readString(buffer);
+                // Checked before anything is built: a name the sealed type does not permit never
+                // reaches a constructor.
+                BinaryRegistry.checkPermitted(base, className);
+                return inner == TAG_RECORD
+                        ? readRecordBody(buffer, mapper, id, className)
+                        : readObjectBody(buffer, mapper, id, className);
+            }
             case TAG_SHORT:
                 return buffer.getShort();
             case TAG_BYTE:
@@ -611,6 +792,82 @@ public class BinarySerializer {
     }
 
     /**
+     * Builds an ordinary {@link DataModel} instance from the field bytes that follow, with its id
+     * and class name already read.
+     *
+     * @param buffer    the source buffer, positioned at the model's field bytes
+     * @param mapper    the object mapper resolving reference handles
+     * @param id        the object id read from the payload
+     * @param className the class name read from the payload
+     * @return the instance, newly created or the one the mapper already held, with its fields set
+     *
+     * <p><b>Under the hood:</b> The instance is created and registered <i>before</i> its fields are
+     * read, which is what lets something inside the graph point back at it.</p>
+     */
+    private static Object readObjectBody(ByteBuffer buffer, ObjectMapper mapper,
+                                         String id, String className) {
+        Object obj = mapper.getObject(id);
+        boolean updatingExisting = obj != null;
+        if (obj == null) {
+            obj = BinaryRegistry.create(className);
+            mapper.registerWithId(id, obj);
+        }
+        @SuppressWarnings("unchecked")
+        BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
+        if (delegate != null) {
+            delegate.read(obj, buffer, mapper);
+        } else if (obj instanceof BinaryPackable) {
+            ((BinaryPackable) obj).readFromBuffer(buffer, mapper);
+        }
+        if (updatingExisting) {
+            // Fields of an instance the caller already holds were just replaced in place;
+            // anything that read them needs to re-run. A freshly created instance has no
+            // readers yet, so it is not reported.
+            LiveMutationTracker.remoteObjectUpdated(obj);
+        }
+        return obj;
+    }
+
+    /**
+     * Builds a {@code record} {@link DataModel} from the component bytes that follow, with its id
+     * and class name already read.
+     *
+     * @param buffer    the source buffer, positioned at the record's component bytes
+     * @param mapper    the object mapper resolving reference handles
+     * @param id        the object id read from the payload
+     * @param className the record class name read from the payload
+     * @return the newly constructed record, or {@code null} if the writer wrote a null
+     * @throws IllegalStateException if the class is not a registered record model
+     *
+     * <p><b>Under the hood:</b> The opposite order to {@link #readObjectBody}: every component is
+     * read first and the record is registered under its id only once the canonical constructor has
+     * run. While that is happening the id sits in {@code openRecordIds}, so a payload referring
+     * back into the record is refused with an explanation instead of resolving to null.</p>
+     */
+    private static Object readRecordBody(ByteBuffer buffer, ObjectMapper mapper,
+                                         String id, String className) {
+        BinaryRecordDelegate<Object> delegate = BinaryRegistry.getRecordDelegate(className);
+        if (delegate == null) {
+            throw new IllegalStateException("Unknown record @DataModel class: " + className
+                    + ". Make sure it is registered.");
+        }
+        Set<String> open = openRecordIds.get();
+        boolean added = open.add(id);
+        Object value;
+        try {
+            value = delegate.read(buffer, mapper);
+        } finally {
+            if (added) {
+                open.remove(id);
+            }
+        }
+        if (value != null) {
+            mapper.registerWithId(id, value);
+        }
+        return value;
+    }
+
+    /**
      * Writes a UTF-8 string to the buffer, prefixed by its length in bytes.
      *
      * @param buffer the destination buffer
@@ -730,29 +987,45 @@ public class BinarySerializer {
             // Only the handle goes on the wire — resolving is the receiver's decision.
             buffer.put(TAG_LAZY);
             writeString(buffer, BinaryRegistry.getLazyAdapter().handleFor(val, mapper));
-        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null || val instanceof BinaryPackable) {
+        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null
+                || BinaryRegistry.getRecordDelegate(val.getClass().getName()) != null
+                || val instanceof BinaryPackable) {
+            String className = val.getClass().getName();
             @SuppressWarnings("unchecked")
-            BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(val.getClass().getName());
+            BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
+            BinaryRecordDelegate<Object> recordDelegate = BinaryRegistry.getRecordDelegate(className);
             Set<Object> seen = seenObjects.get();
+            Set<Object> open = openRecords.get();
             boolean isRoot = seen.isEmpty();
             if (seen.add(val)) {
                 try {
                     String id = mapper.register(val);
-                    buffer.put(TAG_OBJECT);
-                    writeString(buffer, id);
-                    writeString(buffer, val.getClass().getName());
-                    
-                    if (delegate != null) {
-                        delegate.write(val, buffer, mapper);
+                    writeSealedBaseIfAny(buffer, className);
+                    if (recordDelegate != null) {
+                        open.add(val);
+                        buffer.put(TAG_RECORD);
+                        writeString(buffer, id);
+                        writeString(buffer, className);
+                        recordDelegate.write(val, buffer, mapper);
                     } else {
-                        ((BinaryPackable) val).writeToBuffer(buffer, mapper);
+                        buffer.put(TAG_OBJECT);
+                        writeString(buffer, id);
+                        writeString(buffer, className);
+                        if (delegate != null) {
+                            delegate.write(val, buffer, mapper);
+                        } else {
+                            ((BinaryPackable) val).writeToBuffer(buffer, mapper);
+                        }
                     }
                 } finally {
+                    open.remove(val);
                     if (isRoot) {
                         seen.clear();
+                        open.clear();
                     }
                 }
             } else {
+                refuseRecordCycle(val, open);
                 String id = mapper.register(val);
                 buffer.put(TAG_REF);
                 writeString(buffer, id);

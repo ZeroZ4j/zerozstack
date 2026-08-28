@@ -293,6 +293,9 @@ public class BinarySerializerTypesTest {
         assertEquals(0x1E, BinarySerializer.TAG_SHORT_ARRAY);
         assertEquals(0x1F, BinarySerializer.TAG_CHAR_ARRAY);
         assertEquals(0x20, BinarySerializer.TAG_BOOLEAN_ARRAY);
+        assertEquals(0x21, BinarySerializer.TAG_LAZY);
+        assertEquals(0x22, BinarySerializer.TAG_RECORD);
+        assertEquals(0x23, BinarySerializer.TAG_SEALED);
     }
 
     @Test
