@@ -487,6 +487,18 @@ server keeps a record per browser — 10,000 objects, dropped after 24 hours idl
 model nested inside a `@ClientWritable` model needs its own `@ClientWritable`, and one refusal
 refuses the whole change.
 
+**A burst of live edits is one message, not one per setter call (0.8.0+).** A `@ClientWritable`
+change waits for the editing to stop for 150 ms, or for 1 second whatever happens, whichever comes
+first, and everything changed in that burst travels together - measured at 38 messages before and 4
+after for a 38-character sentence typed into the `chat-livesync` topic box. Change it with
+`LiveMutations.configure(pauseMillis, ceilingMillis)`; `(0, 0)` restores a message per setter call.
+Anything the client sends afterwards - a service call, a lock, a signal write - goes on the wire
+behind the waiting edit, so do not generate flush-before-save plumbing. Two things this makes true:
+leaving the page loses what was still waiting (there is deliberately no unload flush - browsers do
+not reliably put bytes on a WebSocket while tearing a page down), and an `Effect` that copies the
+server's broadcast back into the field somebody is typing in now deletes what they typed since, so
+follow the incoming value everywhere except the focused field.
+
 **An edit that does not reach the server is reported, never dropped (0.8.0+).** Whether the server
 refused it or the browser could not send it, the screen is put back to the server's state and the
 reason goes to `LiveMutationRefusals.onRefused(model, reason)`; with no listener it is written to

@@ -145,6 +145,10 @@ final class ClientSignalTransport implements SignalTransport {
     }
 
     private static void sendSet(String name, Object value) {
+        // Same ordering rule as an RMI call: a live edit still waiting out its quiet period goes
+        // on the socket before this write, so the server never sees the write land on top of a
+        // value the person has already changed.
+        LiveMutations.flushBeforeOutboundCall();
         try {
             GrowableBuffer buffer = new GrowableBuffer();
             buffer.putInt(0); // fire-and-forget

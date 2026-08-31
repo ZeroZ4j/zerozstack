@@ -173,12 +173,18 @@ public class ChatView extends Card {
             // The same object travels both ways. Reading its getter inside an Effect follows the
             // server's changes down; the listener below sends this window's edits up.
             liveTopic = chatService.getTopic();
+            // Whether this person has the topic box open in front of them. What comes back from
+            // the server is what the server had a moment ago, and writing that into a box somebody
+            // is typing in deletes whatever they have typed since - one character, or a whole word.
+            // So the box follows the server only while nobody is typing in it. The line of text
+            // under it always follows, so the newest value is on the screen either way.
+            boolean[] beingTypedIn = {false};
+            topicField.addDomEventListener("focus", evt -> beingTypedIn[0] = true);
+            topicField.addDomEventListener("blur", evt -> beingTypedIn[0] = false);
             disposables.add(Effect.create(() -> {
                 String current = liveTopic.getText() == null ? "" : liveTopic.getText();
                 topicDisplay.setText("Topic: " + (current.isEmpty() ? "(none yet)" : current));
-                // Only when it really differs, so somebody else's change does not fight with what
-                // this person is in the middle of typing.
-                if (!current.equals(topicField.getValue())) {
+                if (!beingTypedIn[0] && !current.equals(topicField.getValue())) {
                     topicField.setValue(current);
                 }
             }));

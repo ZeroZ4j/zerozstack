@@ -337,6 +337,14 @@ public class WasmRmiClient {
             return;
         }
 
+        // A live edit waiting out its quiet period must not be overtaken by this call. Somebody
+        // types into a field and immediately presses a button; if the button's call went first,
+        // the server would decide on the value the person has already replaced, and every screen
+        // would say the typing was ignored. Sending the edits here puts them on the socket ahead
+        // of this call, so the server reads them in the order they happened. Does nothing, at the
+        // cost of one lock, when nothing is waiting.
+        LiveMutations.flushBeforeOutboundCall();
+
         int msgId = messageIdGenerator.incrementAndGet() & 0x7FFFFFFF;
         pendingRequests.put(msgId, new PendingRequest(callback, System.currentTimeMillis()));
 

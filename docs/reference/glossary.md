@@ -60,8 +60,8 @@ identity, cycles and in-place updates survive serialization.
 
 **Mutation**
 : A client-originated change to a `@ClientWritable` LiveSync object, sent as a whole-object frame and
-re-checked by the server before it is applied. Each setter call sends its own frame: mutations do not
-coalesce in the current build.
+re-checked by the server before it is applied. A burst of setter calls becomes one frame: since 0.8.0
+the change waits for the editing to stop for a moment, or for one second, whichever comes first.
 
 **Retained value**
 : The current value a shared signal holds on the server and sends to each client as it subscribes.

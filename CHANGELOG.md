@@ -781,6 +781,45 @@ belongs to that server rather than to the whole Java process, so two servers can
 
 ### Changed
 
+- **Typing into a live object no longer sends a message for every character.** A change made on the
+  client used to go to the server the instant the setter returned, so somebody typing into a field
+  wired straight to a live object sent one whole-object message per key press. Measured in a real
+  browser against the `chat-livesync` example, counting on the server: a short sentence, 38
+  characters at ordinary typing speed, sent **38 messages before this change and 4 after it.**
+
+    A change now waits for the changes to stop for **150 milliseconds**, and everything changed in
+    that burst goes in one message. There is also a ceiling of **1 second**, measured from the first
+    unsent change, so that somebody who types steadily and never pauses still has their work sent
+    about once a second rather than not at all. Both numbers are settings:
+    `LiveMutations.configure(pauseMillis, ceilingMillis)`, called before `Zeroz4jClient.connect`.
+
+    **Nothing your application sends can arrive ahead of a waiting edit.** Somebody types into a
+    field and immediately presses a button; the button's service call now goes on the wire behind
+    the typing, so the server is never asked to act on a value the person has already replaced.
+    Service calls, `LiveMutex` locks and shared-signal writes are all covered, and it needs no code.
+
+    **If you wrote to the live object on blur instead of on every keystroke to avoid the cost, you
+    can stop.** The advice to do that is gone from the documentation. Nothing breaks if you keep it.
+
+    **If some code of yours genuinely needs the old behavior — a message the instant the setter
+    returns — call `LiveMutations.configure(0, 0)` before connecting.** That switches the waiting
+    off entirely.
+
+    Two things to know, both stated plainly in [LiveSync](docs/LIVESYNC.md):
+
+    - **Somebody who closes the tab or follows a link mid-burst loses what was still waiting**, up
+      to the ceiling — about a second of typing. There is deliberately no rescue: a handler on the
+      browser's page-leaving events was built and measured, and whether the browser gets the bytes
+      out of the socket before it takes the page apart went both ways on the same machine on the
+      same day. Something that works half the time invites an application to rely on it. Lower the
+      ceiling for a screen where a second matters.
+    - **Do not copy the server's broadcast back into a field somebody is typing in.** An accepted
+      edit comes back to its own author carrying the value the server had a moment ago; writing that
+      into the box deletes what has been typed since. This was nearly invisible before, because the
+      value came back after every character and almost always matched. It now comes back up to a
+      second late. Follow the incoming value everywhere except the field that has the keyboard —
+      the `chat-livesync` example shows the pattern, and it was fixed there.
+
 - **Every example now has a web address of its own, so you can leave several running.** Seven of
   them all answered on `localhost:8080`, which meant starting a second one killed the first with an
   error about the address being in use. Two people lost an afternoon to that in one week; one of

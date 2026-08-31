@@ -15,7 +15,7 @@ These exist in the source as annotations or constants and do nothing. Do not bui
 |---|---|
 | Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x16 SIGNAL_SUB`, `0x18 PUSH` | Declared and unreferenced. Reserved for future protocol work. (`0x15 REJECT` left this list in 0.4.0 and is now sent for every refused live mutation.) |
 | Versioned mutations, acknowledgment and conflict rejection | Reserved in the protocol. The implemented sync path has no version field, no ACK and no conflict detection. A refusal is reported, but nothing counts versions. |
-| Coalesced LiveSync mutations and UI-scheduler dispatch of inbound frames | Both are conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework. So every setter sends its own mutation frame, and all inbound frames are applied inline on the WebSocket callback. |
+| UI-scheduler dispatch of inbound frames | Conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework, so all inbound frames are applied inline on the WebSocket callback. (Outgoing mutations no longer depend on it: since 0.8.0 they are coalesced by a real timer - see [LiveSync](../LIVESYNC.md).) |
 
 ## Connection and reconnection
 
@@ -95,11 +95,24 @@ What automatic recovery deliberately does **not** cover:
   the reason; the client applies the state and hands the reason to any
   `LiveMutationRefusals.onRefused(...)` listener. With no listener it goes to the browser console.
   Nothing is thrown, because the edit was already over by the time the answer arrived.
-- **Every keystroke is its own message.** A change is sent as soon as a setter is called, so typing
-  into a bound field sends one whole-object message per character. It is correct and it is not
-  cheap. Coalescing exists in the code and is switched off (see the table at the top of this page).
-  For a field somebody types into continuously, consider writing to the live object when the field
-  loses focus rather than on every character.
+- **An edit waits before it travels, and leaving the page loses what is still waiting (0.8.0+).**
+  A change is sent after the changes stop for 150 ms, or after 1000 ms whatever happens - whichever
+  comes first (`LiveMutations.configure`). So a burst of typing costs a handful of messages instead
+  of one per character. What it also means: somebody who closes the tab or follows a link mid-burst
+  loses up to a second of typing. There is deliberately no flush when the page is left, because a
+  browser will not reliably put bytes on a WebSocket while it is taking the page apart, and a rescue
+  that works half the time is worse than none. Lower the ceiling for a screen where a second
+  matters.
+- **The client sends in order; the server does not promise to handle in order.** Anything a client
+  sends after an edit - a service call, a lock, a signal write - goes on the wire behind that edit.
+  The server may still handle several messages from one connection at once
+  (`zeroz.ws.maxConcurrentFramesPerSession`, 32 by default), so a service method whose correctness
+  depends on an edit made a moment earlier needs a `LiveMutex` around the pair, not just the order.
+- **The server's own broadcast will fight a text field, if you let it.** An accepted edit is sent
+  back to everybody including its author, carrying the value the server had a moment ago. An
+  `Effect` that copies that into the field somebody is typing in deletes what they typed since.
+  Follow the incoming value everywhere except the field that has the keyboard; see the pattern in
+  [LiveSync](../LIVESYNC.md).
 - **An edit that cannot be sent is announced, not retried.** If a change cannot be put on the wire,
   the client asks the server to re-send that object — which puts the screen back to the truth — and
   reports it to `LiveMutationRefusals`. It is not queued and it is not tried again. (An edit made
