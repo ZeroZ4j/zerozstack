@@ -573,6 +573,27 @@ is built. See [docs/PWA.md](docs/PWA.md).
   `ArrayList`, `LinkedHashSet` and `LinkedHashMap`, so a field typed `TreeSet` fails with a
   `ClassCastException` on deserialization.
 
+## What an application's own assistant reads
+
+This page is for working **on** the framework. Two other documents are for working **in** an
+application built on it, and neither is written by hand:
+
+- **`META-INF/zeroz4j/AGENTS.md` inside `zerozstack-shared-api`.** Generated during this build from
+  the `rules` array in `context7.json`, stamped with this build's version. Every application
+  resolves that artifact, so an assistant gets rules for the version the project actually depends
+  on rather than for whatever a documentation index is currently serving. Change `context7.json`
+  and the jar follows; there is nothing else to edit.
+- **`AGENTS.md` in a generated project.** The archetype writes it, with `${zeroz4jVersion}`
+  substituted. Source:
+  `zerozstack-archetype/src/main/resources/archetype-resources/AGENTS.md`. Its `##` headings are
+  wrapped in Velocity literal blocks because Velocity reads `##` as a comment and silently drops the
+  line; the file says so at the top.
+
+**Every version stated in prose is checked.** `VersionStatementTest` compares it against
+`<revision>` and fails the build, naming the file and line. A sentence about the past keeps its own
+number as long as it says so — `(0.6.0+)`, `since 0.5.0`, `before 0.8.0`, `added in 0.6.0`. A
+version with no such marker is read as a claim about the current release.
+
 ## Conventions
 
 - Apache 2.0 license header on every new `.java` file; copy an existing one.

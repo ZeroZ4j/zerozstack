@@ -49,7 +49,7 @@ classpath.
 
 ## Shape 2: a double-clickable executable (`jpackage`)
 
-For handing the application to someone as a file. Projects generated from the archetype (0.5.1+)
+For handing the application to someone as a file. Projects generated from the archetype (0.6.0+)
 carry a `package` profile:
 
 ```bash

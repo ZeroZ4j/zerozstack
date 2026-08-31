@@ -132,7 +132,7 @@ Correcting the value undoes all four.
 This is checked on every build, in a real browser, for every field type: a page is built, a value
 is typed in that breaks a rule, and the test asserts that the sentence is part of the text a person
 can read on the screen — not merely that the field is holding it somewhere. That distinction is the
-whole of the 0.7.0 fault, and it is why the check is written that way.
+whole of the fault that shipped in 0.7.0, and it is why the check is written that way.
 
 ### Two modes: write-through and buffered
 

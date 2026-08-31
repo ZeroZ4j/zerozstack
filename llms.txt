@@ -53,6 +53,10 @@ Key things to know before generating ZeroZ Stack code:
   a `Button` or a `Link` with a real `href`, never a click listener on a `Div`.
 - Test a server in-process with `zerozstack-server-test` (test scope): `TestServer.builder().beans(...)
   .start()` and `server.connect(user, roles)`. Two servers can run side by side.
+- **This page describes the framework's main line.** An application depends on one released version,
+  which may be older. The rules for that exact version travel inside its own jars, at
+  `META-INF/zeroz4j/AGENTS.md` in `zerozstack-shared-api`, and a project generated from the archetype
+  carries its own `AGENTS.md` naming its version. Prefer those when they disagree with this.
 
 ## Decision guides
 
