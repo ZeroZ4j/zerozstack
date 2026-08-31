@@ -91,14 +91,19 @@ What automatic recovery deliberately does **not** cover:
   record, which holds no more than that either.
 - Only `@ClientWritable` classes accept client writes, and only objects the server has already synced
   can be mutated.
-- **The up direction does not work at all right now, and fails silently.** The browser holds the
-  generated `<Model>_Live` subclass, and the write path looks a model's serializer up by its runtime
-  class name — for which only `<Model>` is registered, never `<Model>_Live`. So sending an edit
-  throws `Unsupported type for GrowableBuffer: <Model>_Live`, the client catches it, writes one line
-  to the console and drops the edit. The person typing sees the screen update, because the local
-  change is optimistic, and nothing ever reaches the server. Found 2026-08-31; the failing test is
-  `LiveUpDirectionWireTest` in `zerozstack-apt`, disabled with the diagnosis on it. Until it is
-  fixed, treat `@ClientWritable` as not implemented and use an `@RmiService` method to save an edit.
+- **A refusal is a sentence, not an exception.** The server sends back both the corrected state and
+  the reason; the client applies the state and hands the reason to any
+  `LiveMutationRefusals.onRefused(...)` listener. With no listener it goes to the browser console.
+  Nothing is thrown, because the edit was already over by the time the answer arrived.
+- **Every keystroke is its own message.** A change is sent as soon as a setter is called, so typing
+  into a bound field sends one whole-object message per character. It is correct and it is not
+  cheap. Coalescing exists in the code and is switched off (see the table at the top of this page).
+  For a field somebody types into continuously, consider writing to the live object when the field
+  loses focus rather than on every character.
+- **An edit that cannot be sent is announced, not retried.** If a change cannot be put on the wire,
+  the client asks the server to re-send that object — which puts the screen back to the truth — and
+  reports it to `LiveMutationRefusals`. It is not queued and it is not tried again. (An edit made
+  while the connection is *down* is a different thing, and that one is kept and sent on reconnect.)
 
 ## Server events
 
@@ -485,8 +490,9 @@ you get by leaving the scope off — sends to every connected session, whichever
 
 ## Examples
 
-- **No example uses `@ClientWritable`.** The LiveSync up-direction is exercised only by
-  `ServerLiveMutationTest` in `zerozstack-server-core`.
+- **One example uses `@ClientWritable`** — the topic box in `chat-livesync`, which is the only place
+  the up direction of LiveSync is shown end to end. It was added in 0.8.0, along with the fix for the
+  up direction being broken.
 - `components-showcase` publishes to push topics that nothing subscribes to, using the low-level
   `broadcastPush(String, Object)` rather than a typed `EventTopic`. Do not copy that pattern.
 

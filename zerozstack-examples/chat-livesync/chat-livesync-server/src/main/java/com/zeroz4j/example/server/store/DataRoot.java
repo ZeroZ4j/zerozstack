@@ -17,15 +17,21 @@
  */
 package com.zeroz4j.example.server.store;
 
+import com.zeroz4j.example.model.ChatTopic;
 import com.zeroz4j.example.model.LiveChatState;
 import jakarta.enterprise.inject.Vetoed;
 
 @Vetoed
 public class DataRoot {
     private LiveChatState chatState = new LiveChatState();
+    private ChatTopic topic = new ChatTopic();
 
     public LiveChatState getChatState() { return chatState; }
 
     public void setChatState(LiveChatState chatState) { this.chatState = chatState; }
+
+    public ChatTopic getTopic() { return topic; }
+
+    public void setTopic(ChatTopic topic) { this.topic = topic; }
 }
 

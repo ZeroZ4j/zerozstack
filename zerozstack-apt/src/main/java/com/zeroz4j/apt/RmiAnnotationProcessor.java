@@ -1125,7 +1125,11 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 writer.write("            obj -> " + model + "_Rules.validate((" + model + ") obj));\n");
             }
             for (String model : clientWritableModels) {
-                writer.write("        BinaryRegistry.registerLive(\"" + model + "\", " + model + "_Live::new);\n");
+                // Both names, because the browser holds the subclass and the wire carries
+                // the model: the writer needs the pair to put the model's own name on a
+                // client edit.
+                writer.write("        BinaryRegistry.registerLive(\"" + model + "\", \""
+                        + model + "_Live\", " + model + "_Live::new);\n");
             }
             for (String enumType : enumTypes) {
                 writer.write("        BinaryRegistry.registerEnum(\"" + enumType + "\", " + enumType + "::valueOf);\n");

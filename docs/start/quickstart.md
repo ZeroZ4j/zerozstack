@@ -120,7 +120,7 @@ differences between the three propagation examples are the point.
 | `inventory-crud` | Master-detail CRUD with derived KPIs |
 | `chat-events` | Server events — deliberately without signals |
 | `job-monitor` | A shared signal driven from a server-side virtual thread |
-| `chat-livesync` | LiveSync — a synced object driving an `Effect` directly |
+| `chat-livesync` | LiveSync both ways — a synced object driving an `Effect`, plus a topic box anybody can type into |
 | `components-showcase` | The component library gallery |
 | `routing-tour` | `@Route` views, nested layouts, typed parameters, loaders |
 | `scoped-signals` | One signal value per tenant, user or browser |

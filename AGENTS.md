@@ -487,6 +487,15 @@ server keeps a record per browser — 10,000 objects, dropped after 24 hours idl
 model nested inside a `@ClientWritable` model needs its own `@ClientWritable`, and one refusal
 refuses the whole change.
 
+**An edit that does not reach the server is reported, never dropped (0.8.0+).** Whether the server
+refused it or the browser could not send it, the screen is put back to the server's state and the
+reason goes to `LiveMutationRefusals.onRefused(model, reason)`; with no listener it is written to
+the console as a sentence. Nothing is thrown — the setter call finished long before the answer
+arrived. Do not generate retry or rollback plumbing for this. The generated registrar records both
+the model name and its `<Model>_Live` subclass name, and the writer puts the model name on the wire;
+that pairing is what makes the up direction work at all, so do not simplify `registerLive` back to
+one name.
+
 **Unexpected server exceptions reach the client as `The server could not complete this request.
 Reference: <code>` (0.7.0+),** with the real message in the log under that code. To send a sentence
 the caller should read, throw `com.zeroz4j.server.ClientVisibleException`.
@@ -510,7 +519,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 |---|---|
 | `todo-signals` | Local signals, `Computed`, `Effect` in isolation |
 | `chat-events` | `EventTopic` / `EventPublisher` / `ServerEvents`, deliberately without signals |
-| `chat-livesync` | `@LiveSync` down-direction driving an `Effect` directly |
+| `chat-livesync` | `@LiveSync` both ways: the message list comes down into an `Effect`, and the topic box is `@ClientWritable` and goes up |
 | `job-monitor` | `Signals.shared` driven from a server-side virtual thread |
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |

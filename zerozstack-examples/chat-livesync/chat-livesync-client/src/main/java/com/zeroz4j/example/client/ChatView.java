@@ -20,9 +20,11 @@ package com.zeroz4j.example.client;
 import com.zeroz4j.example.api.ChatService;
 import com.zeroz4j.example.api.ChatService_Stub;
 import com.zeroz4j.example.model.ChatMessage;
+import com.zeroz4j.example.model.ChatTopic;
 import com.zeroz4j.example.model.LiveChatState;
 import com.zeroz4j.ui.component.*;
 import com.zeroz4j.ui.layout.*;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.signals.ValueSignal;
 import com.zeroz4j.signals.Effect;
 
@@ -36,11 +38,14 @@ public class ChatView extends Card {
     private final ValueSignal<List<ChatMessage>> messagesSignal = new ValueSignal<>(new ArrayList<>());
     private final ValueSignal<String> errorMessageSignal = new ValueSignal<>("");
     private LiveChatState liveState;
+    private ChatTopic liveTopic;
 
     /** Every Effect created by this view, released together in {@link #dispose()}. */
     private final List<com.zeroz4j.api.Disposable> disposables = new ArrayList<>();
 
     private final Div messageListContainer;
+    private final TextField topicField;
+    private final Span topicDisplay;
 
     public ChatView() {
         super();
@@ -51,6 +56,21 @@ public class ChatView extends Card {
         addClassName("flex-col");
 
         add(new CardTitle("LiveSync Chat"));
+
+        // The up direction. Typing here calls a setter on this browser's own copy of the topic,
+        // and that is the whole write path - the framework carries it to the server, which checks
+        // it, applies it and tells every other browser. Nothing here calls a service.
+        topicField = new TextField().withLabel("Topic");
+        topicField.setId("topic-input");
+        topicField.setHelperText("Anyone can change this. Every other window follows along.");
+        topicField.addClassName("mb-2");
+        add(topicField);
+
+        topicDisplay = new Span("");
+        TextStyle.SECONDARY.applyTo(topicDisplay);
+        topicDisplay.setId("topic-display");
+        topicDisplay.addClassName("mb-4");
+        add(topicDisplay);
 
         messageListContainer = new Div();
         messageListContainer.addClassName("flex-1");
@@ -149,6 +169,25 @@ public class ChatView extends Card {
             // subscribes to it, so an inbound sync re-runs this automatically. No polling.
             disposables.add(Effect.create(() ->
                     messagesSignal.set(new ArrayList<>(liveState.getMessages()))));
+
+            // The same object travels both ways. Reading its getter inside an Effect follows the
+            // server's changes down; the listener below sends this window's edits up.
+            liveTopic = chatService.getTopic();
+            disposables.add(Effect.create(() -> {
+                String current = liveTopic.getText() == null ? "" : liveTopic.getText();
+                topicDisplay.setText("Topic: " + (current.isEmpty() ? "(none yet)" : current));
+                // Only when it really differs, so somebody else's change does not fight with what
+                // this person is in the middle of typing.
+                if (!current.equals(topicField.getValue())) {
+                    topicField.setValue(current);
+                }
+            }));
+            topicField.addValueChangeListener(event -> {
+                String typed = event.getValue() == null ? "" : event.getValue();
+                if (!typed.equals(liveTopic.getText())) {
+                    liveTopic.setText(typed);   // the entire client write path
+                }
+            });
 
         } catch (Exception ex) {
             System.err.println("[zeroz4j] Chat error: " + ex.getMessage());

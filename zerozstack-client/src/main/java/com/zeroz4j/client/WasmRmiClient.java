@@ -23,6 +23,7 @@ import com.zeroz4j.api.GrowableBuffer;
 import org.teavm.interop.Async;
 import org.teavm.interop.AsyncCallback;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -245,6 +246,41 @@ public class WasmRmiClient {
     }
 
     /**
+     * Asks the server to re-send one object's current state, so a screen showing a change the
+     * server never received is put back to the truth.
+     *
+     * <p>Used when a live edit could not be put on the wire at all. The answer is an ordinary
+     * update frame applied in place, which is exactly what the server sends by itself when it
+     * refuses an edit — one story for "your change did not happen", not two.</p>
+     *
+     * @param liveObject the object whose optimistic change has to be undone
+     * @return true when the request went out; false when the object has no handle to ask by, or the
+     *         connection is not open
+     */
+    static boolean requestResyncOf(Object liveObject) {
+        String handle = MAPPER.getId(liveObject);
+        if (handle == null || networkChannel == null || !networkChannel.isOpen()) {
+            return false;
+        }
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0); // fire-and-forget
+            BinarySerializer.writeString(buffer, SyncFrameTypes.RESYNC_SERVICE);
+            BinarySerializer.writeString(buffer, "sync");
+            buffer.putInt(1);
+            List<String> one = new ArrayList<>();
+            one.add(handle);
+            BinarySerializer.writeValue(buffer, one, MAPPER);
+            networkChannel.sendRawBytes(buffer.toByteArray());
+            return true;
+        } catch (Exception e) {
+            System.err.println("[zeroz4j] Could not ask the server to restore " + handle
+                    + " after a change that failed to send: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Native TeaVM {@code @Async} stub method interceptor. Calling this method from Java code
      * cooperatively suspends the TeaVM WebAssembly coroutine until the backend returns a binary response.
      *
@@ -407,6 +443,13 @@ public class WasmRmiClient {
                 // Sync notification from server (formerly SNAPSHOT)
                 // We just deserialize it, which will update the mapper instance inline!
                 BinarySerializer.readValue(buffer, MAPPER);
+            } else if (frameType == SyncFrameTypes.REJECT) {
+                // The server refused a live edit. The corrective state has already arrived on its
+                // own frame, so the screen is right; this frame is the sentence saying why, and it
+                // is the only thing that stops an edit springing back with no explanation.
+                String refusedModel = BinarySerializer.readString(buffer);
+                String reason = BinarySerializer.readString(buffer);
+                com.zeroz4j.api.LiveMutationRefusals.report(refusedModel, reason);
             } else if (frameType == SyncFrameTypes.PONG) {
                 // The keepalive's answer. Nothing to do: arriving at all was the point, and
                 // noteActivity() above has already recorded it. Handled explicitly rather than

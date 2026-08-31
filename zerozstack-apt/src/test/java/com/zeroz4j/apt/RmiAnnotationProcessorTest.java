@@ -351,7 +351,9 @@ public class RmiAnnotationProcessorTest {
 
         String registrarContent = Files.readString(
                 findRegistrar(outDir));
-        assertTrue(registrarContent.contains("registerLive(\"com.test.Profile\", com.test.Profile_Live::new)"),
-                "Registrar must register the live supplier");
+        assertTrue(registrarContent.contains("registerLive(\"com.test.Profile\", "
+                        + "\"com.test.Profile_Live\", com.test.Profile_Live::new)"),
+                "The registrar names the live subclass as well as the model: without the pair "
+                        + "a client edit cannot be written under a name the server can read");
     }
 }

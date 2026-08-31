@@ -47,26 +47,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Nothing tested this before. The server-side tests stand in for the browser with plain model
  * instances, which is the one case that cannot go wrong.</p>
  *
- * <h2>Why this test does not run yet</h2>
+ * <h2>What went wrong here, and what fixed it</h2>
  *
- * <p>It fails, and it failed before the change it was written alongside. The write path finds a
- * model's serializer by its runtime class name, and the runtime class here is
- * {@code Profile_Live}, which the registry has no serializer for — only {@code Profile} does. So
- * the write throws {@code Unsupported type for GrowableBuffer: live.up.Profile_Live}, the client
- * catches it, prints one line and drops the edit. <b>The whole up direction of LiveSync therefore
- * does nothing at all</b>, silently, for every application: the person types, the screen updates
- * optimistically, and nothing ever reaches the server.</p>
+ * <p>This failed for the whole of the unreleased version. The write path looked a model's
+ * serializer up by its runtime class name, and the runtime class in the browser is
+ * {@code Profile_Live}, which the registry has no serializer for — only {@code Profile} does. The
+ * write threw {@code Unsupported type for GrowableBuffer: live.up.Profile_Live}, the client caught
+ * it, printed one line and dropped the edit, so <b>the whole up direction of LiveSync did nothing
+ * at all</b>, silently, for every application.</p>
  *
- * <p>Fixing it is a separate change from the one this test arrived with, and it touches the code
- * generator: the generated registrar has to say which live subclass belongs to which model, so the
- * writer can put the model's own name on the wire — the receiving side has no serializer for a
- * subclass name and could not build one. When that lands, delete the {@code @Disabled} below; this
- * is the test that says it worked.</p>
+ * <p>The fix is in the code generator: the generated registrar now names the live subclass as well
+ * as the model, and the writer puts the model's own name on the wire. The receiving side has no
+ * serializer for a subclass name and could not build one.</p>
  */
-@Disabled("The up direction of LiveSync is broken independently of this test: the write path has no "
-        + "serializer for the generated _Live subclass, so every client edit is dropped. Fixing it "
-        + "needs a code-generator change and is not part of the handle-lifetime work this test "
-        + "arrived with.")
 class LiveUpDirectionWireTest {
 
     private static final String PROFILE = "live.up.Profile";

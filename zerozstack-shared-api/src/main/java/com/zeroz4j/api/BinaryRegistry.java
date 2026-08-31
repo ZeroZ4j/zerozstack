@@ -50,6 +50,16 @@ public class BinaryRegistry {
     private static final Map<String, Supplier<Object>> liveSuppliers = new ConcurrentHashMap<>();
 
     /**
+     * The model each generated {@code <Model>_Live} subclass stands for, keyed by the subclass name.
+     *
+     * <p>The browser never holds the class the developer wrote. Deserialization builds the generated
+     * subclass, so the runtime class of everything on a screen is a name the developer never typed
+     * and the registry has no serializer for. Writing one back up therefore has to translate: the
+     * subclass adds behavior, not state, and the model is what both tiers agree on.</p>
+     */
+    private static final Map<String, String> liveModelNames = new ConcurrentHashMap<>();
+
+    /**
      * Class names whose instances are given a lasting handle when they go on the wire.
      *
      * <p>A handle exists so that a later message can name the same object again — a client edit
@@ -128,24 +138,49 @@ public class BinaryRegistry {
     }
 
     /**
-     * Registers the mutation-tracking supplier for a {@code @ClientWritable} model.
-     * Called by generated registrars; only used when {@link #setPreferLiveInstances(boolean)}
-     * has enabled live instantiation (the Wasm client tier).
+     * Registers the mutation-tracking subclass of a {@code @LiveSync} model, under both names it is
+     * known by. Called by generated registrars.
      *
-     * @param className the canonical FQCN of the model class
-     * @param supplier  supplier for the generated {@code <Model>_Live} subclass
+     * <p>The supplier is used only when {@link #setPreferLiveInstances(boolean)} has enabled live
+     * instantiation, which is the browser tier. The name pair is used on both tiers, because the
+     * browser writes those instances back and {@link #wireNameOf(String)} is what turns the runtime
+     * class back into the model both tiers share.</p>
+     *
+     * @param className     the canonical FQCN of the model class
+     * @param liveClassName the canonical FQCN of the generated {@code <Model>_Live} subclass
+     * @param supplier      supplier for that subclass
      */
-    public static void registerLive(String className, Supplier<?> supplier) {
+    public static void registerLive(String className, String liveClassName, Supplier<?> supplier) {
         liveSuppliers.put(className, (Supplier<Object>) (Supplier<?>) supplier);
+        liveModelNames.put(liveClassName, className);
         registerHandleBearing(className);
+    }
+
+    /**
+     * The name a value goes on the wire under.
+     *
+     * @param runtimeClassName the runtime class name of a value about to be written
+     * @return the model it stands for when it is a generated live subclass, otherwise the name
+     *         unchanged
+     *
+     * <p><b>Under the hood:</b> one map lookup. A generated {@code <Model>_Live} subclass has no
+     * serializer of its own and never will — it adds tracked getters and setters and not one field —
+     * so a client edit travelling back up is written as the model, which is the only name the
+     * receiving side can build. Without this the write threw
+     * {@code Unsupported type for GrowableBuffer}, the client swallowed it, and the whole up
+     * direction of LiveSync did nothing at all.</p>
+     */
+    public static String wireNameOf(String runtimeClassName) {
+        String model = liveModelNames.get(runtimeClassName);
+        return model != null ? model : runtimeClassName;
     }
 
     /**
      * Marks a class whose instances need a lasting handle on the wire.
      *
-     * <p>Called for you by {@link #registerLive(String, Supplier)}, which the generated registrar
-     * invokes for every {@code @LiveSync} model. It is public so a hand-written test that registers
-     * models itself can say the same thing.</p>
+     * <p>Called for you by {@link #registerLive(String, String, Supplier)}, which the generated
+     * registrar invokes for every {@code @LiveSync} model. It is public so a hand-written test that
+     * registers models itself can say the same thing.</p>
      *
      * @param className the canonical FQCN of the model class
      */

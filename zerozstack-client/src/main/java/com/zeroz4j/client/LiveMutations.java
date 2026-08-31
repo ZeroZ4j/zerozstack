@@ -20,6 +20,7 @@ package com.zeroz4j.client;
 import com.zeroz4j.api.BinaryRegistry;
 import com.zeroz4j.api.BinarySerializer;
 import com.zeroz4j.api.GrowableBuffer;
+import com.zeroz4j.api.LiveMutationRefusals;
 import com.zeroz4j.api.LiveMutationTracker;
 import com.zeroz4j.api.SyncFrameTypes;
 
@@ -103,6 +104,18 @@ final class LiveMutations {
         flush();
     }
 
+    /**
+     * Puts one object's current state on the wire, or — if that cannot be done — puts the screen
+     * back to the truth and says so.
+     *
+     * <p>A failure here means the person has typed something the server will never have. Dropping it
+     * with a console line is what let the whole up direction of LiveSync stay broken for a version,
+     * so it is handled the way a server refusal is: the object is asked for again, which overwrites
+     * the optimistic change in place, and the reason goes to
+     * {@link LiveMutationRefusals} for the application to show.</p>
+     *
+     * @param liveObject the edited live instance
+     */
     private static void sendMutation(Object liveObject) {
         if (WasmRmiClient.networkChannel == null) {
             return;
@@ -116,8 +129,13 @@ final class LiveMutations {
             BinarySerializer.writeValue(buffer, liveObject, WasmRmiClient.MAPPER);
             WasmRmiClient.networkChannel.sendRawBytes(buffer.toByteArray());
         } catch (Exception e) {
-            System.err.println("[zeroz4j] Failed to send live mutation for "
-                    + liveObject.getClass().getName() + ": " + e.getMessage());
+            String model = BinaryRegistry.wireNameOf(liveObject.getClass().getName());
+            boolean reverted = WasmRmiClient.requestResyncOf(liveObject);
+            LiveMutationRefusals.report(model, "This change could not be sent to the server ("
+                    + e.getMessage() + ")."
+                    + (reverted
+                        ? " The value shown is being put back to what the server has."
+                        : " The screen still shows it, and the server does not have it."));
         }
     }
 }

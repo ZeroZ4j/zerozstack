@@ -149,8 +149,13 @@ LiveSync handles real-time object graph synchronization and reactive signals.
   * Mutation accepted.
   * Payload: `[8 bytes]` New Version
 * **0x15 — REJECT** (Server -> Client)
-  * Mutation rejected (e.g., version conflict).
-  * Payload: `[8 bytes]` Current Version + `[Type Tag + Value]` Current Object + `[String]` Reason
+  * A live mutation was refused, and why.
+  * Payload: `[String]` Model class name + `[String]` Reason
+  * There is no version and no object here. The corrected state travels ahead of this frame as an
+    ordinary `0x10` update aimed at the writer's session, so by the time the reason arrives the
+    screen is already right. This frame exists so the refusal is a sentence somebody can read rather
+    than a value that springs back with no explanation. The client hands it to
+    `LiveMutationRefusals` (0.8.0+); before that it was received and discarded as an unknown frame.
 * **0x16 — SIGNAL_SUB** (Client -> Server)
   * Reserved. The current subscribe mechanism rides an RMI-shaped frame to the internal
     service `zeroz4j.signals` (method `subscribe`, one String argument: the signal name);

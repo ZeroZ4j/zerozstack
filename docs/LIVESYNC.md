@@ -27,7 +27,32 @@ Deserialization on the client instantiates an APT-generated `<Model>_Live` subcl
 2. the session holds a declared write role, if any (`@ClientWritable("editor")`);
 3. the proposed state passes the model's [validation annotations](VALIDATION.md), checked against a throwaway copy so a rejected mutation never touches server state.
 
-Accepted mutations are applied in place, announced to `LiveMutationListener` beans, and re-broadcast to all sessions. Rejected mutations answer the writer with a corrective sync that reverts its optimistic local change.
+Accepted mutations are applied in place, announced to `LiveMutationListener` beans, and re-broadcast to all sessions. Rejected mutations answer the writer with a corrective sync that reverts its optimistic local change, and with the reason.
+
+### When an edit does not land (0.8.0+)
+
+The change is put on the screen before it is sent, so a person can be looking at a value the server
+never received. Two things can go wrong, and both arrive in the same place:
+
+* **The server refused it** — not `@ClientWritable`, a missing role, or a value that fails the
+  model's validation. The server sends the current state back first, so the screen is corrected, and
+  the reason after it.
+* **The browser could not send it** — the change could not be put on the wire at all. The client
+  asks the server to re-send that object, which corrects the screen, and reports the failure.
+
+Either way the application is told:
+
+```java
+LiveMutationRefusals.onRefused((model, reason) -> toast.show("Not saved: " + reason));
+```
+
+Nothing is thrown: by the time the answer arrives, the setter call is long finished. **With no
+listener registered, every refusal is still written to the browser console as a sentence saying the
+change was not saved.** It is never silent — before 0.8.0 a failure to send *was* silent, which is
+how the whole up direction stayed broken for a version with nobody noticing.
+
+An edit made while the connection is **down** is a different thing and is not a refusal: it is kept
+and sent when the connection comes back. See [Reconnection](#reconnection).
 
 ### Every object the change touches is checked, not just the outer one
 
@@ -122,6 +147,10 @@ The server keeps a lock only while somebody holds it or is waiting for it, so fi
 
 ## Rules and limits (stated plainly)
 
+* **Every setter call is its own message.** A change is sent as soon as a setter is called, so
+  typing into a field bound straight to a live object sends one whole-object message per character.
+  Correct, and not cheap. For a field somebody types into continuously, write to the live object when
+  the field loses focus rather than on every keystroke.
 * **Setters are the tracking boundary.** Mutations must go through setters. In-place collection edits (`obj.getTags().add(...)`) are invisible — reassign via the setter or call `LiveMutationTracker.touch(obj)` afterward. Tracked collections are planned.
 * **Whole-object, last-write-wins.** Mutations replace the object's state; two unlocked concurrent editors race and the later write wins. Serialize editors with `LiveMutex` (see the collab-editor example pattern) where that matters. Field-level merging and version-conflict rejection (`MUTATE`/`ACK`/`REJECT` versions) are reserved in the protocol but not yet implemented.
 * **Re-rendering is automatic.** A `@LiveSync` object is a reactive dependency: read one of its getters inside an `Effect` or `Computed` and an inbound sync re-runs it. Notification is per object, not per field.

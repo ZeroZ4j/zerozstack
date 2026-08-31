@@ -311,10 +311,8 @@ public class BinarySerializer {
             // Only the handle goes on the wire — resolving is the receiver's decision.
             buffer.put(TAG_LAZY);
             writeString(buffer, BinaryRegistry.getLazyAdapter().handleFor(val, mapper));
-        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null
-                || BinaryRegistry.getRecordDelegate(val.getClass().getName()) != null
-                || val instanceof BinaryPackable) {
-            String className = val.getClass().getName();
+        } else if (isModelValue(val)) {
+            String className = BinaryRegistry.wireNameOf(val.getClass().getName());
             @SuppressWarnings("unchecked")
             BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
             BinaryRecordDelegate<Object> recordDelegate = BinaryRegistry.getRecordDelegate(className);
@@ -493,6 +491,26 @@ public class BinarySerializer {
     }
 
     /**
+     * Whether a value about to be written is a model rather than a built-in wire type.
+     *
+     * @param val the value
+     * @return true when the registry has a serializer for what it is, or it packs itself
+     *
+     * <p><b>Under the hood:</b> the lookup is by the value's <i>wire</i> name, not its runtime class
+     * name. In the browser every live object is an instance of the generated {@code <Model>_Live}
+     * subclass, which has no serializer of its own; {@link BinaryRegistry#wireNameOf(String)} maps it
+     * back to the model, which has.</p>
+     */
+    private static boolean isModelValue(Object val) {
+        if (val instanceof BinaryPackable) {
+            return true;
+        }
+        String className = BinaryRegistry.wireNameOf(val.getClass().getName());
+        return BinaryRegistry.getDelegate(className) != null
+                || BinaryRegistry.getRecordDelegate(className) != null;
+    }
+
+    /**
      * Whether a value about to be written needs a name that outlives its message.
      *
      * @param val       the value
@@ -500,9 +518,10 @@ public class BinarySerializer {
      * @return true for a {@code @LiveSync} model on either tier
      *
      * <p><b>Under the hood:</b> the generated registrar marks every {@code @LiveSync} model, which
-     * is what {@link BinaryRegistry#bearsHandle(String)} answers from. In the browser the runtime
-     * class is the generated {@code <Model>_Live} subclass, whose name is not marked, so
-     * {@link LiveObservable} answers for it instead.</p>
+     * is what {@link BinaryRegistry#bearsHandle(String)} answers from, and {@code className} is
+     * already the model's own name even for a browser instance of a generated
+     * {@code <Model>_Live} subclass. {@link LiveObservable} answers as well, so a hand-written live
+     * class in a test is recognized without being registered.</p>
      */
     private static boolean bearsHandle(Object val, String className) {
         return val instanceof LiveObservable || BinaryRegistry.bearsHandle(className);
@@ -1154,10 +1173,8 @@ public class BinarySerializer {
             // Only the handle goes on the wire — resolving is the receiver's decision.
             buffer.put(TAG_LAZY);
             writeString(buffer, BinaryRegistry.getLazyAdapter().handleFor(val, mapper));
-        } else if (BinaryRegistry.getDelegate(val.getClass().getName()) != null
-                || BinaryRegistry.getRecordDelegate(val.getClass().getName()) != null
-                || val instanceof BinaryPackable) {
-            String className = val.getClass().getName();
+        } else if (isModelValue(val)) {
+            String className = BinaryRegistry.wireNameOf(val.getClass().getName());
             @SuppressWarnings("unchecked")
             BinarySerializerDelegate<Object> delegate = BinaryRegistry.getDelegate(className);
             BinaryRecordDelegate<Object> recordDelegate = BinaryRegistry.getRecordDelegate(className);

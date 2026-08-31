@@ -289,6 +289,25 @@ belongs to that server rather than to the whole Java process, so two servers can
 
 ### Added
 
+- **An application can be told when a change did not reach the server.**
+  `LiveMutationRefusals.onRefused(...)` calls you back with the model and a sentence saying why,
+  whenever an edit to a live object does not land — because the server refused it, or because the
+  browser could not send it at all. With nothing listening, every refusal is written to the browser
+  console as a full sentence. It is never silent.
+
+    ```java
+    LiveMutationRefusals.onRefused((model, reason) -> toast.show("Not saved: " + reason));
+    ```
+
+    The server already sent a reason back with every refusal, and the browser was throwing it away
+    as an unrecognized message. It is now read, and the local failures were given the same route so
+    that "your change did not happen" is one story rather than two.
+
+- **The chat example now shows two-way editing.** `chat-livesync` grew a topic box: type in it and
+  every other window follows, with no service call and no save button. It is the only example of
+  the up direction of LiveSync, and its absence is part of why that direction stayed broken for a
+  whole version — nothing anybody ran exercised it.
+
 - **A form field can be given a caption.** Until now the only text a field could carry was the
   placeholder — the gray words inside the box — because `new TextField("Primary folder path")` sets
   a placeholder and there was nothing else to set. So every form written on this library named its
@@ -828,6 +847,36 @@ belongs to that server rather than to the whole Java process, so two servers can
     light one and a tinted panel without anybody choosing per surface.
 
 ### Fixed
+
+- **Two-way live editing did not work at all, and said nothing.** A person edited a field bound to
+  a `@ClientWritable` object. Their own screen updated, because the change is shown before it is
+  sent. Nothing reached the server, ever, in any application. The only trace was one line in the
+  browser console.
+
+    The browser does not hold the class you wrote — it holds a generated subclass of it, which
+    reports edits and re-draws the screen. The code that puts an object on the wire looked up how to
+    write it by the name of the class in front of it, and that generated name was registered
+    nowhere. So the write threw, the client caught the error, printed the line and dropped the
+    change.
+
+    The generated registration now records both names, so the writer puts the name **you** wrote on
+    the wire, which is the only one the server can read. Nothing to change in your application: an
+    edit that has been going nowhere since this version began now arrives. `LiveUpDirectionWireTest`
+    is the test that says so, and a browser proof types into a real field in one window and watches
+    a second window receive it.
+
+    **If you worked around this by adding a service method to save an edit**, that method still
+    works and there is no need to remove it. Delete it only when you want the shorter form back.
+
+- **A change that could not be sent was thrown away in silence.** This is what let the fault above
+  survive a whole release: when the write failed, the client printed one console line, kept the
+  change on the screen, and told nobody. A person was left looking at a value the server had never
+  heard of, and no code anywhere could find out.
+
+    A change that cannot be sent now does two things. The client asks the server to re-send that
+    object, which puts the screen back to what is actually stored. And the failure is reported to
+    `LiveMutationRefusals` — see Added — so the application can say so. With no listener registered
+    it is written to the console as a sentence saying the change was not saved.
 
 - **The "connection lost" bar was invisible behind an open dialog.** The bar that appears when the
   connection to the server drops carried the largest stacking number a browser accepts — and still

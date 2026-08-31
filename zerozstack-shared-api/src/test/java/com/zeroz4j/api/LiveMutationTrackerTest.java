@@ -78,7 +78,7 @@ public class LiveMutationTrackerTest {
                     @Override public void write(Object obj, GrowableBuffer buffer, ObjectMapper mapper) {}
                     @Override public void read(Object obj, java.nio.ByteBuffer buffer, ObjectMapper mapper) {}
                 });
-        BinaryRegistry.registerLive("live.test.Model", ArrayList::new);
+        BinaryRegistry.registerLive("live.test.Model", "live.test.Model_Live", ArrayList::new);
 
         assertTrue(BinaryRegistry.create("live.test.Model") instanceof Object);
         assertTrue(!(BinaryRegistry.create("live.test.Model") instanceof ArrayList),
