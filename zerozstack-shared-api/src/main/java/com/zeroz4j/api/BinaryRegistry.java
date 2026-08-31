@@ -48,6 +48,20 @@ public class BinaryRegistry {
     private static final Map<String, Function<String, Enum<?>>> enumResolvers = new ConcurrentHashMap<>();
     /** Instrumented (mutation-tracking) suppliers for @ClientWritable models. */
     private static final Map<String, Supplier<Object>> liveSuppliers = new ConcurrentHashMap<>();
+
+    /**
+     * Class names whose instances are given a lasting handle when they go on the wire.
+     *
+     * <p>A handle exists so that a later message can name the same object again — a client edit
+     * coming back up, a re-sync after a reconnect, a lock request. That is exactly what a
+     * {@code @LiveSync} model is for, so the generated registrar marks those and nothing else.
+     * Everything else on the wire is a value: it is written with a name that means nothing outside
+     * the one message it traveled in, and the registry never hears about it.</p>
+     */
+    // Collections.newSetFromMap rather than ConcurrentHashMap.newKeySet(): TeaVM does not
+    // emulate newKeySet, and this class is compiled for the browser too.
+    private static final Set<String> handleBearing =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private static volatile boolean preferLiveInstances = false;
 
     /**
@@ -123,6 +137,33 @@ public class BinaryRegistry {
      */
     public static void registerLive(String className, Supplier<?> supplier) {
         liveSuppliers.put(className, (Supplier<Object>) (Supplier<?>) supplier);
+        registerHandleBearing(className);
+    }
+
+    /**
+     * Marks a class whose instances need a lasting handle on the wire.
+     *
+     * <p>Called for you by {@link #registerLive(String, Supplier)}, which the generated registrar
+     * invokes for every {@code @LiveSync} model. It is public so a hand-written test that registers
+     * models itself can say the same thing.</p>
+     *
+     * @param className the canonical FQCN of the model class
+     */
+    public static void registerHandleBearing(String className) {
+        handleBearing.add(className);
+    }
+
+    /**
+     * @param className the runtime class name of a value about to be written
+     * @return true when instances of it are given a lasting handle rather than a name good for one
+     *         message
+     *
+     * <p><b>Under the hood:</b> a set membership test. On the browser tier the runtime class of a
+     * live instance is the generated {@code <Model>_Live} subclass, which is not in this set; the
+     * writer recognizes those by {@link LiveObservable} instead.</p>
+     */
+    public static boolean bearsHandle(String className) {
+        return handleBearing.contains(className);
     }
 
     /**

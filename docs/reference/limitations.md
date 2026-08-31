@@ -74,10 +74,31 @@ What automatic recovery deliberately does **not** cover:
 - **Rejections carry a reason.** The writer receives a corrective sync followed by a `0x15 REJECT`
   frame naming the model and the reason, and every rejection cause is logged server-side.
 - **Mutations do not coalesce** in the current build — one frame per setter call. See the table above.
-- **Handles are never evicted.** The `ObjectMapper` is application-scoped with no per-session
-  partitioning and no eviction, so handles accumulate for the process lifetime.
+- **A handle lasts exactly as long as the object.** Since 0.8.0 the handle registry holds what it
+  names weakly, on both tiers, so an entry disappears once the application has let go of the object.
+  There is no ceiling and no expiry, and none is needed. The consequence to know: a live object the
+  server no longer holds cannot be re-synced, and answers a re-sync the same way a restarted server
+  does — nothing comes back, the count is logged, the client re-fetches. Keep live objects in your
+  store or a field. Before 0.8.0 nothing was ever removed and handles accumulated for the process
+  lifetime, which filled a real application's heap.
+- **Only a `@LiveSync` model and the objects inside one get a handle.** Everything else on the wire
+  is a value with a name good for its own message only. So an ordinary value returned from a service
+  method cannot be synced, mutated, locked or re-read by handle — and a client that sends one back up
+  as a call argument now hands over a copy, where before 0.8.0 it reached into the server's own
+  instance and overwrote it.
+- **A re-sync request carries at most 10,000 handles.** A client holding more throws its list away,
+  logs one line, and lets the application re-fetch. The number matches the server's own per-browser
+  record, which holds no more than that either.
 - Only `@ClientWritable` classes accept client writes, and only objects the server has already synced
   can be mutated.
+- **The up direction does not work at all right now, and fails silently.** The browser holds the
+  generated `<Model>_Live` subclass, and the write path looks a model's serializer up by its runtime
+  class name — for which only `<Model>` is registered, never `<Model>_Live`. So sending an edit
+  throws `Unsupported type for GrowableBuffer: <Model>_Live`, the client catches it, writes one line
+  to the console and drops the edit. The person typing sees the screen update, because the local
+  change is optimistic, and nothing ever reaches the server. Found 2026-08-31; the failing test is
+  `LiveUpDirectionWireTest` in `zerozstack-apt`, disabled with the diagnosis on it. Until it is
+  fixed, treat `@ClientWritable` as not implemented and use an `@RmiService` method to save an edit.
 
 ## Server events
 
@@ -455,7 +476,9 @@ cannot. That is a floor, not a guarantee of a usable screen.
 - **Signals** — `Signals.scoped(name, initialValue, Scope.TENANT)` holds one value per tenant.
   `Signals.shared(...)` is a single global value by definition and crosses every boundary.
 - **Not isolated:** the `ObjectMapper` handle namespace is shared across tenants, and scoped signals
-  keep every target's value in memory for the process lifetime with no eviction.
+  keep every target's value in memory for the process lifetime with no eviction. The handle namespace
+  being shared is not a leak — a handle is a random 36-character identifier and being sent an object
+  is what earns the right to ask for it back — but it is one namespace, not one per tenant.
 
 Nothing here is automatic: a tenant-scoped push is a scope you pass. `GLOBAL` — which is also what
 you get by leaving the scope off — sends to every connected session, whichever tenant it belongs to.

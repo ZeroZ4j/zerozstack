@@ -197,13 +197,37 @@ public class WasmRmiClient {
     }
 
     /**
-     * Asks the server to re-send the current state of every object this client holds, by handle.
-     * Fire-and-forget: the answers are ordinary 0x10 update frames applied in place, so there is
-     * nothing to correlate. Objects the server no longer knows (it restarted) are logged there.
+     * Asks the server to re-send the current state of every object this client still holds, by
+     * handle. Fire-and-forget: the answers are ordinary 0x10 update frames applied in place, so
+     * there is nothing to correlate. Objects the server no longer knows (it restarted, or the
+     * application there has let go of them) are logged there.
+     *
+     * <p>"Still holds" is literal. The handle registry keeps its objects weakly, so a handle is on
+     * this list only while something on the screen — or something the application is holding for
+     * the screen — still refers to the object. Nothing that has been scrolled away, replaced or
+     * navigated off is asked for.</p>
+     *
+     * <p>If the list is nevertheless longer than {@link SyncFrameTypes#MAX_RESYNC_HANDLES}, it is
+     * thrown away rather than sent, and one line is logged saying so. That is the escape from a
+     * connection that can never succeed: an over-sized message is refused by the server, which
+     * closes the connection, and the client would otherwise reconnect and send the identical
+     * message forever. Throwing the list away costs the objects their handles — the application
+     * re-fetches them exactly as it does after a server restart — and the next connection works.</p>
      */
     private static void sendResyncRequest() {
         List<String> handles = MAPPER.ids();
         if (handles.isEmpty()) {
+            return;
+        }
+        if (handles.size() > SyncFrameTypes.MAX_RESYNC_HANDLES) {
+            System.out.println("[zeroz4j] Not asking the server to restore " + handles.size()
+                    + " objects: that is more than the " + SyncFrameTypes.MAX_RESYNC_HANDLES
+                    + " a request may carry, and a request that large is refused by the server, "
+                    + "which would leave this tab reconnecting forever. The list has been cleared "
+                    + "and the objects on screen will be fetched again the way they were first "
+                    + "obtained. If you see this line, a screen is holding on to objects it no "
+                    + "longer shows.");
+            MAPPER.clear();
             return;
         }
         try {

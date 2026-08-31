@@ -61,6 +61,7 @@ public class NestedWritePermissionTest {
         private Secret secret;
         private AdminNote note;
         private Member member;
+        private Budget budget;
         public Team() { }
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
@@ -70,7 +71,16 @@ public class NestedWritePermissionTest {
         public void setNote(AdminNote note) { this.note = note; }
         public Member getMember() { return member; }
         public void setMember(Member member) { this.member = member; }
+        public Budget getBudget() { return budget; }
+        public void setBudget(Budget budget) { this.budget = budget; }
     }
+
+    /**
+     * A value rather than an object that is edited. A record has no setters and never changes, so
+     * replacing one is the same kind of act as replacing a number, and it is never asked to be
+     * writable.
+     */
+    public record Budget(String amount) { }
 
     /** Not writable by clients at all. */
     public static class Secret {
@@ -103,6 +113,12 @@ public class NestedWritePermissionTest {
 
     @BeforeAll
     public static void registerModels() {
+        // What the generated registrar marks: a model that is edited in place, so its handle has to
+        // mean the same thing in a later message. Secret is deliberately not marked - it is an
+        // ordinary model, and it gets a handle only because it hangs inside one that is marked.
+        BinaryRegistry.registerHandleBearing(Team.class.getName());
+        BinaryRegistry.registerHandleBearing(AdminNote.class.getName());
+        BinaryRegistry.registerHandleBearing(Member.class.getName());
         BinaryRegistry.register(Team.class.getName(), Team::new,
                 new BinarySerializerDelegate<Team>() {
                     @Override public void write(Team obj, GrowableBuffer buffer, ObjectMapper mapper) {
@@ -110,12 +126,23 @@ public class NestedWritePermissionTest {
                         BinarySerializer.writeValue(buffer, obj.getSecret(), mapper);
                         BinarySerializer.writeValue(buffer, obj.getNote(), mapper);
                         BinarySerializer.writeValue(buffer, obj.getMember(), mapper);
+                        BinarySerializer.writeValue(buffer, obj.getBudget(), mapper);
                     }
                     @Override public void read(Team obj, ByteBuffer buffer, ObjectMapper mapper) {
                         obj.setName(BinarySerializer.readString(buffer));
                         obj.setSecret((Secret) BinarySerializer.readValue(buffer, mapper));
                         obj.setNote((AdminNote) BinarySerializer.readValue(buffer, mapper));
                         obj.setMember((Member) BinarySerializer.readValue(buffer, mapper));
+                        obj.setBudget((Budget) BinarySerializer.readValue(buffer, mapper));
+                    }
+                });
+        BinaryRegistry.registerRecord(Budget.class.getName(),
+                new com.zeroz4j.api.BinaryRecordDelegate<Budget>() {
+                    @Override public void write(Budget obj, GrowableBuffer buffer, ObjectMapper mapper) {
+                        BinarySerializer.writeString(buffer, obj.amount());
+                    }
+                    @Override public Budget read(ByteBuffer buffer, ObjectMapper mapper) {
+                        return new Budget(BinarySerializer.readString(buffer));
                     }
                 });
         BinaryRegistry.register(Secret.class.getName(), Secret::new,
@@ -325,6 +352,58 @@ public class NestedWritePermissionTest {
     }
 
     @Test
+    @DisplayName("a nested object nobody may write is refused even when it carries no known handle")
+    public void aFreshNestedNonWritableObjectIsRefused() {
+        Team canonicalTeam = new Team();
+        canonicalTeam.setName("Platform");
+        Secret canonicalSecret = new Secret("original");
+        canonicalTeam.setSecret(canonicalSecret);
+
+        String teamId = engine.mapper.register(canonicalTeam);
+        connect(Set.of());
+
+        Team forged = new Team();
+        forged.setName("Platform");
+        forged.setSecret(new Secret("stolen"));
+
+        // The forged secret does not carry the canonical secret's handle: it is a brand-new object
+        // the client made up. Before 0.8.0 that walked straight through, because the check could
+        // only speak about objects the registry already held. Nothing was overwritten, but the
+        // client's own copy was hung off the team and broadcast to everybody, which is the same
+        // outcome by a different route.
+        engine.handleLiveMutation(craft(forged, teamId, null, null), writer);
+
+        assertEquals("original", canonicalTeam.getSecret().getText(),
+                "the restricted part of the team must be exactly as it was");
+        assertEquals(0, bystander.basic.sentBuffers().size(), "nothing broadcast");
+        assertEquals(2, writer.basic.sentBuffers().size(), "the writer is snapped back and told why");
+        assertTrue(rejectionReason(writer, 1).contains("Secret"),
+                "the reason must name what was refused: " + rejectionReason(writer, 1));
+    }
+
+    @Test
+    @DisplayName("a record inside a writable object is a value, and travels freely")
+    public void aNestedRecordIsNotAskedToBeWritable() {
+        Team canonicalTeam = new Team();
+        canonicalTeam.setName("Platform");
+        canonicalTeam.setBudget(new Budget("100"));
+
+        String teamId = engine.mapper.register(canonicalTeam);
+        connect(Set.of());
+
+        Team edit = new Team();
+        edit.setName("Platform");
+        edit.setBudget(new Budget("250"));
+
+        engine.handleLiveMutation(craft(edit, teamId, null, null), writer);
+
+        assertEquals("250", canonicalTeam.getBudget().amount(),
+                "a record is replaced like any other value: it has no setters and never changes, "
+                        + "so there is nothing to mark writable");
+        assertEquals(1, bystander.basic.sentBuffers().size(), "and the change is broadcast");
+    }
+
+    @Test
     @DisplayName("naming a writable class over a restricted object's handle is refused")
     public void aMismatchedClassNameIsRefused() {
         Secret canonicalSecret = new Secret("original");
@@ -364,6 +443,7 @@ public class NestedWritePermissionTest {
         BinarySerializer.writeString(buffer, "Platform");
         buffer.put(BinarySerializer.TAG_REF);
         BinarySerializer.writeString(buffer, secretId);
+        buffer.put(BinarySerializer.TAG_NULL);
         buffer.put(BinarySerializer.TAG_NULL);
         buffer.put(BinarySerializer.TAG_NULL);
 

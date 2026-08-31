@@ -63,6 +63,9 @@ public class HandleDisclosureTest {
 
     @BeforeAll
     public static void registerModel() {
+        // Doc stands in for a @LiveSync model: it is synced and re-read by handle. The generated
+        // registrar marks those, and only those get a handle that outlives the message.
+        BinaryRegistry.registerHandleBearing(Doc.class.getName());
         BinaryRegistry.register(Doc.class.getName(), Doc::new,
                 new BinarySerializerDelegate<Doc>() {
                     @Override public void write(Doc obj, GrowableBuffer buffer, ObjectMapper mapper) {

@@ -73,6 +73,11 @@ public class ServerLiveMutationTest {
 
     @BeforeAll
     public static void registerModels() {
+        // All three are edited in place from a client, so all three are @LiveSync in a real
+        // application and the generated registrar marks them.
+        BinaryRegistry.registerHandleBearing(Profile.class.getName());
+        BinaryRegistry.registerHandleBearing(AdminDoc.class.getName());
+        BinaryRegistry.registerHandleBearing(PlainDoc.class.getName());
         BinaryRegistry.register(Profile.class.getName(), Profile::new,
                 new BinarySerializerDelegate<Profile>() {
                     @Override public void write(Profile obj, GrowableBuffer buffer, ObjectMapper mapper) {

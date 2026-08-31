@@ -62,6 +62,30 @@ import jakarta.websocket.WebSocketContainer;
 @EnableWeld
 public class WasmRmiServerEngineTest {
 
+    /**
+     * What a connection actually received, for an assertion about how many frames it received.
+     *
+     * <p>"expected: 2 but was: 1" says nothing about <i>which</i> frame is missing, and the two
+     * candidates - the AUTH frame the connection opens with, and the answer to the call - fail for
+     * entirely different reasons. This prints each frame's correlation id and opcode, and whether
+     * the connection still has a writer at all.</p>
+     *
+     * @param s the connection
+     * @return one line naming every frame it has received
+     */
+    static String diag(FakeSession s) {
+        StringBuilder sb = new StringBuilder("frames=");
+        for (ByteBuffer frame : s.basic.sentBuffers()) {
+            ByteBuffer reading = frame.duplicate();
+            reading.position(0);
+            sb.append("[id=").append(reading.getInt()).append(" op=")
+              .append(reading.remaining() > 0 ? Integer.toHexString(reading.get() & 0xFF) : "-")
+              .append(']');
+        }
+        return sb.append(" hasWriter=").append(WsWrites.hasWriter(s)).toString();
+    }
+
+
     @RmiService
     public interface MyTestService {
         String sayHello(String name);
@@ -349,7 +373,7 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size(), diag(fakeSession));
         
         ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(100, response.getInt());
@@ -374,7 +398,7 @@ public class WasmRmiServerEngineTest {
         
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size(), diag(fakeSession));
         
         ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(101, response.getInt());
@@ -404,7 +428,7 @@ public class WasmRmiServerEngineTest {
 
         assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size(), diag(fakeSession));
 
         ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
         assertEquals(102, response.getInt());
@@ -585,7 +609,7 @@ public class WasmRmiServerEngineTest {
 
         // Frame 0 is the auth frame from onOpen; the resync answer is the only other one:
         // one frame for the known handle, none for the unknown.
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.sentBuffers().size(), diag(fakeSession));
         ByteBuffer frame = fakeSession.basic.sentBuffers().get(1);
         assertEquals(0, frame.getInt());
         assertEquals(com.zeroz4j.api.SyncFrameTypes.SUBSCRIBE, frame.get());

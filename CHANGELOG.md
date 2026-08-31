@@ -243,6 +243,50 @@ belongs to that server rather than to the whole Java process, so two servers can
   nothing needs changing; the new ones are how one server applies a limit the process as a whole does
   not have.
 
+- **Only a live object, and what is inside one, now has a lasting name on the wire.** Every object
+  that crossed the wire used to be entered in a registry of names and left there for the life of the
+  process. It now happens for a `@LiveSync` model and for the objects reachable inside one, and for
+  nothing else — those are exactly the things a later message has to be able to point at again: an
+  edit coming back from the browser, a re-sync after a dropped connection, a lock. Everything else
+  travels as a value, with a short name that means nothing once its message has been read.
+
+    Three things change that an application can notice.
+
+    **An object a browser sends back as a call argument is now a copy.** Before, if a service handed
+    an object to the browser and the browser passed it back into another call, the server did not
+    build a new object from what arrived — it found its own object by name and wrote the incoming
+    values straight into it. So a browser could rewrite data in the server's own graph simply by
+    sending it back, with nothing checked. **If a call is meant to change server state, change it in
+    the method**, from the values the caller sent. That is what the method is for, and it is where
+    the check belongs.
+
+    **A `LiveMutex` can be taken only on a live object.** Locking asks for an object by name, and an
+    ordinary value no longer has one. This was never a usable feature for anything else: an object
+    with no way to be synced or edited has nothing to serialize editors against.
+
+    **A test that registers its own models by hand must say which of them are live.** The generated
+    registrar does this for you in a real application. In a test that calls
+    `BinaryRegistry.register(...)` itself, add
+    `BinaryRegistry.registerHandleBearing(MyModel.class.getName())` for each model that stands in for
+    a `@LiveSync` one.
+
+- **The server keeps an object's name only while the application still holds the object.** Both the
+  server's and the browser's registry of names now hold what they name weakly, so an entry
+  disappears once the application itself has let go. Nothing changes for an object kept in a store, a
+  root object or a field, which is where a live object already lives in any real application. An
+  object that was built for one call and then dropped can no longer be restored after a reconnect:
+  the client is told nothing was found — exactly as it is told after a server restart — the count is
+  written to the server log, and the application fetches it again the way it first did.
+
+- **A change a browser proposes is now checked against every model it contains, named or not.** The
+  rule has not moved: a client may edit exactly the models marked `@ClientWritable`, wherever they
+  appear. What has moved is that it is now enforced on a model the browser invented on the spot, and
+  not only on one it pointed at by name. So a browser can no longer slip an unmarked model into a
+  marked one by sending a fresh copy of it instead of naming the server's. **If a change starts being
+  refused where it used to go through**, the message names the type: either mark that type
+  `@ClientWritable`, or stop sending it up. A `record` is exempt — it has no setters, never changes,
+  and travels as a value.
+
 ### Added
 
 - **A form field can be given a caption.** Until now the only text a field could carry was the
@@ -1063,6 +1107,40 @@ belongs to that server rather than to the whole Java process, so two servers can
   from `META-INF/resources`, and each example's server module already supplies one there. The dead
   copies had drifted — they still carried the old light-gray body the served page stopped using —
   so anyone reading them was reading the wrong file. They are gone.
+
+- **An application ran out of memory because nothing was ever forgotten.** Every object that had ever
+  been sent to a browser was kept, on the server and in the browser both, and there was no code
+  anywhere that removed one. A screen that refreshes itself builds new objects every time it draws,
+  so the pile grew for as long as the program ran. Measured on a case built to match the report — two
+  hundred rows redrawn five thousand times — the old code held two million objects and 365 MB, and
+  could not finish at all in the half-gigabyte of memory the real application had. The same run now
+  holds nothing and finishes comfortably. Two separate changes were needed and both are in: only the
+  objects that need a lasting name get one, and a name no longer keeps its object alive.
+
+- **A browser tab in that state could never connect again.** After a dropped connection the browser
+  asks the server to send back the current state of everything it holds, and it asked for everything
+  it had ever seen — a list of two million names in one 84 MB message. A message that size is refused
+  (the limit is 4 MB), which closes the connection, which makes the browser reconnect and send the
+  identical message. The list never got shorter, so the tab was finished: no amount of waiting fixed
+  it, and only the person reloading the page did. Three things end that loop. The list is now only
+  what the screen still holds. It is capped at ten thousand names, and a browser over the cap throws
+  the list away rather than sending it, writing one line to the console that says so and says why.
+  And a browser that has thrown its list away simply fetches its objects again, the same as after a
+  server restart.
+
+- **A browser could overwrite the server's own data by handing an object back.** An object a service
+  returned came back with the server's name for it attached. Passing that object into another call
+  made the server find its own object by that name and write the browser's values into it — before
+  the method ran, with nothing checked, and with no way for the application to know. Ordinary values
+  no longer carry a name that survives their message, so what arrives is a new object built from what
+  was sent, and the server's own data is untouched.
+
+- **A model a browser invented could be smuggled into one it was allowed to edit.** A change reaching
+  a model that is not `@ClientWritable` was refused, but only when the browser pointed at the
+  server's own copy by name. Sending a fresh copy of the same restricted model instead went straight
+  through: nothing was overwritten, but the browser's version was attached to the object it was
+  editing and then broadcast to everybody, which is the same outcome by another route. Every model in
+  a proposed change is now checked, named or not.
 
 ### Documentation
 

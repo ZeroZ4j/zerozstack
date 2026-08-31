@@ -241,6 +241,53 @@ Two consequences worth knowing before relying on either:
 - A model reached through a `List`, `Set`, `Map` or a field declared as a model type all behave
   the same way. There is no longer a path that writes a model in place without recording it.
 
+### Two kinds of name (0.8.0+)
+
+An id on the wire is one of two things, and which one it is decides how long it means anything.
+
+| | What it is | How long it means something |
+|---|---|---|
+| **A handle** | a random 36-character identifier, kept in the server's and the browser's handle registry | until the object it names is no longer used |
+| **A message name** | a short id beginning with `~`, counted from zero inside each top-level value | only inside the message it arrived in |
+
+A handle is given to a **`@LiveSync` model, and to every object reachable inside one**. Nothing else
+gets one. That is not an optimization: those are exactly the objects a later message needs to be able
+to name again — a client edit coming back up, a re-sync after a reconnect, a lock request — and the
+whole graph inside a live object is included because a client edit arrives as one whole graph and is
+applied part by part into the objects those parts name.
+
+Everything else — the return value of a call, the payload of an event, the value of a shared signal —
+is a **value**. It is written with a message name, it is never entered in a registry, and the
+receiving side builds a fresh instance for it. Shared references and loops inside one top-level value
+still arrive intact, because that is all the message name was ever needed for.
+
+Two consequences worth knowing:
+
+- **Sending the same ordinary object twice sends two objects.** It was already true across two
+  top-level values; it is now true across two messages as well. Compare by id or `equals`, never by
+  `==`.
+- **An ordinary object a client sends back up is a copy.** Before 0.8.0, passing a previously
+  received object back as a call argument silently reached into the server's own instance and
+  overwrote it. The server now builds a fresh instance from what the client sent, and its own data is
+  left alone. A change a client should be able to make to server state goes through a service method
+  or through `@LiveSync`, both of which check it first.
+
+### Neither side keeps an object alive (0.8.0+)
+
+The handle registry holds what it names **weakly**, on both tiers. An entry disappears once the
+application itself has let go of the object; no timer, no eviction policy, no ceiling. Before 0.8.0
+both registries held every object for ever, so a screen that redraws itself every few seconds built
+an unbounded pile on the server and in the browser — the failure this rule exists to prevent.
+
+What follows from it:
+
+- **The server answers a re-sync only for objects it still holds.** If the application there has
+  dropped its last reference to a live object, its handle is gone and the answer is the same as
+  after a server restart: no frame, one counted log line, and the client re-fetches. Keep live
+  objects in your store or a field, which is where they already live in any real application.
+- **A browser asks for exactly what its screen still holds.** Anything scrolled away, replaced or
+  navigated off is not asked for.
+
 ## Nested models are written by reference, not in place
 
 Before 0.8.0, a field whose declared type was a model class was written straight into the buffer
@@ -391,11 +438,19 @@ itself in this order, all as fire-and-forget frames:
 3. A re-subscribe for every shared signal the client declared — `zeroz4j.signals`, method
    `subscribe`; each is answered with a `0x17` update carrying the current retained value.
 4. One re-sync request — internal service **`zeroz4j.resync`**, method `sync`, one argument: the
-   `List` of every object handle this client holds. The server answers with one `0x10` frame per
-   handle it still knows, carrying that object's current state, applied in place on the client
+   `List` of every object handle this client still holds. The server answers with one `0x10` frame
+   per handle it still knows, carrying that object's current state, applied in place on the client
    exactly like any LiveSync update. Re-serializing also re-registers the objects' lazy-field
    handles for the new session. Handles the server does not know — it restarted since they were
-   fetched — produce no frame and one server-side log line naming the count.
+   fetched, or the application there has let go of the object — produce no frame and one server-side
+   log line naming the count.
+
+   **The list is capped at 10,000 handles.** A client that somehow holds more throws its list away
+   rather than sending it, logs one line saying so, and lets the application re-fetch. The cap is an
+   escape hatch, not a budget: a request larger than the 4 MB a connection accepts is refused, the
+   connection is closed, and the client reconnects and sends the identical request — for ever. A tab
+   in that state could never connect again. The server's own record of what it sent a browser holds
+   at most 10,000 objects anyway, so a longer list could not have been answered.
 
 A handle presented to `zeroz4j.resync` is answered only when the server's own record says that
 browser was sent the object. **A handle names an object; it does not stand for permission to have

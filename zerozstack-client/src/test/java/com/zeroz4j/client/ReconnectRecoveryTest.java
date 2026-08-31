@@ -185,8 +185,13 @@ public class ReconnectRecoveryTest {
 
     @Test
     public void reconnectRequestsResyncForEveryHeldObject() throws Exception {
-        WasmRmiClient.MAPPER.registerWithId("handle-1", new Object());
-        WasmRmiClient.MAPPER.registerWithId("handle-2", new Object());
+        // Held in a local list on purpose: the registry keeps its objects weakly, so an object
+        // nothing else refers to is allowed to disappear before the request is built.
+        List<Object> held = new ArrayList<>();
+        held.add(new Object());
+        held.add(new Object());
+        WasmRmiClient.MAPPER.registerWithId("handle-1", held.get(0));
+        WasmRmiClient.MAPPER.registerWithId("handle-2", held.get(1));
 
         drop();
         restore();
@@ -198,6 +203,41 @@ public class ReconnectRecoveryTest {
         @SuppressWarnings("unchecked")
         List<Object> handles = (List<Object>) frames.get(0).args().get(0);
         assertTrue(handles.contains("handle-1") && handles.contains("handle-2"));
+    }
+
+    @Test
+    public void aTabThatHasAccumulatedTooManyObjectsHealsItselfInsteadOfLoopingForever() throws Exception {
+        // A tab poisoned the way the real one was: more objects than a single request may carry.
+        // Sending them produces a message the server refuses, which closes the connection, which
+        // makes the client reconnect and send the identical message - for ever.
+        List<Object> held = new ArrayList<>();
+        for (int i = 0; i <= SyncFrameTypes.MAX_RESYNC_HANDLES; i++) {
+            Object object = new Object();
+            held.add(object);
+            WasmRmiClient.MAPPER.registerWithId("handle-" + i, object);
+        }
+
+        drop();
+        restore();
+
+        assertTrue(channel.sent.isEmpty(),
+                "the over-sized request must not be sent: it is the thing that kills the connection");
+        assertEquals(0, WasmRmiClient.MAPPER.size(),
+                "and the list is thrown away, so the next attempt is not the same attempt again");
+
+        // The loop is broken: the very next reconnect behaves like any other.
+        Object fresh = new Object();
+        held.add(fresh);
+        WasmRmiClient.MAPPER.registerWithId("fresh-handle", fresh);
+        drop();
+        restore();
+
+        List<Frame> frames = decodeAll();
+        assertEquals(1, frames.size(), "one ordinary re-sync request");
+        assertEquals(SyncFrameTypes.RESYNC_SERVICE, frames.get(0).iface());
+        @SuppressWarnings("unchecked")
+        List<Object> handles = (List<Object>) frames.get(0).args().get(0);
+        assertEquals(List.of("fresh-handle"), handles);
     }
 
     @Test

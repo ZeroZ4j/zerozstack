@@ -1027,10 +1027,15 @@ public class WasmRmiServerEngine implements EventPublisher {
      * and a per-connection record would be empty exactly when re-sync needs it.
      *
      * <p>A handle the caller was never sent, and a handle this server no longer knows at all, are
-     * treated identically: no frame, no error, and a counted log line. The second case means the
-     * server restarted since the client fetched the object (the registry is in memory). Either way
-     * the client's copy stays as it is and the application re-fetches it the way it first obtained
-     * it.
+     * treated identically: no frame, no error, and a counted log line. The second case has two
+     * causes since 0.8.0 — the server restarted since the client fetched the object, or the
+     * application here has let go of it and the registry, which holds its objects weakly, has let
+     * go too. Either way the client's copy stays as it is and the application re-fetches it the way
+     * it first obtained it.
+     *
+     * <p>At most {@link SyncFrameTypes#MAX_RESYNC_HANDLES} handles are examined. A client caps its
+     * own list at the same number; this is the ceiling applied to whatever actually arrives, so one
+     * connection cannot make the server write an unbounded number of frames.
      *
      * @param handles the handle list from the client
      * @param session the reconnected session
@@ -1040,9 +1045,21 @@ public class WasmRmiServerEngine implements EventPublisher {
         int sent = 0;
         int unknown = 0;
         int undisclosed = 0;
+        int examined = 0;
         for (Object handleObj : handles) {
             if (!(handleObj instanceof String)) {
                 continue;
+            }
+            if (++examined > SyncFrameTypes.MAX_RESYNC_HANDLES) {
+                // The client caps its own list; this is the same ceiling applied to whatever
+                // actually arrives, so no one connection can make the server write an unbounded
+                // number of frames. The record of what this browser was sent holds no more than
+                // this many objects anyway, so nothing answerable is being skipped.
+                LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": the request "
+                    + "named " + handles.size() + " handles, more than the "
+                    + SyncFrameTypes.MAX_RESYNC_HANDLES + " a request may carry. The rest were "
+                    + "ignored; the client re-fetches those objects the way it first obtained them.");
+                break;
             }
             if (!runtime.disclosures().wasDisclosedToSession(session, (String) handleObj)) {
                 undisclosed++;
@@ -1075,9 +1092,10 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
         if (unknown > 0) {
             LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent
-                + " object(s) re-sent, " + unknown + " handle(s) unknown -- the server restarted "
-                + "since the client fetched them; those objects stay stale until the application "
-                + "re-fetches them.");
+                + " object(s) re-sent, " + unknown + " handle(s) unknown -- either this server "
+                + "restarted since the client fetched them, or the application here no longer "
+                + "holds those objects (the registry keeps them weakly). Those objects stay stale "
+                + "until the application re-fetches them.");
         } else if (undisclosed == 0 && sent > 0) {
             LOG.info("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent + " object(s) re-sent.");
         }
@@ -1093,6 +1111,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         String refusal = null;
         ObjectMapper tempMapper = new ObjectMapper();
         ObjectMapper.setResolutionGuard(guard);
+        ObjectMapper.setModelGuard(guard);
         try {
             proposed = BinarySerializer.readValue(buffer, tempMapper);
         } catch (LiveMutationGuard.Denied denied) {
@@ -1107,6 +1126,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         } finally {
             // Cleared before anything else runs: answering the refusal reads the registry itself.
             ObjectMapper.setResolutionGuard(null);
+            ObjectMapper.setModelGuard(null);
         }
         if (refusal != null) {
             rejectNestedWrite(session, guard.rootHandleId(), refusal);
@@ -1158,6 +1178,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             // The guard stays on for the applying pass too. It cannot refuse anything the first pass
             // already accepted; it is here so no future path can apply an unchecked decode.
             ObjectMapper.setResolutionGuard(guard);
+            ObjectMapper.setModelGuard(guard);
             try {
                 applied = BinarySerializer.readValue(buffer, mapper); // in-place apply
             } catch (LiveMutationGuard.Denied denied) {
@@ -1165,6 +1186,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                 refusal = denied.reason();
             } finally {
                 ObjectMapper.setResolutionGuard(null);
+                ObjectMapper.setModelGuard(null);
             }
             if (refusal != null) {
                 rejectNestedWrite(session, guard.rootHandleId(), refusal);

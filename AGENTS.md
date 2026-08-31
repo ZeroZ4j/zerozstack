@@ -366,6 +366,15 @@ out), shared signals re-subscribed, live objects re-synced in place, offline sig
 `LiveMutex` (`setLostListener`), and re-fetching live objects after a full **server restart**, which
 empties the handle registry that re-sync restores from.
 
+**Only a `@LiveSync` model and the objects inside one carry a handle (0.8.0+),** and the registry
+holds them weakly on both tiers. Everything else on the wire is a value with a name good for its own
+message: it cannot be synced, locked or re-read, and a client sending one back as a call argument
+hands over a copy rather than reaching into the server's instance. Keep live objects in your store or
+a field — an object the server has dropped answers a re-sync the way a restarted server does. A
+re-sync request carries at most 10,000 handles; a client over that throws its list away and re-fetches
+rather than sending a message the connection would refuse. A test that registers models by hand calls
+`BinaryRegistry.registerHandleBearing(fqcn)` for the ones standing in for `@LiveSync` models.
+
 ## Running the examples
 
 All eleven examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the

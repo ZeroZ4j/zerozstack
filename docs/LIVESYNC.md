@@ -129,6 +129,9 @@ The server keeps a lock only while somebody holds it or is waiting for it, so fi
 * **Every object a change reaches is checked, not just the outermost one.** A model nested inside a `@ClientWritable` model needs its own `@ClientWritable` before a client can edit it, and one refusal refuses the whole change.
 * **Being sent an object is what earns the right to read it back.** The server remembers what it sent to which browser, and answers a re-read only from that record.
 * **Being sent an object is also what earns the right to lock it.** Same record, same rule. A lock request for an object this browser was never sent is refused immediately.
+* **Only a `@LiveSync` model and the objects inside one have a name.** Everything else on the wire is a value: it cannot be synced, mutated, locked or re-read, because there is nothing to name it by. This is what stops a screen that redraws itself from filling memory with objects nobody will ever ask for again.
+* **A name lasts as long as the object does, and no longer.** Neither tier keeps an object alive just because it once put it on the wire.
+* **Every model a client change reaches must be `@ClientWritable`, whether or not it came with a name.** A model the client invented on the spot is checked exactly like one it named, so an unmarked model cannot be smuggled into a marked one. A `record` is exempt: it has no setters and never changes, so it travels as a value.
 
 ## Reconnection
 
@@ -148,6 +151,34 @@ accepting edits. And if the **server itself restarted**, its handle registry is 
 cannot restore the objects — the application re-fetches them the way it first obtained them (the
 server log names how many handles were unknown).
 
+### The server keeps a name only while it still holds the object (0.8.0+)
+
+The handle registry no longer keeps objects alive. A live object's name lasts exactly as long as the
+application's own reference to it, on both sides.
+
+* **On the server**, an object your code has dropped is collected, and its name goes with it. A
+  re-sync naming it gets the same answer as after a restart: nothing comes back, the count is logged,
+  and the client re-fetches. This is not a new thing to do — keep live objects in your store, a root
+  object or a field, which is where they already are in any real application. An object built for one
+  call and never kept was never re-syncable in any meaningful sense.
+* **In the browser**, an object nothing on the screen refers to any more is collected too, and it is
+  not asked for after a reconnect. Before 0.8.0 the browser asked for everything it had ever been
+  sent, which is what made a long-lived tab unable to reconnect at all.
+
+Nothing an application can see changes while it holds its objects normally. What changes is the
+answer to "what happens to the ones it dropped": they used to stay for ever, and now they go.
+
+### A tab that has collected too much heals itself (0.8.0+)
+
+A re-sync request carries at most 10,000 handles. Past that the browser throws the list away instead
+of sending it and writes one line to the console saying that it did and why. Everything on the screen
+is re-fetched by the application the way it first obtained it, and the connection works again.
+
+This exists because the alternative is a tab that can never connect. An over-sized request is refused
+by the server, which closes the connection; the client reconnects and sends the identical request;
+the list never gets shorter. If that line ever appears, a screen is holding references to objects it
+stopped showing long ago — the log line is the place to start looking.
+
 ### What re-sync will and will not send back
 
 Every object travels with a name — a **handle** — and the client asks for objects back by naming them.
@@ -162,6 +193,10 @@ Three things follow, and only the third is likely to surprise anyone:
 
 The record is bounded: at most 10,000 objects per browser, and a browser's whole record is dropped after 24 hours of inactivity (`zeroz.disclosure.maxHandlesPerClient` and `zeroz.disclosure.idleHours`).
 A dropped record behaves exactly like a server restart — the client is told nothing was found and re-fetches.
+
+Since 0.8.0 far less goes into that record, because far less carries a name at all: only a live object
+and the objects inside it. An ordinary value returned from a service method is not named, cannot be
+asked for again, and does not use up a slot.
 
 ## Choosing a propagation feature
 

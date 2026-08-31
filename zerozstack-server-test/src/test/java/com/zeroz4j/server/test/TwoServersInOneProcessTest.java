@@ -86,6 +86,10 @@ class TwoServersInOneProcessTest {
 
     @BeforeAll
     static void registerModel() {
+        // Doc stands in for a @LiveSync model: it is synced, re-read by name and locked. The
+        // generated registrar marks those, and only a marked model gets a name that outlives
+        // the message it travels in.
+        BinaryRegistry.registerHandleBearing(Doc.class.getName());
         BinaryRegistry.register(Doc.class.getName(), Doc::new,
                 new BinarySerializerDelegate<Doc>() {
                     @Override

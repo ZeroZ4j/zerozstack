@@ -17,8 +17,11 @@
  */
 package com.zeroz4j.api;
 
-import java.util.Collections;
-import java.util.IdentityHashMap;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,17 +32,89 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>AI Agent Execution Notes:</b></p>
  * <ul>
- *   <li><b>Reference Identity:</b> Uses an {@link IdentityHashMap} for {@code objectToId} lookup, matching instances by reference address ({@code ==}) rather than {@code equals()}.</li>
- *   <li><b>State Mutations:</b> Modifies bidirectional maps {@code idToObject} and {@code objectToId}. Thread safety is maintained via synchronized blocks on {@code objectToId} and {@link ConcurrentHashMap}.</li>
- *   <li><b>LiveSync Role:</b> Generates session-scoped reference handles for objects sent over RMI. Inbound LiveSync frames use these handles to locate and update instances in-place.</li>
- *   <li><b>Two server-side hooks:</b> {@link ResolutionGuard} can veto resolving a handle while a
- *       client-proposed change is being decoded, and {@link DisclosureRecorder} is told about every
- *       handle written toward a recipient. Both are optional and unused in the browser.</li>
+ *   <li><b>Reference Identity:</b> Objects are matched by reference address ({@code ==}), never by
+ *       {@code equals()}, so two equal-but-separate instances get two handles.</li>
+ *   <li><b>Held weakly:</b> the registry does not keep an object alive. Both directions hold
+ *       {@link WeakReference}s, and an entry disappears once the application itself has let go of
+ *       the object. Before 0.8.0 both maps held strong references and nothing ever removed an
+ *       entry, so every object that had ever been sent stayed in memory for the life of the
+ *       process.</li>
+ *   <li><b>State Mutations:</b> Modifies bidirectional maps {@code idToObject} and
+ *       {@code objectToId}. Thread safety is maintained via synchronized blocks on
+ *       {@code objectToId} and {@link ConcurrentHashMap}.</li>
+ *   <li><b>LiveSync Role:</b> Generates reference handles for the objects that need one. Inbound
+ *       LiveSync frames use these handles to locate and update instances in-place.</li>
+ *   <li><b>Three server-side hooks:</b> {@link ResolutionGuard} can veto resolving a handle while a
+ *       client-proposed change is being decoded, {@link ModelGuard} is shown every model the decode
+ *       builds or updates whether it has a handle or not, and {@link DisclosureRecorder} is told
+ *       about every handle written toward a recipient. All three are optional and unused in the
+ *       browser.</li>
  * </ul>
+ *
+ * <p><b>Not everything on the wire is registered.</b> A handle exists so a later frame can name the
+ * same object again: a {@code @LiveSync} model and everything inside one. An ordinary value returned
+ * from a call is written with a name that means nothing outside the message it traveled in, and
+ * never reaches this class. See {@code BinarySerializer} and docs/PROTOCOL.md.</p>
  */
 public class ObjectMapper {
-    private final Map<String, Object> idToObject = new ConcurrentHashMap<>();
-    private final Map<Object, String> objectToId = Collections.synchronizedMap(new IdentityHashMap<>());
+
+    /**
+     * A weak reference to a registered object that can also be used as an identity-keyed map key.
+     *
+     * <p>{@code WeakHashMap} is no use here: it matches keys with {@code equals}, and two equal
+     * models are two separate objects on the wire. So the key is the weak reference itself, hashed
+     * on {@link System#identityHashCode(Object)} and compared by {@code ==} on the referent. The
+     * handle travels with the key so that a reference cleared by the collector can be found and
+     * removed from both directions.</p>
+     */
+    private static final class Handle extends WeakReference<Object> {
+        final String id;
+        private final int hash;
+
+        Handle(Object referent, String id, ReferenceQueue<Object> queue) {
+            super(referent, queue);
+            this.id = id;
+            this.hash = System.identityHashCode(referent);
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof Handle)) {
+                return false;
+            }
+            Object mine = get();
+            return mine != null && mine == ((Handle) other).get();
+        }
+    }
+
+    private final ReferenceQueue<Object> collected = new ReferenceQueue<>();
+    private final Map<String, Handle> idToObject = new ConcurrentHashMap<>();
+    private final Map<Handle, String> objectToId = new HashMap<>();
+
+    /**
+     * Removes the entries whose object the collector has taken.
+     *
+     * <p>Called from every operation that adds, counts or lists, so the registry stays the size of
+     * what is actually still in use without a sweeper thread. In the browser this queue is fed by
+     * the JavaScript engine's own {@code FinalizationRegistry}.</p>
+     */
+    private void purge() {
+        Handle dead;
+        while ((dead = (Handle) collected.poll()) != null) {
+            synchronized (objectToId) {
+                objectToId.remove(dead);
+            }
+            idToObject.remove(dead.id, dead);
+        }
+    }
 
     /**
      * Vetoes the resolution of a handle while it is installed.
@@ -76,8 +151,31 @@ public class ObjectMapper {
         void handleDisclosed(String handleId);
     }
 
+    /**
+     * Shown every model a decode builds or updates, with or without a handle.
+     *
+     * <p>{@link ResolutionGuard} can only speak about objects the registry already holds, so it
+     * says nothing about a model the payload invents on the spot or about one whose name is only
+     * meaningful inside that one message. The server installs this alongside it while applying a
+     * client-proposed change, so the rule "a client may edit exactly the models you marked" is
+     * decided by what the model is, not by whether it happened to carry a handle.</p>
+     *
+     * <p>Server-side only. The browser never installs one.</p>
+     */
+    public interface ModelGuard {
+        /**
+         * @param model the instance the decoder has just built or is about to write fields into
+         * @param depth how deeply nested it is: 1 is the payload's outermost model
+         * @throws RuntimeException to abort the whole decode
+         */
+        void checkModel(Object model, int depth);
+    }
+
     /** Thread-confined: a guard belongs to the one decode it was installed for. */
     private static final ThreadLocal<ResolutionGuard> RESOLUTION_GUARD = new ThreadLocal<>();
+
+    /** Thread-confined, like {@link #RESOLUTION_GUARD} and installed with it. */
+    private static final ThreadLocal<ModelGuard> MODEL_GUARD = new ThreadLocal<>();
 
     /** Process-wide: installed once at startup, and read on every write. */
     private static volatile DisclosureRecorder disclosureRecorder;
@@ -106,6 +204,35 @@ public class ObjectMapper {
     }
 
     /**
+     * Installs or clears the guard shown every model decoded on this thread.
+     *
+     * <p>Always clear it in a {@code finally}, for the same reason as
+     * {@link #setResolutionGuard(ResolutionGuard)}.</p>
+     *
+     * @param guard the guard, or null to clear
+     */
+    public static void setModelGuard(ModelGuard guard) {
+        if (guard == null) {
+            MODEL_GUARD.remove();
+        } else {
+            MODEL_GUARD.set(guard);
+        }
+    }
+
+    /**
+     * Shows a decoded model to the guard installed on this thread, if there is one.
+     *
+     * @param model the instance the decoder has just built or resolved
+     * @param depth how deeply nested it is: 1 is the payload's outermost model
+     */
+    public static void checkDecodedModel(Object model, int depth) {
+        ModelGuard guard = MODEL_GUARD.get();
+        if (guard != null) {
+            guard.checkModel(model, depth);
+        }
+    }
+
+    /**
      * Installs the recorder told about every handle written.
      *
      * @param recorder the recorder, or null to stop recording
@@ -127,15 +254,17 @@ public class ObjectMapper {
      */
     public String register(Object obj) {
         if (obj == null) return null;
+        purge();
         String id;
         synchronized (objectToId) {
-            String existing = objectToId.get(obj);
+            String existing = objectToId.get(new Handle(obj, null, null));
             if (existing != null) {
                 id = existing;
             } else {
                 id = Ids.newId();
-                objectToId.put(obj, id);
-                idToObject.put(id, obj);
+                Handle handle = new Handle(obj, id, collected);
+                objectToId.put(handle, id);
+                idToObject.put(id, handle);
             }
         }
         // Outside the lock: the recorder keeps its own state and must not be able to deadlock a
@@ -157,7 +286,12 @@ public class ObjectMapper {
      * <p><b>Under the hood:</b> Looks up reference key in {@code objectToId} map.</p>
      */
     public String getId(Object obj) {
-        return objectToId.get(obj);
+        if (obj == null) {
+            return null;
+        }
+        synchronized (objectToId) {
+            return objectToId.get(new Handle(obj, null, null));
+        }
     }
 
     /**
@@ -174,7 +308,8 @@ public class ObjectMapper {
         if (guard != null) {
             guard.checkResolve(id);
         }
-        return idToObject.get(id);
+        Handle handle = idToObject.get(id);
+        return handle == null ? null : handle.get();
     }
 
     /**
@@ -188,8 +323,12 @@ public class ObjectMapper {
      */
     public void registerWithId(String id, Object obj) {
         if (id == null || obj == null) return;
-        idToObject.put(id, obj);
-        objectToId.put(obj, id);
+        purge();
+        synchronized (objectToId) {
+            Handle handle = new Handle(obj, id, collected);
+            idToObject.put(id, handle);
+            objectToId.put(handle, id);
+        }
     }
 
     /**
@@ -203,7 +342,7 @@ public class ObjectMapper {
     public void deregister(Object obj) {
         if (obj == null) return;
         synchronized (objectToId) {
-            String id = objectToId.remove(obj);
+            String id = objectToId.remove(new Handle(obj, null, null));
             if (id != null) {
                 idToObject.remove(id);
             }
@@ -230,19 +369,31 @@ public class ObjectMapper {
      * <p><b>Under the hood:</b> Returns {@code idToObject.size()}.</p>
      */
     public int size() {
+        purge();
         return idToObject.size();
     }
 
     /**
-     * A snapshot of every tracked handle ID.
+     * A snapshot of every handle whose object is still in use.
      *
-     * <p>This is what the client sends the server after a reconnect: the complete list of
-     * objects it holds, so the server can re-send their current state. A snapshot rather
-     * than a live view, because the caller serializes it while other code may register.</p>
+     * <p>This is what the client sends the server after a reconnect, so the server can re-send the
+     * current state of what that browser still holds. "Still in use" is not a guess: the registry
+     * holds objects weakly, so a handle is here only while something in the application other than
+     * this registry still refers to the object. Anything the screen has dropped has already gone.</p>
+     *
+     * <p>A snapshot rather than a live view, because the caller serializes it while other code may
+     * register.</p>
      *
      * @return the handle IDs at the moment of the call, in no particular order
      */
-    public java.util.List<String> ids() {
-        return new java.util.ArrayList<>(idToObject.keySet());
+    public List<String> ids() {
+        purge();
+        List<String> live = new ArrayList<>(idToObject.size());
+        for (Map.Entry<String, Handle> entry : idToObject.entrySet()) {
+            if (entry.getValue().get() != null) {
+                live.add(entry.getKey());
+            }
+        }
+        return live;
     }
 }
