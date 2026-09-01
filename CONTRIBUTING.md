@@ -43,8 +43,8 @@ The build runs test classes in whatever order it likes, and that order is not th
 machine. A test that passes only in one position is not a passing test; it is a test that will fail
 on somebody else's computer, and the suite it belongs to stops meaning anything until it does.
 
-Two ways to write one have already cost this project a red build for weeks at a time, and both look
-completely reasonable on the page.
+Three ways to write one have already cost this project a red build for weeks at a time, and all
+three look completely reasonable on the page.
 
 **Never wait for "a frame". Wait for a number of frames.** Every connection is sent an AUTH frame
 the moment it opens, and frames are put on the wire by a writer thread rather than by the thread
@@ -62,7 +62,15 @@ slow passes at the top of the suite and fails further down. Fix the code so the 
 depend on the clock — a boundary that is checked with "later than" usually wanted "at or later
 than" — rather than sleeping until the test agrees with you.
 
-If you have to check that a change did not reintroduce either, run the module three times over:
+**Never assert on something you have asked the runtime to forget.** The handle registry holds what
+it names weakly, so an object nothing else refers to can disappear at any moment. A test that
+registers five thousand of them and then counts five thousand is really asserting that no garbage
+collection happened in the two lines between, which depends entirely on what the rest of the run
+did for memory. Hold what the count is about, in a list, for as long as the count needs it, and let
+go afterwards where the test means to.
+
+If you have to check that a change did not reintroduce any of these, run the module three times
+over:
 
 ```bash
 mvn -pl <module> test -Dsurefire.runOrder=reversealphabetical

@@ -31,14 +31,15 @@ upgrading.
 
 ### Internal
 
-- **Two tests answered differently depending on where they landed in the run**, which is why
+- **Three tests answered differently depending on where they landed in the run**, which is why
   continuous integration had been red since the release before last while the same command passed
   on a developer's machine. One waited for "a frame" to come back from the server and was satisfied
   by the frame every connection is sent when it opens, so it read its result before the server had
-  produced one. The other only held while the very first cryptographic operation in a Java process
-  was still slow, so it passed at the top of a run and failed further down. Neither touched
-  anything an application can see. The rule that keeps both out is in
-  [CONTRIBUTING.md](CONTRIBUTING.md).
+  produced one. One only held while the very first cryptographic operation in a Java process was
+  still slow. And one counted five thousand objects it had asked the runtime to forget, so whether
+  it passed came down to whether the garbage collector ran in the two lines between. All three
+  passed at the top of a run and failed further down; none touched anything an application can see.
+  The rules that keep them out are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## [0.8.0] — 2026-09-01
 
