@@ -59,12 +59,12 @@ public final class Js {
      * in the composer.
      */
     @JSBody(params = {"element", "callback"}, script =
-        "element.addEventListener('paste', function(e){"
-        + " var items = e.clipboardData && e.clipboardData.items; if(!items) return;"
-        + " for (var i=0;i<items.length;i++){"
-        + "  if (items[i].type && items[i].type.indexOf('image')===0){"
-        + "   e.preventDefault();"
-        + "   var blob = items[i].getAsFile(); if(!blob) continue;"
+        "element.addEventListener('paste', function(paste){"
+        + " var items = paste.clipboardData && paste.clipboardData.items; if(!items) return;"
+        + " for (var idx=0;idx<items.length;idx++){"
+        + "  if (items[idx].type && items[idx].type.indexOf('image')===0){"
+        + "   paste.preventDefault();"
+        + "   var blob = items[idx].getAsFile(); if(!blob) continue;"
         + "   var reader = new FileReader();"
         + "   reader.onload = function(ev){ callback(ev.target.result); };"
         + "   reader.readAsDataURL(blob);"
@@ -94,9 +94,9 @@ public final class Js {
         + "var ta = document.createElement('textarea');"
         + "ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';"
         + "document.body.appendChild(ta); ta.select();"
-        + "try { document.execCommand('copy'); } catch (e) {}"
+        + "try { document.execCommand('copy'); } catch (ignored) {}"
         + "document.body.removeChild(ta);"
-        + "if (was && was.focus) { try { was.focus(); } catch (e) {} }")
+        + "if (was && was.focus) { try { was.focus(); } catch (ignored) {} }")
     public static native void copyToClipboard(String text);
 
     @JSBody(params = {"theme"}, script = "document.body.setAttribute('data-theme', theme);")
@@ -119,7 +119,7 @@ public final class Js {
         + "if (dialog.open && !dialog.isConnected) { dialog.removeAttribute('open'); }"
         + "if (!dialog.isConnected) { return false; }"
         + "if (dialog.open) { return true; }"
-        + "try { dialog.showModal(); } catch (e) { return false; }"
+        + "try { dialog.showModal(); } catch (ignored) { return false; }"
         + "return true;")
     public static native boolean dialogShowModal(HTMLElement dialog);
 
@@ -155,7 +155,7 @@ public final class Js {
      */
     @JSBody(params = {"element"}, script =
         "if (!element || !element.isConnected || typeof element.focus !== 'function') { return; }"
-        + "try { element.focus(); } catch (e) {}")
+        + "try { element.focus(); } catch (ignored) {}")
     public static native void focus(HTMLElement element);
 
     /**
@@ -183,16 +183,17 @@ public final class Js {
         + " var wanted = container.querySelector('[autofocus]');"
         + " if (!wanted) {"
         + "  var all = container.querySelectorAll(selector);"
-        + "  for (var i = 0; i < all.length; i++) {"
-        + "   var e = all[i];"
-        + "   if (e.offsetWidth > 0 || e.offsetHeight > 0 || e.getClientRects().length > 0) { wanted = e; break; }"
+        + "  for (var idx = 0; idx < all.length; idx++) {"
+        + "   var candidate = all[idx];"
+        + "   if (candidate.offsetWidth > 0 || candidate.offsetHeight > 0"
+        + "       || candidate.getClientRects().length > 0) { wanted = candidate; break; }"
         + "  }"
         + " }"
         + " if (!wanted) {"
         + "  if (!container.hasAttribute('tabindex')) { container.setAttribute('tabindex', '-1'); }"
         + "  wanted = container;"
         + " }"
-        + " try { wanted.focus(); } catch (e) {}"
+        + " try { wanted.focus(); } catch (ignored) {}"
         + " if (!container.contains(document.activeElement) && tries < 40) {"
         + "  requestAnimationFrame(attempt);"
         + " }"
@@ -203,7 +204,7 @@ public final class Js {
     /** Whether {@code element} matches a CSS selector — ":hover", ":focus-within" and so on. */
     @JSBody(params = {"element", "selector"}, script =
         "if (!element) { return false; }"
-        + "try { return element.matches(selector); } catch (e) { return false; }")
+        + "try { return element.matches(selector); } catch (ignored) { return false; }")
     public static native boolean matches(HTMLElement element, String selector);
 
     /**
@@ -212,8 +213,8 @@ public final class Js {
      * element to ask whether the click was inside something.
      */
     @JSBody(params = {"event"}, script =
-        "var t = event.target;"
-        + "return (t && t.nodeType === 1) ? t : null;")
+        "var target = event.target;"
+        + "return (target && target.nodeType === 1) ? target : null;")
     public static native HTMLElement eventTargetElement(org.teavm.jso.dom.events.Event event);
 
     /** Whether {@code element} is, or is inside, {@code container}. */
@@ -238,22 +239,23 @@ public final class Js {
         + "var selector = 'a[href], area[href], button:not([disabled]), input:not([disabled])"
         + ":not([type=hidden]), select:not([disabled]), textarea:not([disabled]),"
         + " iframe, object, embed, [contenteditable], [tabindex]:not([tabindex=\"-1\"])';"
-        + "container.__zzTrap = function (e) {"
-        + " if (e.key !== 'Tab') { return; }"
+        + "container.__zzTrap = function (keydown) {"
+        + " if (keydown.key !== 'Tab') { return; }"
         + " var all = container.querySelectorAll(selector);"
         + " var nodes = [];"
-        + " for (var i = 0; i < all.length; i++) {"
-        + "  var n = all[i];"
-        + "  if (n.offsetWidth > 0 || n.offsetHeight > 0 || n.getClientRects().length > 0) { nodes.push(n); }"
+        + " for (var idx = 0; idx < all.length; idx++) {"
+        + "  var node = all[idx];"
+        + "  if (node.offsetWidth > 0 || node.offsetHeight > 0"
+        + "      || node.getClientRects().length > 0) { nodes.push(node); }"
         + " }"
-        + " if (nodes.length === 0) { e.preventDefault(); return; }"
+        + " if (nodes.length === 0) { keydown.preventDefault(); return; }"
         + " var first = nodes[0];"
         + " var last = nodes[nodes.length - 1];"
         + " var here = document.activeElement;"
         + " var inside = container.contains(here);"
-        + " if (e.shiftKey) {"
-        + "  if (!inside || here === first) { e.preventDefault(); last.focus(); }"
-        + " } else if (!inside || here === last) { e.preventDefault(); first.focus(); }"
+        + " if (keydown.shiftKey) {"
+        + "  if (!inside || here === first) { keydown.preventDefault(); last.focus(); }"
+        + " } else if (!inside || here === last) { keydown.preventDefault(); first.focus(); }"
         + "};"
         + "container.addEventListener('keydown', container.__zzTrap, true);")
     public static native void trapFocusIn(HTMLElement container);

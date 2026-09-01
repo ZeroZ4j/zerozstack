@@ -13,6 +13,16 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    It generates a project from the archetype, builds it, starts it and drives it with a headless
    browser. The three blockers fixed in 0.4.1 all produced a project that compiled, started and
    served pages while not working; only an end-to-end run catches that class of defect.
+
+   Install the browser driver with `npm install` **in `zerozstack-archetype/smoke`**, which is where
+   the version is pinned and where both scripts look for it. Do not borrow an installation from
+   another project on the machine: everything a run leaves in that folder is ignored by git, so
+   there is no reason left to.
+
+   Run **both** scripts. `smoke-test.mjs` proves a generated project works; `drop-recovery-test.mjs`
+   proves it survives losing its server and getting it back, and since 0.8.0 also proves that the
+   bar it puts on the screen says the right sentence rather than a piece of browser jargon — which
+   is what every release before 0.8.0 shipped, unnoticed, because nothing had ever read it.
 3. Update [CHANGELOG.md](CHANGELOG.md). If several branches landed in this release, merge their
    entries into **one** set of sections first — a release entry is never one block per branch. The
    rules for what an entry has to do, and why, are in

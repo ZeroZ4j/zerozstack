@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [0.8.0] — unreleased
+## [0.8.0] — 2026-09-01
 
 Every control in the library can now be worked from a keyboard and says what it is; a build check
 fails if a new one cannot. Overlays behave like overlays — a dialog takes over the page, Escape
@@ -1292,12 +1292,46 @@ belongs to that server rather than to the whole Java process, so two servers can
   editing and then broadcast to everybody, which is the same outcome by another route. Every model in
   a proposed change is now checked, named or not.
 
+- **The red bar that appears when the connection drops said `[object HTMLDivElement]`.** Instead of
+  "Connection lost — reconnecting…", every person who lost their connection was shown a piece of
+  browser jargon. It had been that way since the bar was added, so 0.6.0 and 0.7.0 both shipped it.
+  It now says the sentence.
+
+    The cause is worth knowing if you write any browser code of your own. A handful of places in
+    the framework hand a small piece of JavaScript to the Java-to-browser compiler, which drops that
+    text into the finished file as it stands and renames only the values passed into it. When the
+    finished file is made smaller — which is what the compiler does unless it is told not to, and
+    therefore what every application built from the archetype does — those values are renamed to
+    single letters. The bar's script had called its own element `b`, and the message passed into it
+    was renamed to `b` as well, so the message quietly became the element and the browser printed
+    the element the way it prints any object.
+
+    Nothing threw, nothing was logged, and none of the eleven examples showed it, because their
+    builds are the ones told not to make the file smaller. A build check now reads every such piece
+    of JavaScript in the framework and fails the build if it names anything with a single letter.
+
+- **The progress figure during a file upload was never reported.** Same cause as the bar above, in
+  the code that posts the file: the value the browser calls back with as the upload proceeds had
+  been renamed to the same single letter as the name of the progress callback, so what ran on every
+  step was an attempt to call the browser's own progress report as if it were a function. A
+  `FileUpload` therefore sat at zero until the upload finished, in every application built from the
+  archetype. It now counts up. Nothing to change in your application.
+
 ### Documentation
 
 - **How far object identity reaches is now written down.** The same object in two fields of one model
   arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is
   not a safe way to ask whether two things that came off the wire are the same one — compare by
   identifier, or with `equals`. This was true before and stated nowhere.
+
+- **The release check that drives a real browser now looks at what the connection bar says**, and
+  reads whether it is on the screen in a way that does not depend on how it is put there. It had
+  been looking for a value that this release stopped setting when the bar moved into the layer the
+  browser keeps above everything else, so it reported a failure on a release where recovery works;
+  and it had never once looked at the words, which is how the bar came to say the wrong thing for
+  two releases running. The browser driver it needs is now installed in the check's own folder
+  rather than borrowed from wherever one happened to be lying about — see
+  `zerozstack-archetype/smoke/README.md`.
 
 - **Four new pages.** [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md) writes out what
   every control in the library owes a person with no mouse, and what the build check does and does

@@ -76,36 +76,46 @@ final class ConnectionBanner {
     // a popover is centred and boxed by default, and this is a full-width strip at the top edge.
     // Nothing here may set display, because a popover's visibility belongs to showPopover and
     // hidePopover; an inline display would fight them.
+    //
+    // The bar's own element is called "bar" and not something shorter, and that is not a matter of
+    // taste. TeaVM inlines this script as text and renames only the parameters, and when the build
+    // is minified - which every generated application's build is, because that is the compiler's
+    // default - it renames them to single letters, "b" for the first one. Through 0.6.0 and 0.7.0
+    // this script called its own element "b" as well, so "b" stopped meaning the text and started
+    // meaning the element, and the bar came up reading "[object HTMLDivElement]" in every
+    // application ever generated from the archetype. Nothing errored; the examples all looked
+    // right, because their builds turn minifying off. JsBodyNamingContractTest now fails the build
+    // if any embedded script names something with a single letter.
     @JSBody(params = { "text" }, script =
-        "var b = document.getElementById('zeroz4j-connection-banner');" +
-        "if (!b) {" +
-        "  b = document.createElement('div');" +
-        "  b.id = 'zeroz4j-connection-banner';" +
-        "  b.setAttribute('role', 'status');" +
-        "  b.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:auto;" +
+        "var bar = document.getElementById('zeroz4j-connection-banner');" +
+        "if (!bar) {" +
+        "  bar = document.createElement('div');" +
+        "  bar.id = 'zeroz4j-connection-banner';" +
+        "  bar.setAttribute('role', 'status');" +
+        "  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:auto;" +
         "width:auto;height:auto;max-width:none;max-height:none;margin:0;border:0;border-radius:0;" +
         "overflow:hidden;z-index:2147483647;" +
         "background:#b91c1c;color:#ffffff;font:14px/1.4 system-ui,sans-serif;" +
         "text-align:center;padding:6px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.3);';" +
-        "  if (typeof b.showPopover === 'function') { b.setAttribute('popover', 'manual'); }" +
-        "  document.body.appendChild(b);" +
+        "  if (typeof bar.showPopover === 'function') { bar.setAttribute('popover', 'manual'); }" +
+        "  document.body.appendChild(bar);" +
         "}" +
-        "b.textContent = text;" +
-        "if (b.hasAttribute('popover')) {" +
-        "  try { b.hidePopover(); } catch (ignored) { }" +
-        "  try { b.showPopover(); } catch (ignored) { }" +
+        "bar.textContent = text;" +
+        "if (bar.hasAttribute('popover')) {" +
+        "  try { bar.hidePopover(); } catch (ignored) { }" +
+        "  try { bar.showPopover(); } catch (ignored) { }" +
         "} else {" +
-        "  b.style.display = 'block';" +
+        "  bar.style.display = 'block';" +
         "}")
     private static native void showNative(String text);
 
     @JSBody(params = {}, script =
-        "var b = document.getElementById('zeroz4j-connection-banner');" +
-        "if (b) {" +
-        "  if (b.hasAttribute('popover')) {" +
-        "    try { b.hidePopover(); } catch (ignored) { }" +
+        "var bar = document.getElementById('zeroz4j-connection-banner');" +
+        "if (bar) {" +
+        "  if (bar.hasAttribute('popover')) {" +
+        "    try { bar.hidePopover(); } catch (ignored) { }" +
         "  } else {" +
-        "    b.style.display = 'none';" +
+        "    bar.style.display = 'none';" +
         "  }" +
         "}")
     private static native void hideNative();

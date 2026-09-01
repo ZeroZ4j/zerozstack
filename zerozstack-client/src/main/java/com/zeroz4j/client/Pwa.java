@@ -232,14 +232,14 @@ public final class Pwa {
         "if (!window.__zeroz4jInstall) {"
         + "  window.__zeroz4jInstall = { offer: null, listeners: [] };"
         + "  window.__zeroz4jInstall.notify = function (available) {"
-        + "    var l = window.__zeroz4jInstall.listeners;"
-        + "    for (var i = 0; i < l.length; i++) { l[i](available); }"
+        + "    var listeners = window.__zeroz4jInstall.listeners;"
+        + "    for (var idx = 0; idx < listeners.length; idx++) { listeners[idx](available); }"
         + "  };"
-        + "  window.addEventListener('beforeinstallprompt', function (e) {"
+        + "  window.addEventListener('beforeinstallprompt', function (offered) {"
         // Without preventDefault some browsers show their own mini-infobar and the captured event
         // is spent on it, leaving the application's own button with nothing to prompt with.
-        + "    e.preventDefault();"
-        + "    window.__zeroz4jInstall.offer = e;"
+        + "    offered.preventDefault();"
+        + "    window.__zeroz4jInstall.offer = offered;"
         + "    window.__zeroz4jInstall.notify(true);"
         + "  });"
         + "  window.addEventListener('appinstalled', function () {"
@@ -254,8 +254,8 @@ public final class Pwa {
 
     @JSBody(params = { "path" }, script =
         "if (!('serviceWorker' in navigator)) { return; }"
-        + "navigator.serviceWorker.register(path).catch(function (e) {"
-        + "  console.warn('[zeroz4j] Service worker registration failed: ' + e);"
+        + "navigator.serviceWorker.register(path).catch(function (failure) {"
+        + "  console.warn('[zeroz4j] Service worker registration failed: ' + failure);"
         + "});")
     private static native void registerServiceWorker(String path);
 
@@ -270,11 +270,11 @@ public final class Pwa {
     @JSBody(params = { "outcome" }, script =
         "var state = window.__zeroz4jInstall;"
         + "if (!state || !state.offer) { outcome('unavailable'); return; }"
-        + "var e = state.offer;"
+        + "var offer = state.offer;"
         + "state.offer = null;"                            // single use, whatever the answer
         + "state.notify(false);"
-        + "e.prompt();"
-        + "e.userChoice.then(function (choice) { outcome(choice.outcome); })"
+        + "offer.prompt();"
+        + "offer.userChoice.then(function (choice) { outcome(choice.outcome); })"
         + "            .catch(function () { outcome('dismissed'); });")
     private static native void showInstallPrompt(InstallOutcome outcome);
 
@@ -287,7 +287,7 @@ public final class Pwa {
         + "                 .replace(/-/g, '+').replace(/_/g, '/');"
         + "  var raw = atob(padded);"
         + "  var bytes = new Uint8Array(raw.length);"
-        + "  for (var i = 0; i < raw.length; i++) { bytes[i] = raw.charCodeAt(i); }"
+        + "  for (var idx = 0; idx < raw.length; idx++) { bytes[idx] = raw.charCodeAt(idx); }"
         + "  return bytes;"
         + "}"
         + "navigator.serviceWorker.ready.then(function (registration) {"
@@ -299,8 +299,8 @@ public final class Pwa {
         + "  var json = sub.toJSON();"
         + "  var keys = json.keys || {};"
         + "  callback(sub.endpoint, keys.p256dh || null, keys.auth || null, null);"
-        + "}).catch(function (e) {"
-        + "  callback(null, null, null, String(e));"
+        + "}).catch(function (failure) {"
+        + "  callback(null, null, null, String(failure));"
         + "});")
     private static native void subscribe(String vapidPublicKey, SubscriptionCallback callback);
 }
