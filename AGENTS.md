@@ -57,7 +57,7 @@ cache.
 | `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
-| `zerozstack-examples` | Eleven runnable reference applications. |
+| `zerozstack-examples` | Twelve runnable reference applications. |
 
 An application has three modules: **shared** (`@DataModel` classes, `@RmiService` interfaces),
 **client** (the UI, compiled for the browser by TeaVM), **server** (`@ApplicationScoped`
@@ -377,9 +377,9 @@ rather than sending a message the connection would refuse. A test that registers
 
 ## Running the examples
 
-All eleven examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
-root, the seven original ones have a `run.bat` (Windows). **Every example binds a port of its own
-(0.8.0+), so several can run at once** — the table below has the numbers.
+All twelve examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
+root, the seven original ones and `payments-datamodels` have a `run.bat` (Windows). **Every example
+binds a port of its own (0.8.0+), so several can run at once** — the table below has the numbers.
 
 For those seven there is no executable jar and no `exec-maven-plugin` — `java -jar` and
 `mvn exec:java` both fail regardless of what older docs say. The working invocation is the one
@@ -392,6 +392,8 @@ java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer
 
 They share the main class `com.zeroz4j.example.server.ExampleServer`. **The four added in 0.6.0 do
 not**: each has a main class of its own, and three of them also build a runnable jar.
+`payments-datamodels` has one of its own too, in its own package:
+`com.zeroz4j.example.payments.server.ExampleServer`.
 
 | Example | Port | Example | Port |
 |---|---|---|---|
@@ -401,7 +403,7 @@ not**: each has a main class of its own, and three of them also build a runnable
 | `pwa-install` | 8083 | `components-showcase` | 8090 |
 | `todo-signals` | 8084 | | |
 | `chat-events` | 8085 | | |
-| `chat-livesync` | 8086 | | |
+| `chat-livesync` | 8086 | `payments-datamodels` | 8092 |
 
 `routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
 `java -jar routing-tour-server/target/routing-tour-server-0.8.0-SNAPSHOT.jar`.
@@ -411,8 +413,8 @@ a `run.bat` — `run.bat 9000`. Each server reads them in that order and falls b
 `DEFAULT_PORT` constant.
 
 **Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
-`components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup` and
-`inventory-crud` connect anonymously. `routing-tour` and `scoped-signals` take credentials from the
+`components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup`,
+`inventory-crud` and `payments-datamodels` connect anonymously. `routing-tour` and `scoped-signals` take credentials from the
 URL — `?user=admin&password=admin` — which is how you open two windows as different users.
 
 **No example enables the development logins by itself.** Pass `--dev-login` to the server main class
@@ -540,7 +542,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 |---|---|
 | `todo-signals` | Local signals, `Computed`, `Effect` in isolation |
 | `chat-events` | `EventTopic` / `EventPublisher` / `ServerEvents`, deliberately without signals |
-| `chat-livesync` | `@LiveSync` both ways: the message list comes down into an `Effect`, and the topic box is `@ClientWritable` and goes up |
+| `chat-livesync` | `@LiveSync` both ways: the message list comes down into an `Effect`, the topic box is `@ClientWritable` and goes up, and `LiveMutationRefusals` tells the person when the server would not have their edit |
 | `job-monitor` | `Signals.shared` driven from a server-side virtual thread |
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |
@@ -549,6 +551,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 | `scoped-signals` | `Signals.scoped` with `Scope.CLIENT` and `Scope.USER` beside a global `Signals.shared` |
 | `oidc-login` | `OidcClient` PKCE login against Keycloak, and `@Secured`/`@RolesAllowed` enforced from its claims |
 | `pwa-install` | `Pwa.install()`, `Pwa.installable()`, `PwaManifest` per request, push subscription, and the offline page |
+| `payments-datamodels` | The three shapes a wire type can take - `record`, sealed family, and a model extending another model - nested and in collections, both directions, with a `TestServer` test driving real frames |
 
 ## Not implemented — do not generate code against these
 

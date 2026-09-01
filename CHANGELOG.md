@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [0.8.0] — unreleased
+## [0.8.0] — 2026-09-01
 
 Every control in the library can now be worked from a keyboard and says what it is; a build check
 fails if a new one cannot. Overlays behave like overlays — a dialog takes over the page, Escape
@@ -922,6 +922,15 @@ belongs to that server rather than to the whole Java process, so two servers can
 
 ### Fixed
 
+- **A server started inside a test knew none of the application's own wire types.** Every real
+  binding calls `BinaryRegistry.init()` at start-up — Helidon in `Zeroz4jServer.start`, a servlet
+  container in `Zeroz4jServletBootstrap` — and `TestServer` did not. So the first test that sent or
+  received any model of its own failed with `Unsupported type for GrowableBuffer:
+  com.example.MyModel`, which reads like a fault in the model rather than a missing step in the
+  harness, and there was nothing in the guide to say otherwise. `TestServer.start()` now does what
+  every binding does. Nothing to change in a test that already worked around it: registering twice
+  is harmless.
+
 - **The server could handle one person's messages in the wrong order, and usually did.** Somebody
   types into a field that is kept in step with the server, then presses a button that calls a
   service. The typing is written to the connection first and the connection delivers it first — but
@@ -1293,6 +1302,43 @@ belongs to that server rather than to the whole Java process, so two servers can
   a proposed change is now checked, named or not.
 
 ### Documentation
+
+- **A twelfth example, and it is the one that exercises the new wire shapes.**
+  [`payments-datamodels`](zerozstack-examples/payments-datamodels) is a small payments desk on port
+  **8092**: put things in a basket, say how the customer paid, take the payment, give money back.
+  All three shapes a wire type can take are in it because the domain wanted them — amounts and
+  basket lines are records, the way somebody paid is a sealed family with a record per kind, and a
+  payment and a refund share a base class. They travel nested inside each other and inside
+  collections, in both directions.
+
+    Until this shipped, **not one example used a record, a sealed family, or a model extending
+    another model.** All three were new in this release, so nothing anybody could run demonstrated
+    any of them, and a total failure would have looked exactly like nothing happening — which is how
+    the whole up direction of LiveSync stayed broken for a version.
+
+    Both halves of the round trip are visible on purpose: the server logs every call field by field,
+    naming the real kind of each sealed value it received, and the screen prints what came back and
+    what shape it was in. Its test drives real frames through a `TestServer` rather than calling the
+    service, because a direct call runs no serializer and would pass whatever was broken.
+
+- **Three examples now test a service through a real connection instead of around it.**
+  `payments-datamodels` proves its models survive the wire. `chat-livesync`'s test used to be one
+  assertion of `true` and a comment wondering how the service might be given a store; it now checks
+  that a message one person sends is pushed to every open browser, that clearing the history needs
+  the admin role, and that a visitor who never signed in is refused. `form-signup` gained a test
+  that a browser ignoring the validation rules is stopped at the server, which is the point that
+  example exists to make and was checked nowhere.
+
+    [Testing an application](docs/guides/testing.md) gained the two things that catch people out
+    when driving a frame in: the answer arrives a moment after `send` returns, and it is not
+    necessarily the last frame — match it by the number the request was sent under.
+
+- **`chat-livesync` now tells the person when their edit was refused.** It registers a
+  `LiveMutationRefusals.onRefused(...)` listener, shows the reason above the topic box, and puts the
+  box back to the server's value — which the box otherwise avoids doing while somebody is typing in
+  it, and must do here, because after a refusal what is in it is a value that exists nowhere else.
+  The refusal is easy to cause on purpose: the topic is capped at eighty characters by an annotation
+  on the model and the box does not stop you typing more.
 
 - **How far object identity reaches is now written down.** The same object in two fields of one model
   arrives once; the same object as two separate items of a top-level list arrives twice. So `==` is

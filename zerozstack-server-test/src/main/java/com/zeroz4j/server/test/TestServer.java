@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.server.test;
 
+import com.zeroz4j.api.BinaryRegistry;
 import com.zeroz4j.api.ObjectMapper;
 import com.zeroz4j.server.Disclosures;
 import com.zeroz4j.server.EventPublisher;
@@ -450,6 +451,14 @@ public final class TestServer implements AutoCloseable {
         public TestServer start() {
             String serverName = name != null && !name.trim().isEmpty()
                     ? name.trim() : "test-server-" + SERIAL.incrementAndGet();
+
+            // The application's own wire types, exactly as a real deployment registers them. Every
+            // binding does this at start-up - Helidon in Zeroz4jServer.start, a servlet container in
+            // Zeroz4jServletBootstrap - and a test server that skipped it could not send or receive
+            // a single one of the application's models: the first call threw "Unsupported type",
+            // which reads like a bug in the model rather than a missing step in the harness. It is
+            // safe to run again; a registrar overwrites its own entries.
+            BinaryRegistry.init();
 
             List<Class<?>> all = new ArrayList<>();
             all.add(ServerRuntime.class);
