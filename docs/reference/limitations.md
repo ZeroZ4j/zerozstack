@@ -1,8 +1,8 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.8.0, in one place. This page exists because surprises are what make
-people abandon a framework, and because a coding agent that reads it will not generate code against
-features that do not exist.
+Every known gap in ZeroZ Stack 0.9.0-SNAPSHOT, in one place. This page exists because surprises are
+what make people abandon a framework, and because a coding agent that reads it will not generate
+code against features that do not exist.
 
 ZeroZ Stack is an experimental proof-of-concept. Read this list as the honest boundary of the
 demonstration, not as a roadmap commitment.

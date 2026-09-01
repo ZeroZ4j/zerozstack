@@ -3,10 +3,10 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.8.0**. The Java UI is
-compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
-and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
-routes or SQL.
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.9.0-SNAPSHOT**. The
+Java UI is compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket
+RPC protocol, and the server persists a live object graph with EclipseStore. You write no
+JavaScript, JSON, REST routes or SQL.
 
 **Compilation target:** the build produces **JavaScript** via TeaVM's JavaScript backend
 (`<targetType>JAVASCRIPT</targetType>`); no module sets `WEBASSEMBLY`. This is a deliberate interim
@@ -423,7 +423,7 @@ not**: each has a main class of its own, and three of them also build a runnable
 | `chat-livesync` | 8086 | `payments-datamodels` | 8092 |
 
 `routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
-`java -jar routing-tour-server/target/routing-tour-server-0.8.0-SNAPSHOT.jar`.
+`java -jar routing-tour-server/target/routing-tour-server-0.9.0-SNAPSHOT.jar`.
 
 **To move one:** `--port 9000` on the command line, or `-Dzeroz.port=9000`, or — for the seven with
 a `run.bat` — `run.bat 9000`. Each server reads them in that order and falls back to its own

@@ -65,7 +65,7 @@ run.bat 9000
 ```
 
 The four added in 0.6.0 also build a runnable jar, so
-`java -jar <example>-server/target/<example>-server-0.8.0-SNAPSHOT.jar` works for those without a
+`java -jar <example>-server/target/<example>-server-0.9.0-SNAPSHOT.jar` works for those without a
 classpath. The rest do not; use the classpath command, which is what `run.bat` does.
 
 Six examples need a sign-in, and the only accounts they have are the framework's development ones.

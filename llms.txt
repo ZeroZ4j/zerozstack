@@ -1,13 +1,13 @@
 # ZeroZ4j
 
-> An experimental pure-Java full-stack framework (version 0.8.0). The UI is Java compiled for the
-> browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
+> An experimental pure-Java full-stack framework (version 0.9.0-SNAPSHOT). The UI is Java compiled
+> for the browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
 > WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
 Key things to know before generating ZeroZ Stack code:
 
-- Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.8.0` and depend on
+- Consume through the BOM: import `com.zeroz4j:zerozstack-bom:0.9.0-SNAPSHOT` and depend on
   `zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`, `zerozstack-ui-components`
   and `zerozstack-store-eclipsestore` without versions.
 - To build the framework itself, requires JDK 21 and `mvn clean install -DskipTests` from the repository root; the `clean` is
@@ -85,7 +85,7 @@ Key things to know before generating ZeroZ Stack code:
 ## Reference
 
 - [Glossary](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/glossary.md): Event, signal, push, message, sync, mutation, handle, retained value — defined once, not interchangeable.
-- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.8.0, including features that are declared but not implemented.
+- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.9.0-SNAPSHOT, including features that are declared but not implemented.
 - [Wire protocol](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/PROTOCOL.md): Frame structure, opcodes and type tags.
 - [Validation](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/VALIDATION.md): Annotate once on the model; enforced by the client binder and independently by the server.
 
