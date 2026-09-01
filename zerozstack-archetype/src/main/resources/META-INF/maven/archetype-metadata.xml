@@ -13,12 +13,18 @@
     <!-- Filtered so ${package}, ${rootArtifactId} and ${zeroz4jVersion} resolve. AGENTS.md is
          filtered for the version above all: a generated project's instructions to an AI coding
          assistant are worth little unless they name the framework version that project actually
-         resolves, since the published documentation runs ahead of released versions. -->
+         resolves, since the published documentation runs ahead of released versions. README.md is
+         filtered for the module and package names in its build and run commands.
+
+         Both are Markdown, and Velocity reads ## as the start of a comment and drops the rest of
+         the line without a word. Every second-level heading in both files is wrapped in Velocity's
+         literal block for that reason; see the comment at the top of each. -->
     <fileSet filtered="true" packaged="false">
       <directory></directory>
       <includes>
         <include>Dockerfile</include>
         <include>AGENTS.md</include>
+        <include>README.md</include>
       </includes>
     </fileSet>
   </fileSets>

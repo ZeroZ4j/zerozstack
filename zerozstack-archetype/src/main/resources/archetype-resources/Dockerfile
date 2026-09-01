@@ -2,9 +2,15 @@
 #
 # Build the project first, then the image from the project root:
 #
-#   mvn package
+#   mvn package -Pproduction
 #   docker build -t ${rootArtifactId} .
 #   docker run -p 8080:8080 ${rootArtifactId}
+#
+# -Pproduction is not optional here. A plain `mvn package` builds the browser bundle readable and
+# unoptimized, which is right while you are developing and wrong in an image you hand to anyone:
+# the bundle it copies in is several times larger, and it is not the shape you will have tested by
+# the time it matters. Minification also renames things, and renaming has broken this framework
+# before, so the image you ship should be built from the shape you ran.
 #
 # Deliberately NOT a shaded jar: Weld treats each jar as a separate bean archive, and merging
 # them into one jar breaks CDI discovery in ways that surface far from the cause. Here every

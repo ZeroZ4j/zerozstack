@@ -169,10 +169,24 @@ Then build and run it exactly like an example:
 
 ```bash
 cd myapp
-mvn clean install
+mvn install
 cd myapp-server
 java -cp "target/classes;target/libs/*" com.example.myapp.server.ServerApp
 ```
+
+**A generated project has three build commands, not one, and the difference is most of the time a
+build takes.** `mvn compile` and `mvn test-compile` run `javac` and stop — they do **not** compile
+the user interface for the browser, which is what makes them the right command for an ordinary
+"did that compile" check. `mvn install`, above, builds the browser bundle in a readable,
+unoptimized form and gives you a runnable application. `mvn install -Pproduction` optimizes and
+minifies it, and is the shape you ship. On a freshly generated project with a warm Maven cache those
+are roughly 5, 16 and 17 seconds.
+
+Two things follow. The browser compiler accepts a smaller language than `javac` does, so client code
+can pass the quick check and still fail to compile — run a full build before you believe client work
+is finished, and give an automated pipeline `mvn verify` rather than `mvn test`, which stops before
+the bundle is built. And build and run `-Pproduction` before you ship: minification renames things,
+and that has broken this framework before. The generated `README.md` and `AGENTS.md` both say so.
 
 You should get a styled card at <http://localhost:8080> reading "It works". It is a small page on
 purpose, but everything in it is the real thing: the card and its text are components from

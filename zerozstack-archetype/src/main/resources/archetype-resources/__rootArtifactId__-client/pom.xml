@@ -8,7 +8,26 @@
     <version>${version}</version>
   </parent>
   <artifactId>${rootArtifactId}-client</artifactId>
-  
+
+  <properties>
+    <!--
+        How hard TeaVM works when it turns this module's Java into the browser bundle.
+
+        These are the DEVELOPMENT values. What they buy is a bundle with readable names, so a
+        stack trace in the browser console names your methods instead of single letters. What they
+        cost is size: the bundle is roughly four times larger than the one the `production` profile
+        at the bottom of this file produces.
+
+        They do NOT make the build meaningfully faster - measured on a freshly generated project,
+        SIMPLE and unminified takes about as long as ADVANCED and minified, because almost all of
+        the time goes on translating the framework runtime rather than on optimizing it. The speed
+        of an ordinary check comes from the <phase> below, not from these. The difference between
+        the two settings does grow with the amount of client code.
+    -->
+    <teavm.optimizationLevel>SIMPLE</teavm.optimizationLevel>
+    <teavm.minifying>false</teavm.minifying>
+  </properties>
+
   <dependencies>
     <!-- TeaVM's JDK emulation. Without it the TeaVM compile fails with
          "Class java.util.concurrent.ConcurrentHashMap was not found". Version comes from zerozstack-bom. -->
@@ -44,10 +63,26 @@
         <version>0.15.0</version>
         <executions>
           <execution>
+            <id>browser-bundle</id>
             <goals>
               <goal>compile</goal>
             </goals>
-            <phase>process-classes</phase>
+            <!--
+                prepare-package, NOT the plugin's own default of process-classes.
+
+                Translating this module to JavaScript is by far the slowest step in the build, and
+                process-classes runs during `mvn test-compile` - so every check for a typo paid for
+                a full browser compile. From prepare-package it runs when something is actually
+                being built to run: `mvn package`, `mvn install`, `mvn verify`.
+
+                What this costs you: `mvn compile` and `mvn test-compile` no longer write
+                target/js at all. A command that stops before `package` therefore checks the Java
+                and nothing else, and a mistake only the browser compiler can see - it rejects some
+                Java that javac accepts - will not be reported until the next full build. If you
+                have a pipeline that runs `mvn test` and stops, give it `mvn verify` instead, or it
+                is not compiling your user interface for the browser at all.
+            -->
+            <phase>prepare-package</phase>
             <configuration>
               <mainClass>${package}.client.ClientApp</mainClass>
               <!-- No <mainPageIncluded> here: teavm-maven-plugin 0.15.0 does not recognise it and
@@ -57,7 +92,12 @@
               <!-- TeaVM's JavaScript backend. The WasmGC backend is not currently supported by
                    zerozstack-client; see docs/reference/limitations.md#compilation-target. -->
               <targetType>JAVASCRIPT</targetType>
-              <optimizationLevel>ADVANCED</optimizationLevel>
+              <!-- Set from the properties at the top of this file, so that `-Pproduction` can
+                   raise both of them together. Written out rather than left to the plugin's
+                   defaults because the default for minifying is TRUE, and a setting that
+                   important should not be invisible. -->
+              <optimizationLevel>${teavm.optimizationLevel}</optimizationLevel>
+              <minifying>${teavm.minifying}</minifying>
               <targetDirectory>${project.build.directory}/js</targetDirectory>
             </configuration>
           </execution>
@@ -65,4 +105,26 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!--
+        mvn install -Pproduction
+
+        The shape you ship: whole-program optimization and minified names, and about a quarter
+        the download. On a small project it costs little more build time than an ordinary one; the
+        gap grows as the client does.
+
+        BUILD AND RUN THIS BEFORE YOU RELEASE ANYTHING. Minification renames things, and renaming
+        can break code that a readable build runs perfectly - it has happened in this framework
+        before, and it reached two releases because nobody ran the minified shape until users did.
+        An ordinary build is for developing. This one is what your users get.
+    -->
+    <profile>
+      <id>production</id>
+      <properties>
+        <teavm.optimizationLevel>ADVANCED</teavm.optimizationLevel>
+        <teavm.minifying>true</teavm.minifying>
+      </properties>
+    </profile>
+  </profiles>
 </project>

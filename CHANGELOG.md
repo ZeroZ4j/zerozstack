@@ -10,6 +10,35 @@ upgrading.
 
 ## [Unreleased]
 
+### Changed
+
+- **A generated project no longer compiles its user interface for the browser every time you check
+  for a typo.** Turning the client's Java into something a browser can run is by far the slowest
+  step in the build, and it used to happen during `mvn test-compile` — at the strongest optimization
+  setting and with names minified, the two slowest settings there are. Anyone checking their work by
+  compiling, which is how a coding assistant works, paid for a full browser compile every time. It
+  now happens at `prepare-package` instead, so `mvn compile` and `mvn test-compile` run `javac` and
+  stop, and `mvn package`, `mvn install` and `mvn verify` behave as before. On a freshly generated
+  project with a warm Maven cache, `mvn test-compile` went from about 14 seconds to about 5.
+
+- **A generated project now builds for development by default and for release on request.** The
+  browser bundle is built readable and unoptimized unless you ask for `-Pproduction`, which turns on
+  whole-program optimization and minification and produces exactly what earlier versions produced.
+  The name matches the convention other Java web frameworks use. A full `mvn install` still produces
+  a working, runnable application, so nothing that ran a build before stops working.
+
+  **Build and run `-Pproduction` before you ship.** Minification renames things, and renaming can
+  break code that a readable build runs perfectly — it is why this framework's own outage banner
+  read `[object HTMLDivElement]` for two releases. The generated `README.md` and `AGENTS.md` both
+  say so, and so do the rules that travel inside `zerozstack-shared-api`.
+
+### Added
+
+- **A generated project now carries a `README.md`.** It says what the three modules are, which build
+  command to use for a quick check, which one produces something you can run, and which one produces
+  what you ship — and it says plainly that the quick check does not compile the user interface, so a
+  mistake only the browser compiler can see will not surface until the next full build.
+
 ### Fixed
 
 - **A client id set to expire immediately did not.** `zeroz.clientId.ttlDays` says how long an

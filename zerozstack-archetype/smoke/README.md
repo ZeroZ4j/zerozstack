@@ -61,6 +61,25 @@ Then build and start it:
 cd smokeapp && mvn -B $REPO install && cd smokeapp-server && java -cp "target/classes:target/libs/*" com.smoke.server.ServerApp
 ```
 
+### Run it twice: once as generated, once with `-Pproduction`
+
+**This is not optional, and it is newly load-bearing.** A generated project now builds its browser
+bundle readable and unminified by default, and minified only under `-Pproduction`. So the run above
+no longer exercises the minified shape at all — and the minified shape is the one where the
+`[object HTMLDivElement]` class of bug lives, because minification is what renames a `@JSBody`
+parameter on top of a variable the script declared.
+
+Until this split existed, a generated project was always minified and the smoke test caught that
+shape for free. It does not any more. Build and run both:
+
+```bash
+cd smokeapp && mvn -B $REPO clean install -Pproduction
+```
+
+Then start the server and run **both** scripts again. Expected 5/5 and 7/7 in each shape. If you
+only have time for one, run the `-Pproduction` one: it is the shape users receive, and the readable
+build is the one that will have been exercised all week anyway.
+
 **Look at the page as well as the checks.** The generated project loads Tailwind and daisyUI in its
 `index.html`, and its first screen is built out of real components, so a fresh project is styled the
 moment it starts. If it comes up as bare black-on-white text, that stylesheet is not arriving and
@@ -121,7 +140,9 @@ Two things about it are worth knowing, because getting either wrong has already 
 - **It reads the words the bar shows.** Nothing ever had, which is exactly why every release before
   0.8.0 shipped a bar reading `[object HTMLDivElement]` to every person who lost their connection. The
   expected sentence is written at the top of the script; it has to match what `Zeroz4jClient` passes
-  to `ConnectionBanner.show(...)`, dash and ellipsis included.
+  to `ConnectionBanner.show(...)`, dash and ellipsis included. **This check only does its job against
+  a `-Pproduction` build**, because the words only come out wrong once names have been minified. Run
+  it in both shapes, as above.
 
 ## Packaged-app variant
 

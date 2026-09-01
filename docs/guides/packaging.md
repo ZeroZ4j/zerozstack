@@ -16,6 +16,37 @@ an application that deploys and quietly does nothing.
 This is not fixable with more shade configuration. Use one of the shapes below; in all three,
 every jar stays intact.
 
+## Before any of them: which build, and how much it costs
+
+A generated project builds its client for the browser at **`prepare-package`**, and unoptimized by
+default. That gives three commands rather than one, and the difference between them is most of the
+time a build takes:
+
+| Command | Browser bundle | Measured on a freshly generated project, warm cache |
+|---|---|---|
+| `mvn compile`, `mvn test-compile` | **not built** — `javac` only | about 5 s |
+| `mvn install` | built, readable and unoptimized | about 16 s |
+| `mvn install -Pproduction` | built, optimized and minified | about 17 s |
+
+The seconds are one laptop's; on a slow continuous-integration machine the same full build is 60 to
+90. The ratio is the durable part, and it grows with the amount of client code, because the browser
+compiler analyzes the whole program and has no usable incremental mode.
+
+Two consequences worth planning around:
+
+!!! warning "A pipeline that stops before `package` never compiles your user interface"
+    `mvn test` stops at `test`, which is before `prepare-package`. Such a run checks the Java and
+    nothing else, and client code that the browser compiler rejects — it emulates part of the JDK,
+    not all of it — passes every check in it. **Give a pipeline `mvn verify`.** For the same reason,
+    run a full build yourself before calling a piece of client work finished.
+
+!!! warning "Build and run `-Pproduction` before you ship, not at release time"
+    It is the only command that produces the shape your users get. Minification renames things, and
+    renaming can break code a readable build runs perfectly: it is why this framework's own outage
+    banner read `[object HTMLDivElement]` for two releases. Start the production build, click
+    through it, and read the browser console. Combine it with the shapes below —
+    `mvn verify -Pproduction,package`.
+
 ## Shape 1: the development layout (what the archetype builds)
 
 `mvn package` produces the server jar plus every dependency in `target/libs/`. Launch with a

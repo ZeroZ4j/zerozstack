@@ -53,13 +53,46 @@ Three modules, and which one a class belongs in is not a matter of taste:
 Build and run it:
 
 ```bash
-mvn clean install
+mvn install
 cd ${rootArtifactId}-server
 java -cp "target/classes;target/libs/*" ${package}.server.ServerApp
 ```
 
 Use `:` instead of `;` in that classpath on Linux and macOS. There is no `mvn exec:java` here and
 adding one will not work. Then open <http://localhost:8080>.
+
+#[[## Choosing a build command — read this before you compile anything]]#
+
+Compiling the Java is quick. Compiling the user interface **for the browser** is not, and it is
+most of what a build of this project spends its time on. So there are three commands, and which
+one you reach for decides whether you spend your time waiting.
+
+| Command | Does it build the browser bundle? | Roughly |
+|---|---|---|
+| `mvn compile`, `mvn test-compile` | **No.** `javac` and stop. | a third of a full build |
+| `mvn install` | Yes, in a readable, unoptimized form you can run. | the baseline |
+| `mvn install -Pproduction` | Yes, optimized and minified — the shape that ships. | a little more than a full build on a small project, and the gap grows with the amount of client code |
+
+Measured on a freshly generated project with a warm Maven cache: about 5 seconds for the quick
+check, about 16 for `mvn install`, about 17 with `-Pproduction`. On a slower continuous-integration
+machine the same full build is 60 to 90 seconds. Treat the ratios as the durable part; the seconds
+are one machine's.
+
+**Use `mvn compile` for an ordinary "did that compile" check.** That is what it is for, and it is
+what you should be running most of the time. It does not build the browser bundle.
+
+**Run a full `mvn install` before you say a piece of work is finished.** The browser compiler
+accepts a smaller language than `javac` does — it emulates part of the JDK, not all of it — so
+client code can pass the quick check and still fail to compile. That failure will not reach you
+until the next full build, so make sure there is one. For the same reason, an automated pipeline
+needs `mvn verify`, not `mvn test`: a run that stops before `package` never compiles the user
+interface at all.
+
+**Build and run `-Pproduction` before shipping.** It is the only command that produces what your
+users get. Minification renames things, and renaming can break code that a readable build runs
+perfectly — that has happened in this framework before, and it survived two releases because
+nobody ran the minified shape until users did. Start it, click through it, and read the browser
+console.
 
 #[[## Ten things that are not ordinary Java]]#
 
