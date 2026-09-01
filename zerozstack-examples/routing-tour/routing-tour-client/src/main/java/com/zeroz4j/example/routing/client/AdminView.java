@@ -23,6 +23,7 @@ import com.zeroz4j.api.Route;
 import com.zeroz4j.client.router.RouteParams;
 import com.zeroz4j.client.router.RouteView;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * A guarded route.
@@ -41,9 +42,9 @@ public class AdminView implements RouteView<Void> {
     @Override
     public Component render(Void data, RouteParams params) {
         return Ui.box("flex flex-col gap-3 max-w-2xl",
-                Ui.text("Admin", "text-2xl font-bold"),
-                Ui.text("Reached because this connection holds the 'admin' role.", "opacity-80"),
+                Ui.text("Admin", TextStyle.PAGE_TITLE.getClassNames()),
+                Ui.text("Reached because this connection holds the 'admin' role.", TextStyle.SECONDARY.getClassNames()),
                 Ui.text("Signed in as " + RmiSecurityContext.getUsername()
-                        + " with roles " + RmiSecurityContext.getRoles(), "text-sm opacity-60"));
+                        + " with roles " + RmiSecurityContext.getRoles(), TextStyle.SECONDARY.getClassNames()));
     }
 }

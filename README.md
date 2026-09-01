@@ -36,15 +36,15 @@ Because the stack is unified, AI coding agents can generate end-to-end features 
 ZeroZ Stack relies on a carefully curated, highly concurrent architecture to achieve this vision.
 
 ### A. Native Object Persistence (Killing the ORM)
-ZeroZ Stack bypasses the Object-Relational Mismatch entirely. By utilizing **EclipseStore** via our pluggable `zerozstack-store-eclipsestore` module, objects are stored natively as a graph. There are no translation layers, no `UPDATE` statements, and no N+1 query problems. Multi-tenancy is handled seamlessly out-of-the-box. The in-memory graph is explicitly saved by the developer, while realtime UI updates can be implicitly managed via `@LiveSync`.
+ZeroZ Stack bypasses the Object-Relational Mismatch entirely. By utilizing **EclipseStore** via our pluggable `zerozstack-store-eclipsestore` module, objects are stored natively as a graph. There are no translation layers, no `UPDATE` statements, and no N+1 query problems. Multi-tenancy is built in, but it is not automatic: storage is isolated per tenant, while events, live objects and signals are isolated only when you pass a tenant scope. [Limitations](docs/reference/limitations.md#multi-tenancy) says exactly where the boundary is and where it is not. The in-memory graph is explicitly saved by the developer, while realtime UI updates can be implicitly managed via `@LiveSync`.
 
 ### B. Binary RPC & Project Loom (Virtual Threads)
-The framework discards REST and JSON. The client (Wasm) and server communicate via a custom binary protocol over persistent WebSockets. 
+The framework discards REST and JSON. The client and server communicate via a custom binary protocol over persistent WebSockets. 
 To handle thousands of persistent connections without thread exhaustion, the backend leverages **Project Loom Virtual Threads**. Incoming WebSocket binary frames are immediately handed off to a Virtual Thread, ensuring the application server's I/O threads never block during complex processing.
 
 ### C. AOT Compilation & Client-Side State
 ZeroZ Stack relies on Ahead-of-Time (AOT) compilation via **TeaVM** to guarantee performance. Annotation processors generate binary serializers and RMI stubs at compile-time, avoiding slow runtime reflection in the browser. 
-Unlike traditional Java web frameworks (like Vaadin), **ZeroZ Stack maintains zero server-side DOM state**. UI components (styled with utility-first DaisyUI/Tailwind CSS) are instantiated, configured, and bound to listeners entirely in the client-side Wasm heap, utilizing cooperative coroutines for non-blocking I/O.
+Unlike traditional Java web frameworks (like Vaadin), **ZeroZ Stack maintains zero server-side DOM state**. UI components (styled with utility-first DaisyUI/Tailwind CSS) are instantiated, configured, and bound to listeners entirely in the browser, on the compiled Java heap TeaVM produces, utilizing cooperative coroutines for non-blocking I/O.
 
 ### D. Files, Where Bytes Do Not Fit in a Message
 Some things are too big for a message and belong on disk. `FileUpload` gives a screen a drop-or-pick box with a progress bar and a cancel button per file; the server side is one Java class implementing `FileUploadHandler`, which is handed each finished file. The bytes travel over their own HTTP address and are streamed straight to disk, so a large file never has to be held in memory. 25 MB per file by default. See [Accepting file uploads](docs/guides/file-uploads.md).
@@ -65,6 +65,7 @@ ZeroZ Stack is fully modular, allowing developers to pick exactly what they need
 *   **`zerozstack-server-jakarta`**: The same, as servlets, for deploying a WAR to WildFly, Payara, Open Liberty or TomEE.
 *   **`zerozstack-auth-oidc`**: Verifies OpenID Connect tokens at the handshake and turns their claims into roles and a tenant.
 *   **`zerozstack-store-eclipsestore`**: The native object-graph persistence adapter.
+*   **`zerozstack-server-test`**: Starts a server inside a test, in the same process, in about a tenth of a second. Take it at **test scope** — it starts a bean container, which has no business on a production classpath.
 *   **`zerozstack-archetype`**: A Maven Archetype to instantly scaffold a new multi-module project.
 
 ---
@@ -79,7 +80,7 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
         <dependency>
             <groupId>com.zeroz4j</groupId>
             <artifactId>zerozstack-bom</artifactId>
-            <version>0.7.0</version>
+            <version>0.8.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -101,12 +102,8 @@ Available from Maven Central. Depend on the modules you need; the BOM keeps vers
 Or start from the archetype, which generates the three-module shape for you:
 
 ```bash
-mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.7.0
+mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.8.0
 ```
-
-Publication to Maven Central is planned; see
-[ZeroZ DB's RELEASING.md](https://github.com/ZeroZ4j/zerozdb/blob/main/RELEASING.md) for the
-process the family uses.
 
 ## 6. Developer Resources
 
@@ -117,15 +114,15 @@ This repository contains the core framework and reference implementations.
 * **[Quickstart](docs/start/quickstart.md)** — build the framework and run a working example in about five minutes. Every command verified.
 * **[Choosing how state moves](docs/decide/index.md)** — ZeroZ Stack gives you five ways to propagate state (local signals, RMI, server events, shared signals, LiveSync). Picking the wrong one is the most common source of trouble in ZeroZ Stack applications; this is the decision procedure.
 * **[Troubleshooting](docs/guides/troubleshooting.md)** — symptom-first, and specifically covering the cases where nothing happens and there is no exception to search for.
-* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.7.0, stated plainly.
-* **[Changelog](CHANGELOG.md)** — what changed and what breaks. Read the Breaking section before upgrading; 0.4.0 renames an artifact and changes several silent behaviours into thrown exceptions.
+* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.8.0, stated plainly.
+* **[Changelog](CHANGELOG.md)** — what changed and what breaks. Read the Breaking section before upgrading. 0.8.0 makes a dialog take over the page, turns `Drawer`, `Tooltip` and `Toast` into working components you no longer assemble by hand, and runs `onDetach` for the first time — so code you wrote and watched do nothing is about to execute.
 * **[Glossary](docs/reference/glossary.md)** — event, signal, push, sync and mutation are not interchangeable terms here.
 
 **Deeper:**
 
 * **[10 Core Concepts](docs/CONCEPTS.md)** - A quick guide to the essential concepts you need to know when building a ZeroZ Stack application.
 * **[Developer Setup & Getting Started Guide](docs/GETTING_STARTED.md)** - Learn how to scaffold a new project using the `zerozstack-archetype`.
-* **[Code Walkthrough: End-to-End Java](docs/CODE_WALKTHROUGH.md)** - Examples of Models, RMI Interfaces, and Wasm UI binding.
+* **[Code Walkthrough: End-to-End Java](docs/CODE_WALKTHROUGH.md)** - Examples of Models, RMI Interfaces, and browser UI binding.
 * **[Detailed Protocol Specification](docs/PROTOCOL.md)** - Deep dive into the binary WebSocket frame structure and architecture.
 * **[Server Events: Typed Push Topics](docs/SERVER_EVENTS.md)** - Broadcasting typed, fire-and-forget events from the server to connected clients.
 * **[Signals: Client-Side Reactive State](docs/SIGNALS.md)** - Reactive UI state with `ValueSignal`, `Computed`, and `Effect` — and `Signals.scoped` for state belonging to one tenant, user or browser.

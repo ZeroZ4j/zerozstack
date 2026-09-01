@@ -24,6 +24,7 @@ import com.zeroz4j.example.routing.api.TourService;
 import com.zeroz4j.example.routing.api.TourService_Stub;
 import com.zeroz4j.example.routing.model.Task;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * Two path parameters in one pattern, both typed at the point of use.
@@ -42,11 +43,11 @@ public class TaskDetailView implements RouteView<Task> {
     public Component render(Task task, RouteParams params) {
         return Ui.box("flex flex-col gap-4 max-w-2xl",
                 Ui.routerLink("/projects/" + params.getLong("projectId"), "← Back to project"),
-                Ui.text(task.getTitle(), "text-2xl font-bold"),
+                Ui.text(task.getTitle(), TextStyle.PAGE_TITLE.getClassNames()),
                 Ui.text(task.isDone() ? "Done" : "Open",
                         "badge " + (task.isDone() ? "badge-success" : "badge-warning") + " w-fit"),
-                Ui.text(task.getDetail(), "opacity-80"),
+                Ui.text(task.getDetail(), TextStyle.SECONDARY.getClassNames()),
                 Ui.text("Path parameters: projectId=" + params.get("projectId")
-                        + ", taskId=" + params.get("taskId"), "text-sm opacity-60 pt-4"));
+                        + ", taskId=" + params.get("taskId"), TextStyle.SECONDARY.getClassNames() + " pt-4"));
     }
 }

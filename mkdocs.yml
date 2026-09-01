@@ -80,13 +80,17 @@ nav:
       - Anti-patterns: decide/antipatterns.md
 
   - Guides:
+      - Declaring the types that cross the wire: guides/data-models.md
       - Saving data: guides/persistence.md
       - Store modes — embedded or hosted: store-modes.md
       - Authentication and authorization: guides/security-auth.md
       - Logging in with OpenID Connect: guides/oidc-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
+      - Stacking overlays: guides/ui-layering.md
+      - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
       - Packaging and running: guides/packaging.md
+      - Testing an application: guides/testing.md
       - Troubleshooting: guides/troubleshooting.md
       - Routing: ROUTING.md
       - Installing as an app (PWA): PWA.md

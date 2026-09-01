@@ -36,4 +36,57 @@
             <artifactId>junit-jupiter</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <resources>
+            <!-- This module has no src/main/resources of its own today. It is listed anyway,
+                 because declaring <resources> replaces the default rather than adding to it, and
+                 a resource added here later would otherwise vanish without a word. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The rule list an AI coding assistant reads out of the jar. Written by the step
+                 below into a directory of its own, so nothing under target/classes is produced by
+                 two things at once. -->
+            <resource>
+                <directory>${project.build.directory}/generated-resources/agent-rules</directory>
+            </resource>
+        </resources>
+        <plugins>
+            <!--
+                Every application resolves this module, so this is where a copy of the rules
+                reaches an assistant working in somebody else's project: it reads the version the
+                project actually depends on, offline, with no documentation service in the loop.
+
+                Generated from context7.json rather than written, so there is one source and drift
+                is impossible. The version is passed as an argument instead of being substituted by
+                resource filtering: filtering would have to run over a Markdown file full of ${...}
+                and @...@ examples, and the one thing that needs substituting is already on the
+                command line.
+
+                JDK 21 runs a .java file directly, so this adds no dependency to the build.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>generate-agent-rules</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>${project.basedir}/../tools/agent-rules/GenerateAgentRules.java</argument>
+                                <argument>${project.basedir}/../context7.json</argument>
+                                <argument>${project.build.directory}/generated-resources/agent-rules/META-INF/zeroz4j/AGENTS.md</argument>
+                                <argument>${project.version}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

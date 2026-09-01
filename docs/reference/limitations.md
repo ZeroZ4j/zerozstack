@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.7.0, in one place. This page exists because surprises are what make
+Every known gap in ZeroZ Stack 0.8.0, in one place. This page exists because surprises are what make
 people abandon a framework, and because a coding agent that reads it will not generate code against
 features that do not exist.
 
@@ -13,9 +13,9 @@ These exist in the source as annotations or constants and do nothing. Do not bui
 
 | Item | Status |
 |---|---|
-| Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x15 REJECT`, `0x16 SIGNAL_SUB`, `0x18 PUSH` | Declared and unreferenced. Reserved for future protocol work. |
-| Versioned mutations, acknowledgement and conflict rejection | Reserved in the protocol. The implemented sync path has no version field, no ACK and no conflict detection. |
-| Coalesced LiveSync mutations and UI-scheduler dispatch of inbound frames | Both are conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework. So every setter sends its own mutation frame, and all inbound frames are applied inline on the WebSocket callback. |
+| Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x16 SIGNAL_SUB`, `0x18 PUSH` | Declared and unreferenced. Reserved for future protocol work. (`0x15 REJECT` left this list in 0.4.0 and is now sent for every refused live mutation.) |
+| Versioned mutations, acknowledgment and conflict rejection | Reserved in the protocol. The implemented sync path has no version field, no ACK and no conflict detection. A refusal is reported, but nothing counts versions. |
+| UI-scheduler dispatch of inbound frames | Conditional on a `PlatformScheduler`, and `WasmRmiClient.setPlatformScheduler` is never called anywhere in the framework, so all inbound frames are applied inline on the WebSocket callback. (Outgoing mutations no longer depend on it: since 0.8.0 they are coalesced by a real timer - see [LiveSync](../LIVESYNC.md).) |
 
 ## Connection and reconnection
 
@@ -74,10 +74,51 @@ What automatic recovery deliberately does **not** cover:
 - **Rejections carry a reason.** The writer receives a corrective sync followed by a `0x15 REJECT`
   frame naming the model and the reason, and every rejection cause is logged server-side.
 - **Mutations do not coalesce** in the current build — one frame per setter call. See the table above.
-- **Handles are never evicted.** The `ObjectMapper` is application-scoped with no per-session
-  partitioning and no eviction, so handles accumulate for the process lifetime.
+- **A handle lasts exactly as long as the object.** Since 0.8.0 the handle registry holds what it
+  names weakly, on both tiers, so an entry disappears once the application has let go of the object.
+  There is no ceiling and no expiry, and none is needed. The consequence to know: a live object the
+  server no longer holds cannot be re-synced, and answers a re-sync the same way a restarted server
+  does — nothing comes back, the count is logged, the client re-fetches. Keep live objects in your
+  store or a field. Before 0.8.0 nothing was ever removed and handles accumulated for the process
+  lifetime, which filled a real application's heap.
+- **Only a `@LiveSync` model and the objects inside one get a handle.** Everything else on the wire
+  is a value with a name good for its own message only. So an ordinary value returned from a service
+  method cannot be synced, mutated, locked or re-read by handle — and a client that sends one back up
+  as a call argument now hands over a copy, where before 0.8.0 it reached into the server's own
+  instance and overwrote it.
+- **A re-sync request carries at most 10,000 handles.** A client holding more throws its list away,
+  logs one line, and lets the application re-fetch. The number matches the server's own per-browser
+  record, which holds no more than that either.
 - Only `@ClientWritable` classes accept client writes, and only objects the server has already synced
   can be mutated.
+- **A refusal is a sentence, not an exception.** The server sends back both the corrected state and
+  the reason; the client applies the state and hands the reason to any
+  `LiveMutationRefusals.onRefused(...)` listener. With no listener it goes to the browser console.
+  Nothing is thrown, because the edit was already over by the time the answer arrived.
+- **An edit waits before it travels, and leaving the page loses what is still waiting (0.8.0+).**
+  A change is sent after the changes stop for 150 ms, or after 1000 ms whatever happens - whichever
+  comes first (`LiveMutations.configure`). So a burst of typing costs a handful of messages instead
+  of one per character. What it also means: somebody who closes the tab or follows a link mid-burst
+  loses up to a second of typing. There is deliberately no flush when the page is left, because a
+  browser will not reliably put bytes on a WebSocket while it is taking the page apart, and a rescue
+  that works half the time is worse than none. Lower the ceiling for a screen where a second
+  matters.
+- **One connection's messages are handled in the order they were sent (0.8.0+).** Anything a client
+  sends after an edit - a service call, a lock, a signal write - goes on the wire behind that edit,
+  and the server handles it after that edit. A service method whose correctness depends on an edit
+  made a moment earlier is safe without a `LiveMutex`. Two exceptions, both deliberate: the keepalive
+  ping is answered straight away rather than queued, and a lock request that is waiting for somebody
+  else lets the messages behind it past, because it has changed nothing yet. Before 0.8.0 the server
+  handled up to 32 messages from one connection at once and this was a real hazard.
+- **The server's own broadcast will fight a text field, if you let it.** An accepted edit is sent
+  back to everybody including its author, carrying the value the server had a moment ago. An
+  `Effect` that copies that into the field somebody is typing in deletes what they typed since.
+  Follow the incoming value everywhere except the field that has the keyboard; see the pattern in
+  [LiveSync](../LIVESYNC.md).
+- **An edit that cannot be sent is announced, not retried.** If a change cannot be put on the wire,
+  the client asks the server to re-send that object — which puts the screen back to the truth — and
+  reports it to `LiveMutationRefusals`. It is not queued and it is not tried again. (An edit made
+  while the connection is *down* is a different thing, and that one is kept and sent on reconnect.)
 
 ## Server events
 
@@ -87,7 +128,7 @@ What automatic recovery deliberately does **not** cover:
   check. Use `publishToUser` or `publishToSession` for anything belonging to somebody.
 - **Tenant scope requires a provider that reports a tenant.** `Scope.TENANT` filters on the tenant an
   `AuthenticationProvider` attached to the session; a session with no tenant never matches.
-- **At most once.** A disconnected client misses events. No queueing, acknowledgement or redelivery.
+- **At most once.** A disconnected client misses events. No queueing, acknowledgment or redelivery.
 - **No replay.** Late subscribers receive nothing.
 - **Serialization failures throw to the caller.** The payload is checked once before the broadcast, so
   `publish` fails loudly instead of appearing to succeed while reaching nobody.
@@ -122,8 +163,11 @@ What automatic recovery deliberately does **not** cover:
 - **Treat the signal graph as single-threaded.** `ValueSignal` synchronizes its own reads, writes and
   listener notification, but `Computed` has no synchronization at all, so the graph as a whole is not
   thread-safe even though one type in it is.
-- **`KeyedList` discards its `Disposable`.** Its effect cannot be released and lives as long as the
-  upstream signal. `bindText` and `bindValue` now return theirs.
+- **`KeyedList` has to be disposed by you.** Since 0.8.0 it implements `Disposable`, so its effect
+  can be released — but nothing releases it for you. Keep the object `new KeyedList<>(...)` gives
+  back and call `dispose()` on it when the screen leaves, normally from `onDetach`. Before 0.8.0 it
+  handed out nothing to stop it with, so every one ever built kept watching its signal for ever.
+  `bindText` and `bindValue` return their own `Disposable` the same way.
 - **`bindValue` requires a writable signal.** Passing a `Computed` throws rather than silently
   degrading to one-way; use `bindValueReadOnly` when a one-way binding is what you want.
 
@@ -170,6 +214,14 @@ What automatic recovery deliberately does **not** cover:
 - Collections: `List`, `Set`, `Map`
 - Arrays: `byte[]`, `int[]`, `long[]`, `double[]`, `float[]`, `short[]`, `char[]`, `boolean[]`
 - `@DataModel` classes, including cycles and shared references
+- `@DataModel` **records** (0.8.0+) — but a record cannot take part in a reference cycle, cannot be
+  `@LiveSync` or `@ClientWritable`, and cannot be a persistence root
+- `@DataModel` **sealed interfaces and sealed abstract classes** (0.8.0+) — a field, list element,
+  argument or return value declared as the sealed base arrives as the real member type. Every
+  permitted type must itself be `@DataModel` and `final`, and must not itself be sealed
+- **Fields inherited from a base `@DataModel`** (0.8.0+). Before that they were dropped silently.
+  Extending a non-`@DataModel` class that has fields of its own, and shadowing a base field name,
+  are both refused when you compile
 
 - EclipseStore `Lazy<T>` fields — see below
 
@@ -269,6 +321,41 @@ WebAssembly today.
   by running each navigation on a green thread; application code fetching from such a callback must
   do the same.
 
+## User interface
+
+New in 0.8.0: every control in `zerozstack-ui-components` can be reached with Tab, pressed with
+Enter, and says what it is, and `KeyboardAndNamingContractTest` fails the build when a new one
+cannot. That is a floor, not a guarantee of a usable screen.
+
+- **The build check cannot tell you whether a name is a good name.** It sees that a control has one.
+  "Button" and "Delete this invoice permanently" both pass.
+- **It says nothing about color contrast, focus rings, motion, or whether the tab order makes
+  sense.** A control can satisfy every rule the check knows and still be unreadable on the theme it
+  ships with, invisible when focused, or reached tenth when it should be reached first. Those need
+  eyes, and this project has no automated answer to any of them.
+- **It reads source code, not a running page.** It works out which element each listener was put on
+  and what tag that element is. A keydown handler that answers Enter by doing nothing satisfies it.
+- **The real browser harness is not part of the build.** `tools/ui-proof` is where key presses are
+  actually sent and the page is actually asked what it says — the only place a question like "is
+  this error message part of the text a person can read" gets a true answer. It compiles the library
+  to JavaScript, takes about a minute, needs a Chrome on the machine, and is run by hand. Nothing
+  runs it for you, so a change that breaks it can be merged without anybody noticing until somebody
+  runs it.
+- **No accessibility rule is enforced in your application.** Every check described here reads this
+  repository's own source. A screen you write in your own project is checked by nothing.
+- **`replaceContents` is not enforced outside this repository either.** The check that fails a build
+  for emptying a container by hand reads the files in this checkout. In your application, writing
+  `getElement().setInnerHTML("")` still silently leaves the old screen's timers and effects running.
+- **A dialog beats every layer, and only a dialog can cover a dialog.** `Layer` orders everything
+  drawn on the page, but an open modal `Dialog` sits in a place of the browser's own above the whole
+  page that no stacking number reaches. Inside that place things stack in the order they arrived, so
+  a dialog opened after the framework's "connection lost" bar is drawn over it.
+- **On a browser older than Chrome 114, Safari 17 or Firefox 125 the "connection lost" bar has
+  nowhere to go**, and behaves as it did before 0.8.0: visible everywhere except under a dialog.
+- **A tooltip is drawn on the side it was told to sit on.** One placed against the right-hand edge of
+  the window is still partly off the window. It no longer takes the whole page sideways, which is
+  what it did before 0.8.0.
+
 ## Routing
 
 - **Loaders run in sequence, not in parallel.** A layout's loader and its child's cannot overlap,
@@ -277,7 +364,7 @@ WebAssembly today.
 - **The whole chain is rebuilt on every navigation.** A layout is not kept mounted while its children
   swap, so moving between two children of the same layout re-runs that layout's loader and rebuilds
   its components.
-- **One child per layout.** Sibling outlets are not modelled.
+- **One child per layout.** Sibling outlets are not modeled.
 - **No wildcard or optional segments.** Patterns are literal segments and `:params` with a fixed
   count; `/files/*path` is not supported.
 - **No lazy loading, transitions or scroll restoration.** Everything is in one bundle and the
@@ -297,7 +384,7 @@ WebAssembly today.
   and no application assets beyond what a page happens to request.
 - **Its caching strategy is fixed.** Navigations are network-first, same-origin assets are
   cache-first, `/wasm-rmi` and cross-origin requests are never intercepted. An application needing
-  different behaviour registers its own worker with `Pwa.install(path)` and takes on the
+  different behavior registers its own worker with `Pwa.install(path)` and takes on the
   cache-invalidation problem the shipped one solves.
 - **No background sync and no queued writes.** An action taken with no connection is lost, not
   replayed later.
@@ -313,7 +400,7 @@ WebAssembly today.
 
 - **One handler per application.** If more than one `FileUploadHandler` is deployed, the framework
   uses one of them and logs a warning naming them all.
-- **No resume and no chunking.** A file arrives in one request. An upload that was cancelled, or
+- **No resume and no chunking.** A file arrives in one request. An upload that was canceled, or
   whose connection dropped, starts again from the beginning next time.
 - **No per-user, per-tenant or per-day quota, and no limit on how many files may be uploaded at
   once.** `zeroz.upload.maxBytes` is 25 MB and applies to one file. Anything else — who may upload,
@@ -329,7 +416,7 @@ WebAssembly today.
 - **An upload needs a live connection.** The page asks its existing WebSocket for a one-time pass,
   valid for 60 seconds (`zeroz.upload.passSeconds`), usable once, and only from the browser it was
   issued to. There is no way to upload without a connection open — no API key, no signed URL.
-- **A file that did not arrive whole never reaches the handler.** A cancelled upload, or one whose
+- **A file that did not arrive whole never reaches the handler.** A canceled upload, or one whose
   connection dropped, is answered "That file did not finish sending. Please try again." and the
   part-received file is deleted.
 
@@ -409,15 +496,18 @@ WebAssembly today.
 - **Signals** — `Signals.scoped(name, initialValue, Scope.TENANT)` holds one value per tenant.
   `Signals.shared(...)` is a single global value by definition and crosses every boundary.
 - **Not isolated:** the `ObjectMapper` handle namespace is shared across tenants, and scoped signals
-  keep every target's value in memory for the process lifetime with no eviction.
+  keep every target's value in memory for the process lifetime with no eviction. The handle namespace
+  being shared is not a leak — a handle is a random 36-character identifier and being sent an object
+  is what earns the right to ask for it back — but it is one namespace, not one per tenant.
 
 Nothing here is automatic: a tenant-scoped push is a scope you pass. `GLOBAL` — which is also what
 you get by leaving the scope off — sends to every connected session, whichever tenant it belongs to.
 
 ## Examples
 
-- **No example uses `@ClientWritable`.** The LiveSync up-direction is exercised only by
-  `ServerLiveMutationTest` in `zerozstack-server-core`.
+- **One example uses `@ClientWritable`** — the topic box in `chat-livesync`, which is the only place
+  the up direction of LiveSync is shown end to end. It was added in 0.8.0, along with the fix for the
+  up direction being broken.
 - `components-showcase` publishes to push topics that nothing subscribes to, using the low-level
   `broadcastPush(String, Object)` rather than a typed `EventTopic`. Do not copy that pattern.
 

@@ -19,12 +19,61 @@ package com.zeroz4j.ui.component;
 
 import com.zeroz4j.ui.component.mixin.HasColorVariants;
 
+/**
+ * A link goes somewhere.
+ *
+ * <p>Give it a destination. An {@code <a>} with no {@code href} is not a link: the browser leaves
+ * it out of the tab order, so it cannot be reached by keyboard at all, and a screen reader reads
+ * it as ordinary text. It looks exactly like a link and nobody notices until somebody puts the
+ * mouse down.</p>
+ *
+ * <pre>{@code
+ * Link docs = new Link("Read the guide", "/docs/guide");
+ * }</pre>
+ *
+ * <p><b>If it does something rather than going somewhere, it is a {@link Button}.</b> Saving,
+ * deleting, opening a panel and switching a tab are all buttons, however small and quiet they are
+ * meant to look - {@code btn-link} makes a button look exactly like a link, which is the right way
+ * round.</p>
+ */
 public class Link extends Component implements HasText, HasComponents, HasStyle, HasSize,
         HasColorVariants<Link> {
 
     public Link() {
         super("a");
         addClassName("link");
+    }
+
+    /** A link with words and somewhere to go, which is what a link is. */
+    public Link(String text, String href) {
+        this();
+        setText(text);
+        setHref(href);
+    }
+
+    /**
+     * Where this link goes.
+     *
+     * @param href the address, or null to take it away - which also takes the link out of the tab
+     *             order, so only do that to something nobody is meant to follow
+     */
+    public void setHref(String href) {
+        if (href == null || href.isEmpty()) {
+            getElement().removeAttribute("href");
+        } else {
+            getElement().setAttribute("href", href);
+        }
+    }
+
+    /** The address this link goes to, or null when it has none. */
+    public String getHref() {
+        return getElement().getAttribute("href");
+    }
+
+    /** {@link #setHref(String)}, returning the link so it reads inside the expression that builds it. */
+    public Link withHref(String href) {
+        setHref(href);
+        return this;
     }
 
     @Override

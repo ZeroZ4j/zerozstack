@@ -19,6 +19,7 @@ package com.zeroz4j.example.server;
 
 import com.zeroz4j.example.api.ChatService;
 import com.zeroz4j.example.model.ChatMessage;
+import com.zeroz4j.example.model.ChatTopic;
 import com.zeroz4j.example.model.LiveChatState;
 import com.zeroz4j.example.server.store.DataRoot;
 import com.zeroz4j.server.RmiRequestContext;
@@ -49,6 +50,13 @@ public class ChatServiceImpl implements ChatService {
     @Override
     public LiveChatState getState() {
         return getRoot().getChatState();
+    }
+
+    @Override
+    public ChatTopic getTopic() {
+        // Handed out as it is. From here the browser edits it directly: the topic object is
+        // @ClientWritable, so a setter call there becomes a change here, with no method to call.
+        return getRoot().getTopic();
     }
 
     @Override

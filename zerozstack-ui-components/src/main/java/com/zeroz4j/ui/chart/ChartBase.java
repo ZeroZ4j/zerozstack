@@ -20,6 +20,8 @@ package com.zeroz4j.ui.chart;
 import com.zeroz4j.ui.component.Js;
 import com.zeroz4j.ui.component.SvgCanvas;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.browser.Window;
@@ -79,9 +81,10 @@ public abstract class ChartBase extends Div {
         plotHost.addClassName("relative w-full");
         svgHost.addClassName("w-full");
         tooltip.addClassName("pointer-events-none absolute z-30 hidden max-w-xs rounded-md border "
-            + "border-base-300 bg-base-100/95 px-2 py-1.5 text-xs leading-snug shadow-lg backdrop-blur-sm");
-        legendHost.addClassName("flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 text-xs "
-            + "text-base-content/70");
+            + "border-base-300 bg-base-100/95 px-2 py-1.5 shadow-lg backdrop-blur-sm "
+            + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
+        legendHost.addClassName("flex flex-wrap items-center gap-x-4 gap-y-1 px-1 pt-2 "
+            + TextStyle.CAPTION.getClassNames());
         plotHost.add(svgHost, tooltip);
         add(plotHost, legendHost);
 
@@ -268,12 +271,126 @@ public abstract class ChartBase extends Div {
     }
 
     /**
-     * A text label. {@code anchor} is {@code start}, {@code middle} or {@code end};
-     * {@code opacity} dims it against the plot without changing hue, so it stays legible
-     * in every theme.
+     * A word or a number drawn inside the picture, in one of the three named roles.
+     *
+     * <p>The role decides the size, the fade and the weight, so no chart writes those down. Ask
+     * for a role rather than a number - see {@link PlotText}. {@code anchor} is {@code start},
+     * {@code middle} or {@code end}.</p>
+     *
+     * @param role which kind of words these are
+     * @param x horizontal position
+     * @param y vertical position
+     * @param content the words
+     * @param anchor which end of the words sits at {@code x}
+     * @return the SVG element, not yet added to anything
      */
+    protected static Element text(PlotText role, double x, double y, String content, String anchor) {
+        return rawText(role, role.getFontSize(), role.getNaturalEmphasis(), x, y, content, anchor);
+    }
+
+    /**
+     * The same, at a strength of its own.
+     *
+     * <p>{@link Emphasis#FULL} is what words drawn on top of a filled shape need: they sit on a
+     * colour of their own, so fading them against the plot behind would be fading them against
+     * something they are not on.</p>
+     *
+     * @param role which kind of words these are
+     * @param emphasis how loud they are
+     * @param x horizontal position
+     * @param y vertical position
+     * @param content the words
+     * @param anchor which end of the words sits at {@code x}
+     * @return the SVG element, not yet added to anything
+     */
+    protected static Element text(PlotText role, Emphasis emphasis, double x, double y,
+                                  String content, String anchor) {
+        return rawText(role, role.getFontSize(), emphasis, x, y, content, anchor);
+    }
+
+    /**
+     * The same, at a size the drawing decides.
+     *
+     * <p>Only for text whose size genuinely comes from the space it has - the reading in the
+     * middle of a dial, and the caption under it, both of which scale with the dial.</p>
+     *
+     * @param role which kind of words these are
+     * @param fontSize the size in pixels, worked out from the room available
+     * @param x horizontal position
+     * @param y vertical position
+     * @param content the words
+     * @param anchor which end of the words sits at {@code x}
+     * @return the SVG element, not yet added to anything
+     */
+    protected static Element text(PlotText role, double fontSize, double x, double y,
+                                  String content, String anchor) {
+        return rawText(role, fontSize, role.getNaturalEmphasis(), x, y, content, anchor);
+    }
+
+    /** Monospaced, for numbers that must not jitter as they change width. */
+    protected static Element monoText(PlotText role, double x, double y, String content, String anchor) {
+        return mono(text(role, x, y, content, anchor));
+    }
+
+    /** Monospaced, at a strength of its own. */
+    protected static Element monoText(PlotText role, Emphasis emphasis, double x, double y,
+                                      String content, String anchor) {
+        return mono(text(role, emphasis, x, y, content, anchor));
+    }
+
+    /** Monospaced, at a size the drawing decides. */
+    protected static Element monoText(PlotText role, double fontSize, double x, double y,
+                                      String content, String anchor) {
+        return mono(text(role, fontSize, x, y, content, anchor));
+    }
+
+    /**
+     * A text label at a size and fade of your own choosing.
+     *
+     * @deprecated Ask for a {@link PlotText} role instead. Two sizes and seven degrees of fade grew
+     *     out of this being the only method there was; the roles exist so that a chart never writes
+     *     either number down again. Kept so an application subclassing this class keeps compiling.
+     * @param x horizontal position
+     * @param y vertical position
+     * @param content the words
+     * @param anchor which end of the words sits at {@code x}
+     * @param fontSize the size in pixels
+     * @param opacity how much of the surrounding colour the words keep
+     * @return the SVG element, not yet added to anything
+     */
+    @Deprecated
     protected static Element text(double x, double y, String content, String anchor,
                                   double fontSize, double opacity) {
+        return svgText(x, y, content, anchor, fontSize, opacity, null);
+    }
+
+    /**
+     * A monospaced label at a size and fade of your own choosing.
+     *
+     * @deprecated Ask for a {@link PlotText} role instead.
+     * @param x horizontal position
+     * @param y vertical position
+     * @param content the words
+     * @param anchor which end of the words sits at {@code x}
+     * @param fontSize the size in pixels
+     * @param opacity how much of the surrounding colour the words keep
+     * @return the SVG element, not yet added to anything
+     */
+    @Deprecated
+    protected static Element monoText(double x, double y, String content, String anchor,
+                                      double fontSize, double opacity) {
+        return mono(svgText(x, y, content, anchor, fontSize, opacity, null));
+    }
+
+    private static Element rawText(PlotText role, double fontSize, Emphasis emphasis,
+                                   double x, double y, String content, String anchor) {
+        return svgText(x, y, content, anchor, fontSize,
+            (emphasis == null ? role.getNaturalEmphasis() : emphasis).getOpacity(),
+            role.getFontWeight());
+    }
+
+    private static Element svgText(double x, double y, String content, String anchor,
+                                   double fontSize, double opacity, String fontWeight) {
         Element element = SvgCanvas.el("text",
             "x", num(x), "y", num(y),
             "text-anchor", anchor,
@@ -281,14 +398,14 @@ public abstract class ChartBase extends Div {
             "fill", "currentColor",
             "fill-opacity", num(opacity),
             "dominant-baseline", "middle");
+        if (fontWeight != null) {
+            element.setAttribute("font-weight", fontWeight);
+        }
         element.appendChild(Window.current().getDocument().createTextNode(content == null ? "" : content));
         return element;
     }
 
-    /** Monospaced label, for numbers that must not jitter as they change width. */
-    protected static Element monoText(double x, double y, String content, String anchor,
-                                      double fontSize, double opacity) {
-        Element element = text(x, y, content, anchor, fontSize, opacity);
+    private static Element mono(Element element) {
         element.setAttribute("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace");
         return element;
     }
@@ -386,7 +503,7 @@ public abstract class ChartBase extends Div {
             entry.add(swatch, label);
             if (item.value() != null) {
                 Div value = new Div(item.value());
-                value.addClassName("font-mono text-base-content/50");
+                value.addClassName("font-mono");
                 entry.add(value);
             }
             legendHost.add(entry);
@@ -409,7 +526,7 @@ public abstract class ChartBase extends Div {
         frame.setAttribute("stroke-opacity", "0.08");
         frame.setAttribute("rx", "6");
         add(frame);
-        add(text(plotLeft() + plotWidth() / 2.0, plotTop() + plotHeight() / 2.0,
-            emptyText, "middle", 12, 0.4));
+        add(text(PlotText.MESSAGE, plotLeft() + plotWidth() / 2.0, plotTop() + plotHeight() / 2.0,
+            emptyText, "middle"));
     }
 }

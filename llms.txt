@@ -1,19 +1,23 @@
 # ZeroZ4j
 
-> An experimental pure-Java full-stack framework (version 0.7.0). The UI is Java compiled for the
+> An experimental pure-Java full-stack framework (version 0.8.0). The UI is Java compiled for the
 > browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
 > WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
 Key things to know before generating ZeroZ Stack code:
 
-- Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.7.0` and depend on
+- Consume from Maven Central: import `com.zeroz4j:zerozstack-bom:0.8.0` and depend on
   `zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`, `zerozstack-ui-components`
   and `zerozstack-store-eclipsestore` without versions.
 - To build the framework itself, requires JDK 21 and `mvn clean install -DskipTests` from the repository root; the `clean` is
   required because each example server's `target/libs` is never pruned.
 - An application has three modules: shared (`@DataModel` models, `@RmiService` interfaces), client
   (UI), server (`@ApplicationScoped` CDI implementations).
+- A `@DataModel` may be a class, a `record`, or a `sealed` interface or abstract class listing its
+  permitted types (records and sealed types both 0.8.0+). A record cannot be `@LiveSync`,
+  `@ClientWritable`, part of a reference cycle, or a persistence root; use a class for those. A model
+  may extend another model and the base's fields travel too (0.8.0+).
 - The client compiles to JavaScript via TeaVM today. This is a deliberate interim choice because
   TeaVM's WasmGC backend is not yet complete enough for ZeroZ Stack; WasmGC remains the intended
   destination. Do not claim client code compiles to WebAssembly today, and do not change the
@@ -36,6 +40,23 @@ Key things to know before generating ZeroZ Stack code:
   change reaches needs its own `@ClientWritable`, not just the outermost one.
 - An unexpected server exception reaches the client as one sentence and a reference code. Throw
   `com.zeroz4j.server.ClientVisibleException` when the caller should read the real message.
+- Never empty a container by hand. `getElement().setInnerHTML("")` leaves the old screen's timers and
+  effects running. Use `replaceContents(...)`, `removeAll()` or `remove(...)`, all of which run
+  `onDetach` on everything leaving (0.8.0+).
+- Ask for a text size by name from `TextStyle` (`PAGE_TITLE`, `SECTION_TITLE`, `BODY`, `SECONDARY`,
+  `CAPTION`) rather than writing out sizes and fades. How loud is a separate question, `Emphasis`
+  (`FULL`, `QUIET`, `FAINT`), given only where the text disagrees with its size. Text drawn inside a
+  chart uses `PlotText` (`FIGURE`, `LABEL`, `CAPTION`, `MESSAGE`), because class names do not reach a
+  drawing.
+- Name every form field with `withLabel("...")`, not with the constructor argument — the constructor
+  argument is the placeholder, which disappears the moment somebody types. Anything clickable must be
+  a `Button` or a `Link` with a real `href`, never a click listener on a `Div`.
+- Test a server in-process with `zerozstack-server-test` (test scope): `TestServer.builder().beans(...)
+  .start()` and `server.connect(user, roles)`. Two servers can run side by side.
+- **This page describes the framework's main line.** An application depends on one released version,
+  which may be older. The rules for that exact version travel inside its own jars, at
+  `META-INF/zeroz4j/AGENTS.md` in `zerozstack-shared-api`, and a project generated from the archetype
+  carries its own `AGENTS.md` naming its version. Prefer those when they disagree with this.
 
 ## Decision guides
 
@@ -54,16 +75,21 @@ Key things to know before generating ZeroZ Stack code:
 ## Reference
 
 - [Glossary](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/glossary.md): Event, signal, push, message, sync, mutation, handle, retained value — defined once, not interchangeable.
-- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.7.0, including features that are declared but not implemented.
+- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.8.0, including features that are declared but not implemented.
 - [Wire protocol](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/PROTOCOL.md): Frame structure, opcodes and type tags.
 - [Validation](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/VALIDATION.md): Annotate once on the model; enforced by the client binder and independently by the server.
 
 ## Guides
 
+- [Declaring the types that cross the wire](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/data-models.md): When to write a class, a record or a sealed family; sharing fields with a base class; which field types are allowed.
+- [Testing an application](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/testing.md): Starting a server inside a test in one process, driving it, and giving one server settings of its own.
 - [Signals](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/SIGNALS.md): ValueSignal, Computed, Effect, shared signals, the immutability contract, lifecycle.
 - [Server events](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/SERVER_EVENTS.md): EventTopic, EventPublisher, ServerEvents, delivery semantics.
 - [LiveSync](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/LIVESYNC.md): Two-way object synchronization, @ClientWritable gates, LiveMutationListener.
-- [UI components](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/UI_COMPONENTS.md): Layouts, the component catalogue, binding.
+- [UI components](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/UI_COMPONENTS.md): Layouts, the component catalog, naming a field, the five named text sizes, swapping what is inside a container.
+- [Forms and binding](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/ui-forms-and-validation.md): Captioning a field, Binder, and where a failed check's sentence appears.
+- [Keyboard and naming](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/ui-keyboard-and-naming.md): What every control owes somebody with no mouse, and what the build check does and does not enforce.
+- [Stacking overlays](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/ui-layering.md): The named Layer scale, and the browser's top layer that no number can beat.
 - [Accepting file uploads](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/file-uploads.md): The FileUpload component, the FileUploadHandler bean, the size limit and what the application must check itself.
 - [Authentication and authorization](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/security-auth.md): AuthenticationProvider, @Secured, @RolesAllowed, client identity without a login, and which connections are accepted.
 - [Packaging and running](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/packaging.md): The four shapes a server ships in, and every zeroz.* setting with its default.

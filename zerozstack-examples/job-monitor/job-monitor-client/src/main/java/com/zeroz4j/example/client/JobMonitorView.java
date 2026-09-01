@@ -28,6 +28,7 @@ import com.zeroz4j.ui.layout.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * Reactive job monitor view driven entirely by the shared signal {@link JobSignals#STATUS}.
@@ -75,8 +76,7 @@ public class JobMonitorView extends Card {
         titleGroup.add(title, statusDot, statusBadge);
 
         jobIdSpan = new Span();
-        jobIdSpan.addClassName("text-sm");
-        jobIdSpan.addClassName("text-base-content/60");
+        TextStyle.SECONDARY.applyTo(jobIdSpan);
 
         headerRow.add(titleGroup, jobIdSpan);
         add(headerRow);
@@ -120,8 +120,7 @@ public class JobMonitorView extends Card {
         footerRow.addClassName("border-t");
         footerRow.addClassName("border-base-300");
 
-        messageSpan = new Span();
-        messageSpan.addClassName("text-sm");
+        messageSpan = TextStyle.SECONDARY.span("");
         messageSpan.addClassName("font-medium");
 
         startButton = new Button("Start job");
@@ -214,7 +213,7 @@ public class JobMonitorView extends Card {
             String currentPhase = status.getPhase();
             boolean isFailed = "Failed".equals(currentPhase);
 
-            steps.getElement().setInnerHTML("");
+            steps.removeAll();
 
             int activeIndex = -1;
             for (int i = 0; i < PIPELINE_PHASES.length; i++) {

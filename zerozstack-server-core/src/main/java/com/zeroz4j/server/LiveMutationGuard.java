@@ -47,8 +47,24 @@ import java.util.Set;
  * name in the frame. The frame's class name is the client's claim, and a client that could name a
  * writable class while handing over a restricted object's handle would walk straight through the
  * check.</p>
+ *
+ * <h2>The second half: models with no handle</h2>
+ *
+ * <p>Since 0.8.0 only a {@code @LiveSync} model and the objects inside one carry a lasting handle;
+ * everything else on the wire is a value with a name good for one message. A handle check alone
+ * would therefore no longer see a model the frame invented on the spot — and that model is still
+ * written into the server's graph, replacing whatever was in that field. So the same rule is applied
+ * a second way, through {@link ObjectMapper.ModelGuard}: <b>every model class a change reaches,
+ * other than the outermost, must itself be marked writable by clients and pass its own role
+ * check</b>, whether it arrived with a handle or without one. This also closes a hole that was
+ * already there: before 0.8.0, a client could smuggle a fresh instance of a restricted model into a
+ * writable one simply by not reusing the restricted object's handle.</p>
+ *
+ * <p>A {@code record} is exempt, because a record is a value rather than an object that is edited:
+ * it has no setters, never changes, and replacing one is the same kind of act as replacing a
+ * number.</p>
  */
-final class LiveMutationGuard implements ObjectMapper.ResolutionGuard {
+final class LiveMutationGuard implements ObjectMapper.ResolutionGuard, ObjectMapper.ModelGuard {
 
     /** Refusal that aborts a decode in progress. Never reaches a client as-is. */
     static final class Denied extends RuntimeException {
@@ -116,6 +132,37 @@ final class LiveMutationGuard implements ObjectMapper.ResolutionGuard {
         }
 
         Class<?> type = canonical.getClass();
+        ClientWritable writable = type.getAnnotation(ClientWritable.class);
+        if (writable == null) {
+            throw new Denied("The change also alters a " + type.getSimpleName()
+                    + " that clients may not write. Nothing was changed.");
+        }
+        if (writable.value().length > 0 && !holdsAnyRole(writable.value())) {
+            throw new Denied("The change also alters a " + type.getSimpleName()
+                    + ", which needs one of the roles " + Arrays.toString(writable.value())
+                    + ". Nothing was changed.");
+        }
+    }
+
+    /**
+     * Checks a model the decode has just built or is about to write into, handle or no handle.
+     *
+     * @param model the instance
+     * @param depth how deeply nested it is; 1 is the change's outermost object
+     * @throws Denied if this connection may not write a model of that class
+     */
+    @Override
+    public void checkModel(Object model, int depth) {
+        if (model == null || depth <= 1) {
+            // The outermost object is the caller's to judge: it has the decoded value and can say
+            // precisely why it was refused - not writable, wrong role, or failed validation.
+            return;
+        }
+        Class<?> type = model.getClass();
+        if (type.isRecord()) {
+            // A record never changes and has no identity to protect; it travels as a value.
+            return;
+        }
         ClientWritable writable = type.getAnnotation(ClientWritable.class);
         if (writable == null) {
             throw new Denied("The change also alters a " + type.getSimpleName()

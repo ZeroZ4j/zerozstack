@@ -59,12 +59,12 @@ public final class Js {
      * in the composer.
      */
     @JSBody(params = {"element", "callback"}, script =
-        "element.addEventListener('paste', function(e){"
-        + " var items = e.clipboardData && e.clipboardData.items; if(!items) return;"
-        + " for (var i=0;i<items.length;i++){"
-        + "  if (items[i].type && items[i].type.indexOf('image')===0){"
-        + "   e.preventDefault();"
-        + "   var blob = items[i].getAsFile(); if(!blob) continue;"
+        "element.addEventListener('paste', function(paste){"
+        + " var items = paste.clipboardData && paste.clipboardData.items; if(!items) return;"
+        + " for (var idx=0;idx<items.length;idx++){"
+        + "  if (items[idx].type && items[idx].type.indexOf('image')===0){"
+        + "   paste.preventDefault();"
+        + "   var blob = items[idx].getAsFile(); if(!blob) continue;"
         + "   var reader = new FileReader();"
         + "   reader.onload = function(ev){ callback(ev.target.result); };"
         + "   reader.readAsDataURL(blob);"
@@ -79,13 +79,24 @@ public final class Js {
     @JSBody(params = {"key", "value"}, script = "window.localStorage.setItem(key, value);")
     public static native void localSet(String key, String value);
 
-    /** Copies text to the clipboard (execCommand fallback works in every embedded browser). */
+    /**
+     * Copies text to the clipboard, and puts the keyboard back where it was.
+     *
+     * <p>The copying is done by making a text box, selecting it, and asking the browser to copy
+     * the selection - which works in every embedded browser, unlike the newer clipboard call.
+     * Selecting that box takes the keyboard off whatever was just pressed, and removing the box
+     * leaves the keyboard on nothing at all. So anybody who pressed a Copy button with the
+     * keyboard was dumped to the top of the page and had to Tab all the way back down. Both Copy
+     * buttons in this library did that, and the browser proof caught it.</p>
+     */
     @JSBody(params = {"text"}, script =
-        "var ta = document.createElement('textarea');"
+        "var was = document.activeElement;"
+        + "var ta = document.createElement('textarea');"
         + "ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';"
         + "document.body.appendChild(ta); ta.select();"
-        + "try { document.execCommand('copy'); } catch (e) {}"
-        + "document.body.removeChild(ta);")
+        + "try { document.execCommand('copy'); } catch (ignored) {}"
+        + "document.body.removeChild(ta);"
+        + "if (was && was.focus) { try { was.focus(); } catch (ignored) {} }")
     public static native void copyToClipboard(String text);
 
     @JSBody(params = {"theme"}, script = "document.body.setAttribute('data-theme', theme);")
@@ -108,7 +119,7 @@ public final class Js {
         + "if (dialog.open && !dialog.isConnected) { dialog.removeAttribute('open'); }"
         + "if (!dialog.isConnected) { return false; }"
         + "if (dialog.open) { return true; }"
-        + "try { dialog.showModal(); } catch (e) { return false; }"
+        + "try { dialog.showModal(); } catch (ignored) { return false; }"
         + "return true;")
     public static native boolean dialogShowModal(HTMLElement dialog);
 
@@ -123,6 +134,158 @@ public final class Js {
     /** Whether {@code dialog} currently carries the native {@code open} state. */
     @JSBody(params = {"dialog"}, script = "return !!dialog.open;")
     public static native boolean dialogIsOpen(HTMLElement dialog);
+
+    /**
+     * The element the keyboard is on right now, or null when the browser says the page body is.
+     *
+     * <p>Used to remember where focus was before an overlay opened, so it can be put back
+     * afterwards. The body is reported as null on purpose: putting focus back on the body is the
+     * same as putting it nowhere, and doing it explicitly steals it from anything that has moved
+     * on since.</p>
+     */
+    @JSBody(params = {}, script =
+        "var el = document.activeElement;"
+        + "if (!el || el === document.body || el === document.documentElement) { return null; }"
+        + "return el;")
+    public static native HTMLElement activeElement();
+
+    /**
+     * Puts the keyboard on {@code element}. Does nothing if it is null, is no longer in the page,
+     * or refuses focus.
+     */
+    @JSBody(params = {"element"}, script =
+        "if (!element || !element.isConnected || typeof element.focus !== 'function') { return; }"
+        + "try { element.focus(); } catch (ignored) {}")
+    public static native void focus(HTMLElement element);
+
+    /**
+     * Puts the keyboard on the first thing inside {@code container} that can take it — a button, a
+     * link, a field. If there is nothing, {@code container} itself is made focusable and takes it,
+     * so that the keyboard is inside the overlay rather than left behind on the page.
+     *
+     * <p>An element carrying {@code autofocus} wins over document order, which is how a "Cancel"
+     * button is made the one waiting for Enter.</p>
+     *
+     * <p>It keeps trying for about half a second. A panel that slides in is invisible for the first
+     * tenth of a second — the stylesheet delays it — and the browser refuses to put the keyboard on
+     * something invisible, so one attempt at the moment of opening lands nowhere at all.</p>
+     */
+    @JSBody(params = {"container"}, script =
+        "if (!container) { return; }"
+        + "var selector = 'a[href], area[href], button:not([disabled]), input:not([disabled])"
+        + ":not([type=hidden]), select:not([disabled]), textarea:not([disabled]),"
+        + " iframe, object, embed, [contenteditable], [tabindex]:not([tabindex=\"-1\"])';"
+        + "var tries = 0;"
+        + "var attempt = function () {"
+        + " tries++;"
+        + " if (!container.isConnected) { return; }"
+        + " if (container.contains(document.activeElement) && document.activeElement !== document.body) { return; }"
+        + " var wanted = container.querySelector('[autofocus]');"
+        + " if (!wanted) {"
+        + "  var all = container.querySelectorAll(selector);"
+        + "  for (var idx = 0; idx < all.length; idx++) {"
+        + "   var candidate = all[idx];"
+        + "   if (candidate.offsetWidth > 0 || candidate.offsetHeight > 0"
+        + "       || candidate.getClientRects().length > 0) { wanted = candidate; break; }"
+        + "  }"
+        + " }"
+        + " if (!wanted) {"
+        + "  if (!container.hasAttribute('tabindex')) { container.setAttribute('tabindex', '-1'); }"
+        + "  wanted = container;"
+        + " }"
+        + " try { wanted.focus(); } catch (ignored) {}"
+        + " if (!container.contains(document.activeElement) && tries < 40) {"
+        + "  requestAnimationFrame(attempt);"
+        + " }"
+        + "};"
+        + "attempt();")
+    public static native void focusFirstInside(HTMLElement container);
+
+    /** Whether {@code element} matches a CSS selector — ":hover", ":focus-within" and so on. */
+    @JSBody(params = {"element", "selector"}, script =
+        "if (!element) { return false; }"
+        + "try { return element.matches(selector); } catch (ignored) { return false; }")
+    public static native boolean matches(HTMLElement element, String selector);
+
+    /**
+     * The element an event happened on, or null when it was not an element. TeaVM's {@code Event}
+     * exposes a target that is a {@code Node}, and a listener registered on the document needs the
+     * element to ask whether the click was inside something.
+     */
+    @JSBody(params = {"event"}, script =
+        "var target = event.target;"
+        + "return (target && target.nodeType === 1) ? target : null;")
+    public static native HTMLElement eventTargetElement(org.teavm.jso.dom.events.Event event);
+
+    /** Whether {@code element} is, or is inside, {@code container}. */
+    @JSBody(params = {"container", "element"}, script =
+        "return !!(container && element && container.contains(element));")
+    public static native boolean contains(HTMLElement container, HTMLElement element);
+
+    /**
+     * Holds the keyboard inside {@code container}: Tab off the last thing in it comes back to the
+     * first, and Shift+Tab off the first goes to the last.
+     *
+     * <p>This is what a modal {@code <dialog>} gets from the browser for nothing. Anything else
+     * that covers the page has to do it itself, and without it a person using the keyboard walks
+     * straight out of the panel into the page behind — which is still there, still clickable, and
+     * hidden under a dim.</p>
+     *
+     * <p>Calling it twice on the same element is harmless. Undo it with
+     * {@link #releaseFocusTrap(HTMLElement)}.</p>
+     */
+    @JSBody(params = {"container"}, script =
+        "if (!container || container.__zzTrap) { return; }"
+        + "var selector = 'a[href], area[href], button:not([disabled]), input:not([disabled])"
+        + ":not([type=hidden]), select:not([disabled]), textarea:not([disabled]),"
+        + " iframe, object, embed, [contenteditable], [tabindex]:not([tabindex=\"-1\"])';"
+        + "container.__zzTrap = function (keydown) {"
+        + " if (keydown.key !== 'Tab') { return; }"
+        + " var all = container.querySelectorAll(selector);"
+        + " var nodes = [];"
+        + " for (var idx = 0; idx < all.length; idx++) {"
+        + "  var node = all[idx];"
+        + "  if (node.offsetWidth > 0 || node.offsetHeight > 0"
+        + "      || node.getClientRects().length > 0) { nodes.push(node); }"
+        + " }"
+        + " if (nodes.length === 0) { keydown.preventDefault(); return; }"
+        + " var first = nodes[0];"
+        + " var last = nodes[nodes.length - 1];"
+        + " var here = document.activeElement;"
+        + " var inside = container.contains(here);"
+        + " if (keydown.shiftKey) {"
+        + "  if (!inside || here === first) { keydown.preventDefault(); last.focus(); }"
+        + " } else if (!inside || here === last) { keydown.preventDefault(); first.focus(); }"
+        + "};"
+        + "container.addEventListener('keydown', container.__zzTrap, true);")
+    public static native void trapFocusIn(HTMLElement container);
+
+    /** Lets the keyboard leave {@code container} again. Harmless if it was never held. */
+    @JSBody(params = {"container"}, script =
+        "if (!container || !container.__zzTrap) { return; }"
+        + "container.removeEventListener('keydown', container.__zzTrap, true);"
+        + "container.__zzTrap = null;")
+    public static native void releaseFocusTrap(HTMLElement container);
+
+    /** Whether a checkbox is ticked (TeaVM does not wrap HTMLInputElement.checked here). */
+    @JSBody(params = {"box"}, script = "return !!box.checked;")
+    public static native boolean checkboxIsChecked(HTMLElement box);
+
+    /** Ticks or unticks a checkbox without firing a change event, as a property write does. */
+    @JSBody(params = {"box", "checked"}, script = "box.checked = !!checked;")
+    public static native void checkboxSetChecked(HTMLElement box, boolean checked);
+
+    /** Opens or closes a &lt;details&gt; element (TeaVM does not wrap HTMLDetailsElement.open). */
+    @JSBody(params = {"details", "open"}, script = "details.open = !!open;")
+    public static native void detailsSetOpen(HTMLElement details, boolean open);
+
+    /** Whether a &lt;details&gt; element is currently open. */
+    @JSBody(params = {"details"}, script = "return !!details.open;")
+    public static native boolean detailsIsOpen(HTMLElement details);
+
+    /** The {@code key} of a keyboard event — "Escape", "Tab", "a" — as the browser reports it. */
+    @JSBody(params = {"event"}, script = "return event.key;")
+    public static native String eventKey(org.teavm.jso.dom.events.Event event);
 
     /** Whether {@code event}'s target is exactly {@code element} and not something inside it. */
     @JSBody(params = {"event", "element"}, script = "return event.target === element;")

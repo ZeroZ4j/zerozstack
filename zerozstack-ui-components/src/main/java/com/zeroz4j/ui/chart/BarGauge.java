@@ -18,6 +18,8 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -176,7 +178,7 @@ public final class BarGauge extends Div {
         removeAll();
         if (rows.isEmpty()) {
             Div empty = new Div("No data");
-            empty.addClassName("py-4 text-center text-xs text-base-content/40");
+            empty.addClassName("py-4 text-center " + TextStyle.SECONDARY.getClassNames());
             add(empty);
             return;
         }
@@ -198,7 +200,7 @@ public final class BarGauge extends Div {
         line.addClassName("flex items-center gap-3");
 
         Div label = new Div(row.label());
-        label.addClassName("shrink-0 truncate text-right text-xs text-base-content/70");
+        label.addClassName("shrink-0 truncate text-right " + TextStyle.CAPTION.getClassNames());
         label.setStyle("width", labelWidth);
         label.getElement().setAttribute("title", row.label());
 
@@ -208,7 +210,7 @@ public final class BarGauge extends Div {
         fill(track, row.value(), false);
 
         Div value = new Div(Double.isNaN(row.value()) ? "-" : format.format(row.value()));
-        value.addClassName("w-20 shrink-0 text-right font-mono text-xs font-semibold");
+        value.addClassName("w-20 shrink-0 text-right font-mono font-semibold " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
         value.setStyle("color", Threshold.colorFor(thresholds, row.value(), Palette.BASE_CONTENT));
 
         line.add(label, track, value);
@@ -220,7 +222,7 @@ public final class BarGauge extends Div {
         column.addClassName("flex min-w-0 flex-1 flex-col items-center gap-1");
 
         Div value = new Div(Double.isNaN(row.value()) ? "-" : format.format(row.value()));
-        value.addClassName("font-mono text-xs font-semibold");
+        value.addClassName("font-mono font-semibold " + TextStyle.CAPTION.getClassNames(Emphasis.FULL));
         value.setStyle("color", Threshold.colorFor(thresholds, row.value(), Palette.BASE_CONTENT));
 
         Div track = new Div();
@@ -229,7 +231,7 @@ public final class BarGauge extends Div {
         fill(track, row.value(), true);
 
         Div label = new Div(row.label());
-        label.addClassName("w-full truncate text-center text-xs text-base-content/70");
+        label.addClassName("w-full truncate text-center " + TextStyle.CAPTION.getClassNames());
         label.getElement().setAttribute("title", row.label());
 
         column.add(value, track, label);

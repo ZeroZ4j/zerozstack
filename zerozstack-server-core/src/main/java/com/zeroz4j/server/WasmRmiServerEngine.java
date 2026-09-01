@@ -35,6 +35,9 @@ import java.util.logging.Level;
 import jakarta.inject.Inject;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -52,12 +55,9 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Server-side Jakarta EE WebSocket endpoint for zeroz4j.
@@ -68,7 +68,7 @@ import java.util.concurrent.RejectedExecutionException;
  * <ul>
  *   <li><b>CDI Discovery &amp; Scanning:</b> At startup ({@link #scanServiceRegistry()}), scans the CDI bean manager for beans implementing {@link RmiService}
  *       interfaces, builds service/method reflection registries, and populates security whitelists ({@code @Secured}, {@code @RolesAllowed}).</li>
- *   <li><b>Virtual Thread Concurrency:</b> Per-session {@link ExecutorService} (Project Loom virtual threads) handles inbound frames without blocking I/O threads.</li>
+ *   <li><b>Frame Ordering:</b> Per-session {@link SessionFrameQueue} handles one connection's frames one at a time, in the order the transport delivered them, on threads from {@link SessionThreads}. Different connections stay fully concurrent.</li>
  *   <li><b>Frame Dispatch:</b> Operates on incoming binary frames in {@link #processIncomingBinaryPayload(ByteBuffer, Session)}. Reads correlation ID, interface name, method name, unmarshals arguments using {@link BinarySerializer}, enforces security, populates {@link RmiRequestContext}, invokes method via reflection, and writes return value (0x01 SUCCESS) or exception (0x0F ERROR).</li>
  * </ul>
  */
@@ -142,6 +142,32 @@ public class WasmRmiServerEngine implements EventPublisher {
     /** How long a silent connection is held; unset leaves the container's own timeout. */
     static final String IDLE_TIMEOUT_MINUTES_PROPERTY = "zeroz.ws.idleTimeoutMinutes";
 
+    /**
+     * Everything this server owns: its open connections, what it has sent to whom, its settings.
+     *
+     * <p>Injected, which is what makes it <em>this</em> server's rather than the process's. See
+     * {@link #runtime()} for what happens when a container builds this endpoint itself instead of
+     * asking CDI for it.</p>
+     */
+    @Inject
+    ServerRuntime injectedRuntime;
+
+    /** Resolved from CDI once when {@link #injectedRuntime} is null. */
+    private volatile ServerRuntime resolvedRuntime;
+
+    /** This server's own bean container, so a second server in the same process is not consulted. */
+    @Inject
+    BeanManager beanManager;
+
+    /** Every bean of this server, for the look-ups that were {@code CDI.current()} before 0.8.0. */
+    @Inject
+    @Any
+    Instance<Object> beans;
+
+    /** Fired when a connection closes, into this server's container only. */
+    @Inject
+    Event<SessionClosedEvent> sessionClosed;
+
     @Inject
     SyncEngine syncEngine;
 
@@ -151,13 +177,20 @@ public class WasmRmiServerEngine implements EventPublisher {
     @Inject
     LiveMutexManager liveMutexManager;
 
-    /**
-     * STATIC on purpose: Tomcat's WebSocket container instantiates a @ServerEndpoint PER
-     * CONNECTION (the configurator does not override getEndpointInstance), while pushers
-     * obtain the CDI @ApplicationScoped instance - a per-instance set left broadcastPush
-     * talking to an always-empty list. Shared statically, every instance sees every session.
+    /*
+     * The set of open connections used to live here, in a static field, with a comment explaining
+     * that it had to be static: a servlet container instantiates a @ServerEndpoint per connection
+     * while pushers obtain the CDI @ApplicationScoped instance, so a per-endpoint set left every
+     * broadcast talking to an empty list.
+     *
+     * That constraint is real and is still met. What has changed is where the set lives. It belongs
+     * to ServerRuntime -- one application-scoped object per server -- and this endpoint reaches it
+     * three ways, in order: it IS the application-scoped bean, because
+     * RmiEndpointConfigurator.getEndpointInstance hands the container the CDI bean; failing that it
+     * asks CDI once and remembers the answer; and every connection carries a reference to its own
+     * runtime, so code holding only a connection finds the right one. What has gone is the sharing:
+     * two servers in one process no longer broadcast into each other's connections.
      */
-    private static final Set<Session> activeSessions = ConcurrentHashMap.newKeySet();
     /** Interface FQCN -> CDI bean instance */
     private final Map<String, Object> serviceRegistry = new ConcurrentHashMap<>();
     /** Interface FQCN -> { methodName -> Method } */
@@ -171,33 +204,39 @@ public class WasmRmiServerEngine implements EventPublisher {
     /** "interfaceFQCN#methodName" -> whether method has @Secured */
     private final Map<String, Boolean> securedMethods = new ConcurrentHashMap<>();
 
-    /** Structured Concurrency: Map each WebSocket session to its own Virtual Thread Executor */
-    private final Map<String, ExecutorService> sessionExecutors = new ConcurrentHashMap<>();
-
-    /** Session id -> when that session was last answered a keepalive ping. */
-    private static final Map<String, Long> pingLastAnswered = new ConcurrentHashMap<>();
-
-    /** Session id -> permits for frames of that session being decoded and executed right now. */
-    private final Map<String, java.util.concurrent.Semaphore> sessionPermits = new ConcurrentHashMap<>();
+    /**
+     * Each WebSocket session's frames, handled one at a time in the order they arrived.
+     *
+     * <p>See {@link SessionFrameQueue}: one queue and one live thread per connection, and no shared
+     * state between connections, so a slow call on one never delays another.</p>
+     */
+    private final Map<String, SessionFrameQueue> sessionQueues = new ConcurrentHashMap<>();
 
     /**
-     * How many frames from one connection may be decoding and executing at the same time.
+     * How many frames from one connection may be waiting or being handled at once.
      *
-     * <p>The container delivers one message at a time per connection, but handing each one straight
-     * to a thread-per-task executor undoes that: the read loop is free to deliver the next message
-     * immediately, so a single connection could have as many frames in flight as it could write
-     * bytes. Decoding is where a small message becomes a large object graph, so unbounded
-     * concurrency multiplies the worst case a message-size limit is meant to cap.</p>
+     * <p>The container delivers one message at a time per connection and the framework now keeps
+     * that order, so this is no longer a concurrency limit: exactly one frame per connection is
+     * handled at a time. What it still bounds is the <em>backlog</em>. A connection that writes
+     * faster than the server handles would queue without limit, and decoding is where a small
+     * message becomes a large object graph, so an unbounded queue multiplies the worst case a
+     * message-size limit is meant to cap.</p>
      *
-     * <p>Thirty-two, and a caller that finds no permit waits rather than being refused. Nothing is
-     * dropped and no call fails, so the number does not have to exceed any burst an application can
-     * produce - a screen firing a dozen calls on load, or a reconnect flushing queued edits, is
-     * simply served a few at a time. It only has to be high enough that ordinary traffic never
-     * queues noticeably, and low enough to be a real ceiling. Waiting happens on that one
-     * connection's read loop, which is the backpressure wanted; other connections are untouched.</p>
+     * <p>Thirty-two, and a connection that fills the queue waits rather than being refused. Nothing
+     * is dropped and no call fails, so the number does not have to exceed any burst an application
+     * can produce - a screen firing a dozen calls on load, or a reconnect flushing queued edits, is
+     * simply served one after another. Waiting happens on that one connection's read loop, which is
+     * the backpressure wanted; other connections are untouched.</p>
+     *
+     * <p>{@code zeroz.ws.maxConcurrentFramesPerSession} is still read, so a deployment that set it
+     * before 0.8.0 keeps working; the name it had described a concurrency that no longer exists.</p>
      */
+    static final String MAX_QUEUED_FRAMES_PROPERTY = "zeroz.ws.maxQueuedFramesPerSession";
+
+    /** The name this setting had before 0.8.0, still read. */
     static final String MAX_CONCURRENT_FRAMES_PROPERTY = "zeroz.ws.maxConcurrentFramesPerSession";
-    static final int DEFAULT_MAX_CONCURRENT_FRAMES = 32;
+
+    static final int DEFAULT_MAX_QUEUED_FRAMES = 32;
 
     /**
      * Shortest gap between two answered keepalive pings on one connection.
@@ -211,6 +250,95 @@ public class WasmRmiServerEngine implements EventPublisher {
     static final long DEFAULT_PING_MIN_INTERVAL_MILLIS = 1000L;
 
     /**
+     * This server's runtime.
+     *
+     * <p>Normally simply the injected one: the configurator hands the container the CDI bean, so
+     * this endpoint object <em>is</em> the application-scoped engine and its collaborators are
+     * injected. A container that builds the endpoint itself anyway leaves the field null, and the
+     * runtime is then asked of CDI once and remembered.</p>
+     *
+     * <p>If neither works there is no server to serve on, and saying so is far better than the
+     * {@code NullPointerException} that used to come out of the first connection.</p>
+     *
+     * @return the runtime, never null
+     * @throws IllegalStateException when no runtime can be reached
+     */
+    ServerRuntime runtime() {
+        ServerRuntime injected = injectedRuntime;
+        if (injected != null) {
+            return injected;
+        }
+        ServerRuntime cached = resolvedRuntime;
+        if (cached != null) {
+            return cached;
+        }
+        ServerRuntime found = ServerRuntime.fromCdi();
+        if (found == null) {
+            throw new IllegalStateException(
+                    "This WebSocket endpoint is not attached to a running ZeroZ Stack server. The "
+                    + "container built it itself instead of taking it from CDI, and there is no CDI "
+                    + "container to ask either. Register the endpoint with "
+                    + "RmiEndpointConfigurator, or start the server through one of the supported "
+                    + "bindings. Nothing on this connection will work until that is fixed.");
+        }
+        resolvedRuntime = found;
+        return found;
+    }
+
+    /**
+     * The runtime a connection is being handled on, checked against this engine's own.
+     *
+     * <p>A connection that belongs to a <b>different</b> server is refused out loud. That is the
+     * shape of the fault this release exists to fix: a test drove one server while watching another
+     * server's connection, and everything passed because somebody really was writing to it.</p>
+     *
+     * @param session the connection
+     * @return this server's runtime
+     * @throws IllegalStateException when the connection belongs to another server
+     */
+    private ServerRuntime runtimeOf(Session session) {
+        ServerRuntime own = runtime();
+        ServerRuntime carried = ServerRuntime.ofOrNull(session);
+        if (carried != null && !carried.id().equals(own.id())) {
+            throw new IllegalStateException(
+                    "Connection " + session.getId() + " belongs to server '" + carried.name()
+                    + "' and was handed to server '" + own.name() + "'. Nothing was done with it. "
+                    + "Each server has its own connections; watching one while driving the other is "
+                    + "how a test comes to assert nothing at all.");
+        }
+        return own;
+    }
+
+    /** @return this server's settings */
+    private ServerConfig config() {
+        return runtime().config();
+    }
+
+    /**
+     * Looks a bean up in this server's container.
+     *
+     * <p>Was {@code CDI.current()}, which picks a container by thread context class loader and
+     * therefore answered with whichever server had started first when two ran in one process.</p>
+     *
+     * @param type what to look up
+     * @param <T>  the bean type
+     * @return every matching bean of this server
+     */
+    private <T> Instance<T> lookup(Class<T> type) {
+        Instance<Object> own = beans;
+        if (own != null) {
+            return own.select(type);
+        }
+        return CDI.current().select(type);
+    }
+
+    /** @return this server's bean manager, falling back to the ambient container */
+    private BeanManager beanManager() {
+        BeanManager own = beanManager;
+        return own != null ? own : CDI.current().getBeanManager();
+    }
+
+    /**
      * Scans CDI container for beans implementing {@code @RmiService}-annotated interfaces
      * and registers them in the service/method whitelist. Also collects security
      * annotations and populates the known roles for the handshake configurator.
@@ -222,13 +350,13 @@ public class WasmRmiServerEngine implements EventPublisher {
     @PostConstruct
     public void scanServiceRegistry() {
         try {
-            BeanManager bm = CDI.current().getBeanManager();
+            BeanManager bm = beanManager();
             for (Bean<?> bean : bm.getBeans(Object.class)) {
                 Class<?> beanClass = bean.getBeanClass();
                 for (Class<?> iface : beanClass.getInterfaces()) {
                     if (iface.isAnnotationPresent(RmiService.class)) {
                         String ifaceName = iface.getName();
-                        Object instance = CDI.current().select(iface).get();
+                        Object instance = lookup(iface).get();
                         serviceRegistry.put(ifaceName, instance);
 
                         // Interface-level security
@@ -239,7 +367,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                         if (ifaceRolesAnn != null) {
                             Set<String> roles = new HashSet<>(Arrays.asList(ifaceRolesAnn.value()));
                             interfaceRoles.put(ifaceName, roles);
-                            RmiEndpointConfigurator.knownRoles.addAll(roles);
+                            runtime().knownRoles().addAll(roles);
                             securedInterfaces.put(ifaceName, true); // @RolesAllowed implies @Secured
                         } else {
                             interfaceRoles.put(ifaceName, Collections.emptySet());
@@ -256,7 +384,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                             if (methodRolesAnn != null) {
                                 Set<String> roles = new HashSet<>(Arrays.asList(methodRolesAnn.value()));
                                 methodRoles.put(methodKey, roles);
-                                RmiEndpointConfigurator.knownRoles.addAll(roles);
+                                runtime().knownRoles().addAll(roles);
                                 securedMethods.put(methodKey, true);
                             }
                         }
@@ -271,21 +399,29 @@ public class WasmRmiServerEngine implements EventPublisher {
         } catch (Exception e) {
             LOG.warning("[zeroz4j] Warning: CDI service scan deferred: " + e.getMessage());
         }
-        ServerSignalTransport.install(mapper);
+        runtime().markInUse();
+        ServerSignalTransport.install(runtime(), mapper);
         Disclosures.install();
     }
 
     /**
      * Shuts down all virtual thread executors gracefully upon bean destruction.
      *
-     * <p><b>Under the hood:</b> Executed via {@code @PreDestroy}. Iterates through {@code sessionExecutors} and calls {@code shutdownNow()}.</p>
+     * <p><b>Under the hood:</b> Executed via {@code @PreDestroy}. Closes every connection's frame
+     * queue, which throws away what has not started and interrupts what has.</p>
      */
     @PreDestroy
     public void shutdown() {
-        for (ExecutorService exec : sessionExecutors.values()) {
-            exec.shutdownNow();
+        for (SessionFrameQueue frames : sessionQueues.values()) {
+            frames.close();
         }
-        sessionExecutors.clear();
+        sessionQueues.clear();
+        // The runtime goes down with the engine, so anything that keeps driving this server
+        // afterwards is told so rather than quietly doing nothing.
+        ServerRuntime runtime = injectedRuntime != null ? injectedRuntime : resolvedRuntime;
+        if (runtime != null) {
+            runtime.shutDown();
+        }
     }
 
     /**
@@ -294,7 +430,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param session the newly connected WebSocket session
      * @param config  the endpoint configuration containing handshake user properties
      *
-     * <p><b>Under the hood:</b> Adds session to {@code activeSessions}, creates a virtual thread executor for the session in {@code sessionExecutors},
+     * <p><b>Under the hood:</b> Takes ownership of the connection in {@link ServerRuntime}, creates the session's ordered frame queue in {@code sessionQueues},
      * transmits an AUTH frame (0x03) with principal and roles to the client, and registers the session with {@code syncEngine}.</p>
      */
     @OnOpen
@@ -314,16 +450,16 @@ public class WasmRmiServerEngine implements EventPublisher {
             return;
         }
 
-        activeSessions.add(session);
-        applyWebSocketLimits(session);
-        // Threads come from the resolved factory rather than being created here, so a deployment
-        // inside a Jakarta EE server can supply a ManagedThreadFactory whose threads carry the
-        // container's naming, transaction and identity context. With no provider registered this is
-        // a virtual-thread factory, identical to newVirtualThreadPerTaskExecutor().
-        sessionExecutors.put(session.getId(),
-                Executors.newThreadPerTaskExecutor(SessionThreads.factory()));
-        sessionPermits.put(session.getId(),
-                new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
+        ServerRuntime runtime = runtime();
+        runtime.requireRunning("open a connection");
+        // Takes ownership, and refuses a connection that already belongs to another server. That
+        // refusal is the whole point: a test driving one server's connection against another used
+        // to pass while proving nothing.
+        runtime.attach(session);
+        applyWebSocketLimits(runtime, session);
+        // This connection's frames, handled one at a time in the order they arrived, and bounded so
+        // a connection that outruns the server queues no more than it is allowed to.
+        sessionQueues.put(session.getId(), new SessionFrameQueue(maxQueuedFrames()));
 
         // Propagate principal and roles from handshake
         Principal principal = (Principal) config.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
@@ -350,7 +486,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         // Before the first byte is written to this connection: everything the server sends it is
         // recorded against its browser, and that record is what later decides whether it may ask for
         // an object again. Keyed by browser rather than by connection, so a reconnect can re-sync.
-        Disclosures.sessionOpened(session);
+        runtime.disclosures().sessionOpened(session);
 
         // Send AUTH frame (0x03) to client. A connection whose credentials the application's
         // AuthenticationProvider declined has no principal, and the frame must say so: reporting it
@@ -373,17 +509,17 @@ public class WasmRmiServerEngine implements EventPublisher {
      *
      * @param session the closing WebSocket session
      *
-     * <p><b>Under the hood:</b> Removes session from {@code activeSessions}, shuts down virtual thread executor,
+     * <p><b>Under the hood:</b> Gives the connection up in {@link ServerRuntime}, closes the session's frame queue,
      * releases all live mutex locks owned by the session via {@link LiveMutexManager#releaseAll}, and unregisters session from {@code syncEngine}.</p>
      */
     @OnClose
     public void onClose(Session session) {
-        activeSessions.remove(session);
+        ServerRuntime runtime = runtimeOf(session);
 
-        // Structured Concurrency: Terminate all tasks for this session
-        ExecutorService sessionExecutor = sessionExecutors.remove(session.getId());
-        if (sessionExecutor != null) {
-            sessionExecutor.shutdownNow();
+        // Drop everything this connection had queued, and interrupt the frame it was handling.
+        SessionFrameQueue frames = sessionQueues.remove(session.getId());
+        if (frames != null) {
+            frames.close();
         }
 
         // Release any distributed locks held by this session
@@ -397,24 +533,25 @@ public class WasmRmiServerEngine implements EventPublisher {
         // Shared signals: drop parked subscriptions
         ServerSignalTransport.sessionClosed(session);
 
-        // Lazy references: release the handles disclosed to this session
-        LazyHandles.sessionClosed(session.getId());
-
-        // Keepalive budget and in-flight permits for a session that no longer exists.
-        pingLastAnswered.remove(session.getId());
-        sessionPermits.remove(session.getId());
-
         // The record of what this browser was sent survives on purpose: the next connection is the
         // same browser and must still be able to re-sync. Only the connection mapping goes.
-        Disclosures.sessionClosed(session.getId());
+        runtime.disclosures().sessionClosed(session.getId());
+
+        // Drops the connection from this server: its active-session entry, its keepalive budget,
+        // its lazy-reference handles, and the back-reference the connection carried.
+        runtime.detach(session);
 
         // Tell the application, after framework cleanup: apps keep registries keyed by session id
         // (scoped pushes, rooms) and previously had no way to learn a session was gone.
         try {
             Principal principal = (Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
-            CDI.current().getBeanManager().getEvent()
-                .select(SessionClosedEvent.class)
-                .fire(new SessionClosedEvent(session.getId(), principal != null ? principal.getName() : null));
+            SessionClosedEvent closed =
+                    new SessionClosedEvent(session.getId(), principal != null ? principal.getName() : null);
+            if (sessionClosed != null) {
+                sessionClosed.fire(closed);
+            } else {
+                beanManager().getEvent().select(SessionClosedEvent.class).fire(closed);
+            }
         } catch (Exception e) {
             // An observer threw, or the CDI container is already shutting down. Either way the
             // close itself must complete; the observer's problem is logged, not propagated.
@@ -490,56 +627,22 @@ public class WasmRmiServerEngine implements EventPublisher {
      * <p><b>Idle timeout.</b> Unset leaves the container's own, since an abandoned connection costs
      * a session rather than memory, and containers differ widely in what a sensible value is.</p>
      */
-    private static void applyWebSocketLimits(Session session) {
-        Integer configuredMaxBinary = positiveIntProperty(MAX_BINARY_BYTES_PROPERTY);
+    private static void applyWebSocketLimits(ServerRuntime runtime, Session session) {
+        ServerConfig config = runtime.config();
+        Integer configuredMaxBinary = config.positiveInt(MAX_BINARY_BYTES_PROPERTY);
         int maxBinaryBytes = configuredMaxBinary != null ? configuredMaxBinary : DEFAULT_MAX_BINARY_BYTES;
         session.setMaxBinaryMessageBufferSize(maxBinaryBytes);
 
-        Integer idleMinutes = positiveIntProperty(IDLE_TIMEOUT_MINUTES_PROPERTY);
+        Integer idleMinutes = config.positiveInt(IDLE_TIMEOUT_MINUTES_PROPERTY);
         if (idleMinutes != null) {
             session.setMaxIdleTimeout(idleMinutes * 60_000L);
         }
 
-        if (LIMITS_REPORTED.compareAndSet(false, true)) {
+        if (runtime.reportLimitsOnce()) {
             LOG.info("[zeroz4j] Largest binary message accepted: " + maxBinaryBytes + " bytes ("
                     + (configuredMaxBinary != null ? "set by " : "framework default; change with ")
                     + MAX_BINARY_BYTES_PROPERTY + "). A message over that closes the connection"
                     + " without an error response.");
-        }
-    }
-
-    /**
-     * Guards the startup report above, so the limits are named once per server rather than once per
-     * connection. Declared beside the method that uses it rather than with the other fields, which
-     * are a different concern.
-     */
-    private static final java.util.concurrent.atomic.AtomicBoolean LIMITS_REPORTED =
-            new java.util.concurrent.atomic.AtomicBoolean();
-
-    /**
-     * Reads a positive integer system property.
-     *
-     * @return the value, or null when unset, unparseable or not positive — an unusable setting is
-     *         logged and ignored rather than applied, because a zero or negative limit means
-     *         something different to each container. The caller then falls back to whatever it
-     *         would have used with the property unset.
-     */
-    private static Integer positiveIntProperty(String name) {
-        String configured = System.getProperty(name);
-        if (configured == null || configured.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            int value = Integer.parseInt(configured.trim());
-            if (value <= 0) {
-                LOG.warning("[zeroz4j] Ignoring " + name + "=" + configured
-                        + ": it must be a positive number.");
-                return null;
-            }
-            return value;
-        } catch (NumberFormatException ex) {
-            LOG.warning("[zeroz4j] Ignoring non-numeric " + name + "='" + configured + "'.");
-            return null;
         }
     }
 
@@ -568,14 +671,16 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param topic   the notification topic string
      * @param payload the message payload object
      *
-     * <p><b>Under the hood:</b> Iterates through {@code activeSessions} and calls {@link #sendPush(Session, String, Object)} for each.</p>
+     * <p><b>Under the hood:</b> Iterates this server's own connections and calls {@link #sendPush(Session, String, Object)} for each.</p>
      */
     public void broadcastPush(String topic, Object payload) {
         // Serialize once up front so an unserializable payload reaches the CALLER. Previously the
         // failure was caught per session and logged, so publish() appeared to succeed while the event
         // reached nobody -- the single most confusing failure in the framework.
         assertSerializable(payload, "event payload for topic '" + topic + "'");
-        for (Session session : activeSessions) {
+        ServerRuntime runtime = runtime();
+        runtime.requireRunning("publish an event");
+        for (Session session : runtime.sessions()) {
             sendPush(session, topic, payload);
         }
     }
@@ -667,10 +772,24 @@ public class WasmRmiServerEngine implements EventPublisher {
                     + " to reach. Without it the event would silently reach nobody.");
         }
         assertSerializable(payload, "event payload for topic '" + topic.name() + "'");
-        for (Session session : activeSessions) {
+        ServerRuntime runtime = runtime();
+        runtime.requireRunning("publish an event");
+        for (Session session : runtime.sessions()) {
             if (matchesScope(session, scope, target)) {
                 sendPush(session, topic.name(), payload);
             }
+        }
+    }
+
+    /**
+     * Drops a connection the server has just found closed, from whichever server owns it.
+     *
+     * @param session the closed connection
+     */
+    private static void forgetClosed(Session session) {
+        ServerRuntime owner = ServerRuntime.ofOrNull(session);
+        if (owner != null) {
+            owner.forget(session);
         }
     }
 
@@ -686,7 +805,9 @@ public class WasmRmiServerEngine implements EventPublisher {
             return 0;
         }
         int closed = 0;
-        for (Session session : activeSessions) {
+        ServerRuntime runtime = runtime();
+        runtime.requireRunning("disconnect a user");
+        for (Session session : runtime.sessions()) {
             if (matchesScope(session, Scope.USER, principalName) && closeSession(session, reason)) {
                 closed++;
             }
@@ -701,7 +822,9 @@ public class WasmRmiServerEngine implements EventPublisher {
         if (sessionId == null || sessionId.isEmpty()) {
             return false;
         }
-        for (Session session : activeSessions) {
+        ServerRuntime runtime = runtime();
+        runtime.requireRunning("disconnect a connection");
+        for (Session session : runtime.sessions()) {
             if (sessionId.equals(session.getId())) {
                 boolean closed = closeSession(session, reason);
                 if (closed) {
@@ -721,9 +844,12 @@ public class WasmRmiServerEngine implements EventPublisher {
      */
     private static boolean closeSession(Session session, String reason) {
         try {
+            ServerRuntime owner = ServerRuntime.ofOrNull(session);
             session.close(new jakarta.websocket.CloseReason(
                     jakarta.websocket.CloseReason.CloseCodes.VIOLATED_POLICY, truncate(reason)));
-            activeSessions.remove(session);
+            if (owner != null) {
+                owner.forget(session);
+            }
             return true;
         } catch (Exception ex) {
             LOG.warning("[zeroz4j] Could not close session " + session.getId() + ": " + ex.getMessage());
@@ -770,13 +896,8 @@ public class WasmRmiServerEngine implements EventPublisher {
      *
      * @param session the session to register
      */
-    static void addActiveSessionForTesting(Session session) {
-        activeSessions.add(session);
-    }
-
-    /** Empties the active-session set. Test support only. */
-    static void clearActiveSessionsForTesting() {
-        activeSessions.clear();
+    void addActiveSessionForTesting(Session session) {
+        runtime().addSessionForTesting(session);
     }
 
     /**
@@ -858,7 +979,8 @@ public class WasmRmiServerEngine implements EventPublisher {
             Object handleArg = BinarySerializer.readValue(buffer, mapper);
             String handle = handleArg == null ? null : handleArg.toString();
 
-            Object lazy = LazyHandles.resolve(handle, session.getId());
+            ServerRuntime runtime = runtimeOf(session);
+            Object lazy = runtime.lazyHandles().resolve(handle, session.getId());
             if (lazy == null) {
                 throw new SecurityException(
                         "Unknown or unauthorized lazy handle: " + handle);
@@ -873,11 +995,8 @@ public class WasmRmiServerEngine implements EventPublisher {
             GrowableBuffer responseBuffer = new GrowableBuffer();
             responseBuffer.putInt(messageId);
             responseBuffer.put(SyncFrameTypes.RPC_RESPONSE);
-            LazyHandles.setCurrentSession(session.getId());
-            try {
+            try (LazyHandles.Write write = LazyHandles.writingTo(runtime, session)) {
                 BinarySerializer.writeValue(responseBuffer, contents, mapper);
-            } finally {
-                LazyHandles.setCurrentSession(null);
             }
             WsWrites.send(session, responseBuffer.toByteArray());
 
@@ -906,23 +1025,41 @@ public class WasmRmiServerEngine implements EventPublisher {
      * and a per-connection record would be empty exactly when re-sync needs it.
      *
      * <p>A handle the caller was never sent, and a handle this server no longer knows at all, are
-     * treated identically: no frame, no error, and a counted log line. The second case means the
-     * server restarted since the client fetched the object (the registry is in memory). Either way
-     * the client's copy stays as it is and the application re-fetches it the way it first obtained
-     * it.
+     * treated identically: no frame, no error, and a counted log line. The second case has two
+     * causes since 0.8.0 — the server restarted since the client fetched the object, or the
+     * application here has let go of it and the registry, which holds its objects weakly, has let
+     * go too. Either way the client's copy stays as it is and the application re-fetches it the way
+     * it first obtained it.
+     *
+     * <p>At most {@link SyncFrameTypes#MAX_RESYNC_HANDLES} handles are examined. A client caps its
+     * own list at the same number; this is the ceiling applied to whatever actually arrives, so one
+     * connection cannot make the server write an unbounded number of frames.
      *
      * @param handles the handle list from the client
      * @param session the reconnected session
      */
     void handleResync(java.util.List<?> handles, Session session) {
+        ServerRuntime runtime = runtimeOf(session);
         int sent = 0;
         int unknown = 0;
         int undisclosed = 0;
+        int examined = 0;
         for (Object handleObj : handles) {
             if (!(handleObj instanceof String)) {
                 continue;
             }
-            if (!Disclosures.wasDisclosedTo(session, (String) handleObj)) {
+            if (++examined > SyncFrameTypes.MAX_RESYNC_HANDLES) {
+                // The client caps its own list; this is the same ceiling applied to whatever
+                // actually arrives, so no one connection can make the server write an unbounded
+                // number of frames. The record of what this browser was sent holds no more than
+                // this many objects anyway, so nothing answerable is being skipped.
+                LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": the request "
+                    + "named " + handles.size() + " handles, more than the "
+                    + SyncFrameTypes.MAX_RESYNC_HANDLES + " a request may carry. The rest were "
+                    + "ignored; the client re-fetches those objects the way it first obtained them.");
+                break;
+            }
+            if (!runtime.disclosures().wasDisclosedToSession(session, (String) handleObj)) {
                 undisclosed++;
                 continue;
             }
@@ -935,11 +1072,8 @@ public class WasmRmiServerEngine implements EventPublisher {
                 GrowableBuffer buffer = new GrowableBuffer();
                 buffer.putInt(0); // broadcast-style frame: no correlation
                 buffer.put(SyncFrameTypes.SUBSCRIBE);
-                LazyHandles.setCurrentSession(session.getId());
-                try {
+                try (LazyHandles.Write write = LazyHandles.writingTo(runtime, session)) {
                     BinarySerializer.writeValue(buffer, obj, mapper);
-                } finally {
-                    LazyHandles.setCurrentSession(null);
                 }
                 WsWrites.send(session, buffer.toByteArray());
                 sent++;
@@ -956,9 +1090,10 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
         if (unknown > 0) {
             LOG.warning("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent
-                + " object(s) re-sent, " + unknown + " handle(s) unknown -- the server restarted "
-                + "since the client fetched them; those objects stay stale until the application "
-                + "re-fetches them.");
+                + " object(s) re-sent, " + unknown + " handle(s) unknown -- either this server "
+                + "restarted since the client fetched them, or the application here no longer "
+                + "holds those objects (the registry keeps them weakly). Those objects stay stale "
+                + "until the application re-fetches them.");
         } else if (undisclosed == 0 && sent > 0) {
             LOG.info("[zeroz4j] Re-sync for session " + session.getId() + ": " + sent + " object(s) re-sent.");
         }
@@ -974,6 +1109,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         String refusal = null;
         ObjectMapper tempMapper = new ObjectMapper();
         ObjectMapper.setResolutionGuard(guard);
+        ObjectMapper.setModelGuard(guard);
         try {
             proposed = BinarySerializer.readValue(buffer, tempMapper);
         } catch (LiveMutationGuard.Denied denied) {
@@ -988,6 +1124,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         } finally {
             // Cleared before anything else runs: answering the refusal reads the registry itself.
             ObjectMapper.setResolutionGuard(null);
+            ObjectMapper.setModelGuard(null);
         }
         if (refusal != null) {
             rejectNestedWrite(session, guard.rootHandleId(), refusal);
@@ -1039,6 +1176,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             // The guard stays on for the applying pass too. It cannot refuse anything the first pass
             // already accepted; it is here so no future path can apply an unchecked decode.
             ObjectMapper.setResolutionGuard(guard);
+            ObjectMapper.setModelGuard(guard);
             try {
                 applied = BinarySerializer.readValue(buffer, mapper); // in-place apply
             } catch (LiveMutationGuard.Denied denied) {
@@ -1046,6 +1184,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                 refusal = denied.reason();
             } finally {
                 ObjectMapper.setResolutionGuard(null);
+                ObjectMapper.setModelGuard(null);
             }
             if (refusal != null) {
                 rejectNestedWrite(session, guard.rootHandleId(), refusal);
@@ -1053,7 +1192,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             }
             Principal principal = (Principal) session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
             try {
-                for (LiveMutationListener listener : CDI.current().select(LiveMutationListener.class)) {
+                for (LiveMutationListener listener : lookup(LiveMutationListener.class)) {
                     listener.onMutated(applied, principal);
                 }
             } catch (Exception e) {
@@ -1171,7 +1310,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      */
     static void sendPong(Session session) {
         if (!session.isOpen()) {
-            activeSessions.remove(session);
+            forgetClosed(session);
             return;
         }
         try {
@@ -1187,7 +1326,7 @@ public class WasmRmiServerEngine implements EventPublisher {
 
     static void sendSignalUpdate(Session session, String name, Object value, ObjectMapper mapper) {
         if (!session.isOpen()) {
-            activeSessions.remove(session);
+            forgetClosed(session);
             return;
         }
         try {
@@ -1195,11 +1334,8 @@ public class WasmRmiServerEngine implements EventPublisher {
             buffer.putInt(0);
             buffer.put(SyncFrameTypes.SIGNAL_UPD);
             BinarySerializer.writeString(buffer, name);
-            LazyHandles.setCurrentSession(session.getId());
-            try {
+            try (LazyHandles.Write write = LazyHandles.writingTo(ServerRuntime.of(session), session)) {
                 BinarySerializer.writeValue(buffer, value, mapper);
-            } finally {
-                LazyHandles.setCurrentSession(null);
             }
             WsWrites.send(session, buffer.toByteArray());
         } catch (Exception e) {
@@ -1214,11 +1350,12 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param value  current value
      * @param mapper object mapper for serialization
      */
-    static void broadcastSignalUpdate(String name, Object value, ObjectMapper mapper) {
+    static void broadcastSignalUpdate(ServerRuntime runtime, String name, Object value,
+                                      ObjectMapper mapper) {
         // As with events: a shared signal whose value cannot be serialized used to fail silently,
         // leaving set() looking successful while nothing propagated.
         assertSerializable(value, "value of shared signal '" + name + "'");
-        for (Session session : activeSessions) {
+        for (Session session : runtime.sessions()) {
             sendSignalUpdate(session, name, value, mapper);
         }
     }
@@ -1236,10 +1373,10 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param target     the target whose sessions should receive it
      * @param mapper     object mapper for serialization
      */
-    static void broadcastSignalUpdateScoped(String familyName, Object value, Scope scope,
-                                            String target, ObjectMapper mapper) {
+    static void broadcastSignalUpdateScoped(ServerRuntime runtime, String familyName, Object value,
+                                            Scope scope, String target, ObjectMapper mapper) {
         assertSerializable(value, "value of scoped signal '" + familyName + "'");
-        for (Session session : activeSessions) {
+        for (Session session : runtime.sessions()) {
             if (matchesScope(session, scope, target)) {
                 sendSignalUpdate(session, familyName, value, mapper);
             }
@@ -1257,8 +1394,12 @@ public class WasmRmiServerEngine implements EventPublisher {
      * using {@link BinarySerializer#writeValue(GrowableBuffer, Object, ObjectMapper)} and transmits via {@link WsWrites#send}.</p>
      */
     public void sendPush(Session session, String topic, Object payload) {
+        // Outside the catch below on purpose. Everything inside it is a failure to deliver one push,
+        // which is logged and moved past; being handed another server's connection is a fault in the
+        // caller, and swallowing it is what let a test watch the wrong server and pass.
+        ServerRuntime runtime = runtimeOf(session);
         if (!session.isOpen()) {
-            activeSessions.remove(session);
+            forgetClosed(session);
             return;
         }
         try {
@@ -1266,11 +1407,8 @@ public class WasmRmiServerEngine implements EventPublisher {
             buffer.putInt(0);
             buffer.put(SyncFrameTypes.RPC_PUSH);
             BinarySerializer.writeString(buffer, topic);
-            LazyHandles.setCurrentSession(session.getId());
-            try {
+            try (LazyHandles.Write write = LazyHandles.writingTo(runtime, session)) {
                 BinarySerializer.writeValue(buffer, payload, mapper);
-            } finally {
-                LazyHandles.setCurrentSession(null);
             }
             WsWrites.send(session, buffer.toByteArray());
         } catch (Exception e) {
@@ -1285,7 +1423,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param payload binary payload buffer received from client
      * @param session active WebSocket session
      *
-     * <p><b>Under the hood:</b> Submits processing task to session's virtual thread executor. Parses correlation ID,
+     * <p><b>Under the hood:</b> Puts the frame on the session's ordered queue, which hands it to a thread when the frame before it has been handled. Parses correlation ID,
      * interface name, method name, and arguments. Validates against service and method registries. Checks security principal
      * and roles. Sets thread-local {@link RmiRequestContext}. Invokes target method via reflection. Writes success frame (0x01)
      * or error frame (0x0F) back to client.</p>
@@ -1301,64 +1439,45 @@ public class WasmRmiServerEngine implements EventPublisher {
         // connection that stops answering pings is killed by the first proxy in the path - and it is
         // five bytes with no work behind it, so making it wait for a permit would cost the very
         // thing that makes it safe to answer before any check.
+        // Refuses out loud a connection that belongs to another server in this process.
+        ServerRuntime runtime = runtimeOf(session);
+
         if (isKeepaliveFrame(data)) {
-            if (keepaliveAllowed(session.getId())) {
+            if (keepaliveAllowed(runtime, session.getId())) {
                 sendPong(session);
             }
             return;
         }
 
-        ExecutorService sessionExecutor = sessionExecutors.get(session.getId());
-        if (sessionExecutor == null) {
+        SessionFrameQueue frames = sessionQueues.get(session.getId());
+        if (frames == null) {
             return; // Session is already closing or closed
         }
 
-        // One connection may have only so many frames decoding at once. Acquired here, on the
-        // container's read thread, so a connection that outruns the limit is slowed down rather than
-        // refused. Nothing in the framework submits to a session's executor from inside a task on
-        // that same executor - this method is the only submitter, and only @OnMessage calls it - so
-        // waiting here cannot deadlock the connection against itself.
-        java.util.concurrent.Semaphore permits = sessionPermits.computeIfAbsent(session.getId(),
-                k -> new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
-        try {
-            permits.acquire();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            LOG.warning("[zeroz4j] Dropped incoming message: the read thread was interrupted.");
-            return;
-        }
+        // The frame goes on the end of this connection's queue and is handled after the one before
+        // it - the order the browser wrote them in, which is the order the transport already
+        // delivered them in. Queueing happens here, on the container's read thread, and waits when
+        // the queue is full, so a connection that outruns the server is slowed down rather than
+        // refused. Nothing in the framework queues a frame from inside a frame - this method is the
+        // only place that queues, and only @OnMessage calls it - so waiting here cannot deadlock the
+        // connection against itself.
+        frames.submit(() -> {
 
-        boolean submitted = false;
-        try {
-            sessionExecutor.submit(() -> {
-
-                // Activate a CDI request context for this invocation: virtual threads have
-                // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
-                // producer) must resolve inside service calls. A servlet container did this
-                // implicitly; here it is the engine's job.
-                try {
-                    jakarta.enterprise.context.control.RequestContextController requestContext =
-                        CDI.current().select(jakarta.enterprise.context.control.RequestContextController.class).get();
-                    boolean contextActivated = requestContext.activate();
-                    try {
-                        dispatchFrame(data, session);
-                    } finally {
-                        if (contextActivated) {
-                            requestContext.deactivate();
-                        }
-                    }
-                } finally {
-                    permits.release();
+            // Activate a CDI request context for this invocation: virtual threads have
+            // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
+            // producer) must resolve inside service calls. A servlet container did this
+            // implicitly; here it is the engine's job.
+            jakarta.enterprise.context.control.RequestContextController requestContext =
+                lookup(jakarta.enterprise.context.control.RequestContextController.class).get();
+            boolean contextActivated = requestContext.activate();
+            try {
+                dispatchFrame(data, session);
+            } finally {
+                if (contextActivated) {
+                    requestContext.deactivate();
                 }
-            });
-            submitted = true;
-        } catch (RejectedExecutionException e) {
-            LOG.warning("[zeroz4j] Dropped incoming message because server is shutting down.");
-        } finally {
-            if (!submitted) {
-                permits.release();
             }
-        }
+        });
     }
 
     /**
@@ -1380,10 +1499,17 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
     }
 
-    /** @return the configured in-flight limit for one connection */
-    private static int maxConcurrentFrames() {
-        Integer configured = positiveIntProperty(MAX_CONCURRENT_FRAMES_PROPERTY);
-        return configured != null ? configured : DEFAULT_MAX_CONCURRENT_FRAMES;
+    /**
+     * @return how many frames one connection may have waiting or being handled at once. The name
+     *         this setting had before 0.8.0 is read when the current one is not set, so a
+     *         deployment that configured it then does not silently fall back to the default.
+     */
+    private int maxQueuedFrames() {
+        Integer configured = config().positiveInt(MAX_QUEUED_FRAMES_PROPERTY);
+        if (configured != null) {
+            return configured;
+        }
+        return config().positiveInt(MAX_CONCURRENT_FRAMES_PROPERTY, DEFAULT_MAX_QUEUED_FRAMES);
     }
 
     @SuppressWarnings("unchecked")
@@ -1460,7 +1586,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                     // work of any kind: it exists to make a byte travel in each direction, and a
                     // heartbeat that did real work would be a way to load the server from outside.
                     if (SyncFrameTypes.KEEPALIVE_SERVICE.equals(interfaceName)) {
-                        if (keepaliveAllowed(session.getId())) {
+                        if (keepaliveAllowed(runtimeOf(session), session.getId())) {
                             sendPong(session);
                         }
                         return;
@@ -1524,11 +1650,9 @@ public class WasmRmiServerEngine implements EventPublisher {
                     GrowableBuffer responseBuffer = new GrowableBuffer();
                     responseBuffer.putInt(messageId);
                     responseBuffer.put(SyncFrameTypes.RPC_RESPONSE);
-                    LazyHandles.setCurrentSession(session.getId());
-                    try {
+                    try (LazyHandles.Write write =
+                                 LazyHandles.writingTo(runtimeOf(session), session)) {
                         BinarySerializer.writeValue(responseBuffer, executionResult, mapper);
-                    } finally {
-                        LazyHandles.setCurrentSession(null);
                     }
                     WsWrites.send(session, responseBuffer.toByteArray());
 
@@ -1620,24 +1744,17 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param sessionId the connection that pinged
      * @return true when a pong should be sent
      */
-    private static boolean keepaliveAllowed(String sessionId) {
-        long minimumGap = pingMinIntervalMillis();
-        long now = System.currentTimeMillis();
-        Long previous = pingLastAnswered.get(sessionId);
-        if (previous != null && now - previous < minimumGap) {
-            return false;
-        }
-        pingLastAnswered.put(sessionId, now);
-        return true;
+    private static boolean keepaliveAllowed(ServerRuntime runtime, String sessionId) {
+        return runtime.keepaliveAllowed(sessionId, pingMinIntervalMillis(runtime));
     }
 
-    private static long pingMinIntervalMillis() {
-        Integer configured = positiveIntProperty(PING_MIN_INTERVAL_PROPERTY);
-        return configured != null ? configured.longValue() : DEFAULT_PING_MIN_INTERVAL_MILLIS;
+    private static long pingMinIntervalMillis(ServerRuntime runtime) {
+        return runtime.config().positiveLong(PING_MIN_INTERVAL_PROPERTY,
+                DEFAULT_PING_MIN_INTERVAL_MILLIS);
     }
 
     /** Forgets every connection's keepalive budget. Test support only. */
-    static void clearKeepaliveBudgetForTesting() {
-        pingLastAnswered.clear();
+    void clearKeepaliveBudgetForTesting() {
+        runtime().clearKeepaliveBudget();
     }
 }

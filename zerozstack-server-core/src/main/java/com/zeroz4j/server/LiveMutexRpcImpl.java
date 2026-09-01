@@ -63,13 +63,18 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
      * <p>Off by default, and it must stay off by default: several shipped examples have no login of
      * any kind and would stop working. An application that does have logins can turn it on.</p>
      */
-    static final String REQUIRE_AUTHENTICATION_PROPERTY = "zeroz.livemutex.requireAuthentication";
+    static final String REQUIRE_AUTHENTICATION_PROPERTY =
+            ServerSettings.LIVE_MUTEX_REQUIRE_AUTHENTICATION;
 
     /** How much of a rejected handle is quoted back, so one log line stays one log line. */
     private static final int MAX_QUOTED_HANDLE = 64;
 
     @Inject
     LiveMutexManager manager;
+
+    /** This server: its settings, and its own record of what it has sent to whom. */
+    @Inject
+    ServerRuntime runtime;
 
     /**
      * Takes the lock for an object on behalf of the calling browser, waiting if somebody else has it.
@@ -96,7 +101,8 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
                     "Refused: this server only lets signed-in users lock items for editing "
                     + "(" + REQUIRE_AUTHENTICATION_PROPERTY + " is on). Sign in and try again.");
         }
-        if (!Disclosures.wasDisclosedTo(RmiRequestContext.getClientId(), sessionId, objectId)) {
+        if (!runtime.disclosures()
+                .wasDisclosedTo(RmiRequestContext.getClientId(), sessionId, objectId)) {
             throw new SecurityException(
                     "Refused: this client was never sent the item " + quote(objectId)
                     + ", so it cannot lock it. You may lock only items the server has sent you. "
@@ -104,6 +110,13 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
                     + "expired (see zeroz.disclosure.idleHours) — fetch the item again from your "
                     + "service and lock the copy you get back.");
         }
+        // This frame is about to block for up to 30 seconds waiting for somebody else to finish.
+        // Frames from one connection are handled in the order they arrived, so holding on here would
+        // stall everything else that browser sends for half a minute - a second field being typed
+        // in, an unrelated button. It has changed nothing at this point: everything above is a read.
+        // So it lets the frames behind it past and does not take its place back. The bound on how
+        // much one connection may have outstanding still counts it.
+        SessionFrameQueue.handOverBeforeWaiting();
         manager.lock(objectId, "session:" + sessionId);
     }
 
@@ -127,9 +140,11 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
 
     // ------------------------------------------------------------------ internals
 
-    /** @return whether this deployment restricts locking to signed-in users */
-    private static boolean requireAuthentication() {
-        return Boolean.parseBoolean(System.getProperty(REQUIRE_AUTHENTICATION_PROPERTY));
+    /** @return whether this server restricts locking to signed-in users */
+    private boolean requireAuthentication() {
+        ServerConfig config = runtime != null
+                ? runtime.config() : ServerConfig.fromSystemProperties();
+        return config.flag(REQUIRE_AUTHENTICATION_PROPERTY);
     }
 
     /** @return the calling connection's session id */

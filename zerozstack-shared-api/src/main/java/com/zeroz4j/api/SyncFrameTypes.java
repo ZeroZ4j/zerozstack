@@ -147,4 +147,22 @@ public final class SyncFrameTypes {
      * fetched them) are counted and logged server-side; no frame is sent for them.</p>
      */
     public static final String RESYNC_SERVICE = "zeroz4j.resync";
+
+    /**
+     * The most handles one re-sync request may carry ({@value}).
+     *
+     * <p>This is a ceiling on a list, not a target. The server answers a handle only if its own
+     * record says it sent that object to this browser, and that record holds at most
+     * {@code zeroz.disclosure.maxHandlesPerClient} — 10,000 by default — so a longer list could not
+     * be answered anyway.</p>
+     *
+     * <p><b>Why a ceiling exists at all.</b> Before 0.8.0 a browser kept every object it had ever
+     * been sent, so a tab left open on a screen that refreshes itself built a list of millions.
+     * Sending it produced a message far larger than the 4 MB a connection accepts, the server closed
+     * the connection for being over the limit, the client reconnected and sent the same list again,
+     * and the list never got shorter — a tab in that state could never connect again. A client that
+     * finds itself over this ceiling now throws its list away and starts clean instead of sending
+     * it, which ends that loop with no action from anybody.</p>
+     */
+    public static final int MAX_RESYNC_HANDLES = 10_000;
 }

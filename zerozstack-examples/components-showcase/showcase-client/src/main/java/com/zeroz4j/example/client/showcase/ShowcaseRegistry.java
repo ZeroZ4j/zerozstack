@@ -59,6 +59,7 @@ public class ShowcaseRegistry {
         showcases.put("link", LinkShowcase::new);
         showcases.put("loading", LoadingShowcase::new);
         showcases.put("mask", MaskShowcase::new);
+        showcases.put("menu", MenuShowcase::new);
         showcases.put("navbar", NavbarShowcase::new);
         showcases.put("pagination", PaginationShowcase::new);
         showcases.put("mockup-phone", PhoneMockupShowcase::new);
@@ -79,6 +80,7 @@ public class ShowcaseRegistry {
         showcases.put("input", TextFieldShowcase::new);
         showcases.put("theme-controller", ThemeControllerShowcase::new);
         showcases.put("timeline", TimelineShowcase::new);
+        showcases.put("type-scale", TextStyleShowcase::new);
         showcases.put("toast", ToastShowcase::new);
         showcases.put("toggle", ToggleShowcase::new);
         showcases.put("tooltip", TooltipShowcase::new);
@@ -113,6 +115,15 @@ public class ShowcaseRegistry {
         showcases.put("property-grid", PropertyGridShowcase::new);
         showcases.put("virtual-scroller", VirtualScrollerShowcase::new);
         showcases.put("svg-canvas", SvgCanvasShowcase::new);
+
+        // Under pressure - the hard cases. A gallery of easiest-possible examples proves a
+        // component renders; these ask whether it can be used.
+        showcases.put("composition", CompositionShowcase::new);
+        showcases.put("four-states", FourStatesShowcase::new);
+        showcases.put("hard-form", HardFormShowcase::new);
+        showcases.put("moving-list", MovingListShowcase::new);
+        showcases.put("long-text", LongTextShowcase::new);
+        showcases.put("narrow", NarrowShowcase::new);
     }
 
     public static Component createShowcase(String componentId) {
@@ -156,6 +167,7 @@ public class ShowcaseRegistry {
         labels.put("link", "Link");
         labels.put("loading", "Loading");
         labels.put("mask", "Mask");
+        labels.put("menu", "Menu");
         labels.put("navbar", "Navbar");
         labels.put("pagination", "Pagination");
         labels.put("mockup-phone", "Phone Mockup");
@@ -176,6 +188,7 @@ public class ShowcaseRegistry {
         labels.put("input", "Text Field");
         labels.put("theme-controller", "Theme Controller");
         labels.put("timeline", "Timeline");
+        labels.put("type-scale", "Type Scale");
         labels.put("toast", "Toast");
         labels.put("toggle", "Toggle");
         labels.put("tooltip", "Tooltip");
@@ -208,6 +221,13 @@ public class ShowcaseRegistry {
         labels.put("property-grid", "Property Grid");
         labels.put("virtual-scroller", "Virtual Scroller");
         labels.put("svg-canvas", "SVG Canvas");
+
+        labels.put("composition", "One thing inside another");
+        labels.put("four-states", "The four states of a panel");
+        labels.put("hard-form", "A form that fails and recovers");
+        labels.put("moving-list", "A list that moves");
+        labels.put("long-text", "Long words, other languages");
+        labels.put("narrow", "Everything, 360 pixels wide");
         return labels;
     }
 }

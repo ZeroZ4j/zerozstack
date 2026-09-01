@@ -18,17 +18,34 @@ same time.
 ## Name the fields first
 
 Before any of this, give each field a caption. `new TextField("Email address")` sets the
-*placeholder*, not a caption — it is grey text inside the empty box that disappears as soon as
+*placeholder*, not a caption — it is gray text inside the empty box that disappears as soon as
 somebody types, and no screen reader announces it. Use `withLabel`:
 
 ```java
+import com.zeroz4j.ui.component.TextField;
+
 TextField name  = new TextField().withLabel("Your name");
 TextField email = new TextField("you@example.com").withLabel("Email address");
 ```
 
-The caption is a real label tied to the control, so clicking the words focuses the field. It works
-in any container, not only a `FormLayout`. Full detail in
-[Naming a field](../UI_COMPONENTS.md#naming-a-field).
+The caption is a real label tied to the control, so clicking the words focuses the field, and a
+screen reader reads the caption as the field's name. It works in any container, not only a
+`FormLayout`. Full detail in [Naming a field](../UI_COMPONENTS.md#naming-a-field).
+
+`withLabel` is on the class every input extends, so all of these take one: text field, text area,
+select, checkbox, toggle, range, rating, radio group, file picker, swap and theme switch.
+
+A rating and a radio group are several controls rather than one, so there is no single control for
+a caption to point at. Those two are captioned as a named group instead: a screen reader reads
+"Delivery speed, group" and then each choice inside it. Nothing is different in your code.
+
+You can also give the caption at any time, including after the field is already on the page:
+
+```java
+TextField port = new TextField();
+layout.add(port);                      // no caption yet
+port.setLabel("Port number");          // the caption appears where the field already is
+```
 
 ## Binder: editing a domain object
 
@@ -82,7 +99,7 @@ binder.forField(confirmField)
 ### Where the messages appear
 
 You do not place them. When a check fails, the binder shows the sentence under the field that
-failed, colours that control and marks it invalid for assistive technology; when the value is fixed,
+failed, colors that control and marks it invalid for assistive technology; when the value is fixed,
 all three are cleared. `asRequired` also puts an asterisk after the field's caption, so the form
 says which fields are needed before anyone presses Save.
 
@@ -100,6 +117,22 @@ Set a message yourself — for something the server said, say — with
     Before 0.8.0 the message went into a stylesheet variable on the field and nowhere else, so the
     field turned red and said nothing. If you wrote a stylesheet rule to display that variable,
     delete it now, or the message appears twice.
+
+### What the reader gets
+
+When a check fails, four things happen at once and you write none of them:
+
+- the sentence appears under the field, in the error color;
+- the control is colored to match;
+- the field is marked invalid, so a screen reader says "invalid" when the reader reaches it;
+- the sentence becomes the field's description, so the same screen reader reads it out.
+
+Correcting the value undoes all four.
+
+This is checked on every build, in a real browser, for every field type: a page is built, a value
+is typed in that breaks a rule, and the test asserts that the sentence is part of the text a person
+can read on the screen — not merely that the field is holding it somewhere. That distinction is the
+whole of the fault that shipped in 0.7.0, and it is why the check is written that way.
 
 ### Two modes: write-through and buffered
 

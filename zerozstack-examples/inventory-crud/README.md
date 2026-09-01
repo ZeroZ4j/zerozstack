@@ -56,4 +56,4 @@ java -jar target/inventory-crud-server-1.0.0-SNAPSHOT.jar
 
 ### 3. Open in Browser
 
-Navigate to `http://localhost:8080` in your web browser.
+Navigate to `http://localhost:8089` in your web browser.

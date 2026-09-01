@@ -19,6 +19,7 @@ package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.component.SvgCanvas;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -167,13 +168,11 @@ public final class DonutChart extends ChartBase {
 
         if (innerRadius > 0.25) {
             String figure = centerValue != null ? centerValue : format.format(total);
-            Element figureText = monoText(centreX, centreY - 4, figure, "middle",
-                Math.max(12, inner * 0.42), 1);
-            figureText.setAttribute("font-weight", "700");
-            add(figureText);
+            add(monoText(PlotText.FIGURE, Math.max(12, inner * 0.42),
+                centreX, centreY - 4, figure, "middle"));
             if (centerLabel != null && !centerLabel.isEmpty()) {
-                add(text(centreX, centreY + inner * 0.34, centerLabel, "middle",
-                    Math.max(9, inner * 0.18), 0.5));
+                add(text(PlotText.LABEL, Math.max(9, inner * 0.18),
+                    centreX, centreY + inner * 0.34, centerLabel, "middle"));
             }
         }
     }
@@ -255,7 +254,7 @@ public final class DonutChart extends ChartBase {
         name.addClassName("font-semibold");
         Div value = new Div(format.format(slice.value())
             + "  ·  " + Scales.fixed(slice.value() / total() * 100, 1) + "%");
-        value.addClassName("font-mono text-base-content/70");
+        value.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         content.add(name, value);
         showTooltip(x, y, content);
     }

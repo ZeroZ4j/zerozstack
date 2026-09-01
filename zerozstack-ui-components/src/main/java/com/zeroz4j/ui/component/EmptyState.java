@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.layout.Div;
 
@@ -25,12 +27,12 @@ public final class EmptyState extends Div {
 
     public EmptyState(String icon, String title, String hint) {
         addClassName("flex flex-col items-center justify-center gap-2 py-12 px-6 text-center "
-            + "text-base-content/60");
+            + Emphasis.QUIET.getClassNames());
         Icon glyph = Icon.of(icon, "w-12 h-12 opacity-30");
         Div titleDiv = new Div(title);
-        titleDiv.addClassName("font-semibold text-base-content/80");
+        titleDiv.addClassName(TextStyle.BODY.getClassNames() + " font-semibold");
         Div hintDiv = new Div(hint);
-        hintDiv.addClassName("text-sm max-w-md");
+        hintDiv.addClassName(TextStyle.SECONDARY.getClassNames(Emphasis.FULL) + " max-w-md");
         add(glyph, titleDiv, hintDiv);
     }
 

@@ -20,6 +20,7 @@ package com.zeroz4j.example.client.showcase;
 import com.zeroz4j.ui.component.TokenMeter;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class TokenMeterShowcase extends ComponentShowcase {
 
@@ -45,7 +46,7 @@ public class TokenMeterShowcase extends ComponentShowcase {
         Div row = new Div();
         row.addClassName("flex flex-col gap-1");
         Span label = new Span(caption);
-        label.addClassName("text-xs text-base-content/50");
+        TextStyle.CAPTION.applyTo(label);
         TokenMeter meter = new TokenMeter();
         meter.set(used, cap);
         row.add(label, meter);

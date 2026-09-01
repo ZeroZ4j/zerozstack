@@ -28,6 +28,7 @@ import com.zeroz4j.signals.ValueSignal;
 import com.zeroz4j.ui.component.*;
 import com.zeroz4j.ui.layout.*;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,14 +68,11 @@ public class SignupView extends Card {
 
         disposables.add(Effect.create(() -> {
             String msg = statusMessage.get();
-            statusDiv.getElement().setInnerHTML("");
+            statusDiv.removeAll();
             if (msg != null && !msg.trim().isEmpty()) {
-                Alert alert = new Alert(msg);
-                if (Boolean.TRUE.equals(statusSuccess.get())) {
-                    alert.addClassName("alert-success");
-                } else {
-                    alert.addClassName("alert-error");
-                }
+                Alert alert = Boolean.TRUE.equals(statusSuccess.get())
+                        ? Alert.success(msg)
+                        : Alert.danger(msg);
                 statusDiv.add(alert);
             }
         }));
@@ -269,9 +267,7 @@ public class SignupView extends Card {
         });
 
         // Registration Table Section
-        Span tableTitle = new Span("Registered Attendees");
-        tableTitle.addClassName("text-lg");
-        tableTitle.addClassName("font-bold");
+        Span tableTitle = TextStyle.SECTION_TITLE.span("Registered Attendees");
         tableTitle.addClassName("mt-8");
         tableTitle.addClassName("mb-2");
         add(tableTitle);
@@ -286,12 +282,10 @@ public class SignupView extends Card {
     }
 
     private void renderTable(Div container) {
-        container.getElement().setInnerHTML("");
+        container.removeAll();
         List<Registration> list = registrations.get();
         if (list == null || list.isEmpty()) {
-            Span emptySpan = new Span("No registrations yet.");
-            emptySpan.addClassName("text-sm");
-            emptySpan.addClassName("opacity-70");
+            Span emptySpan = TextStyle.SECONDARY.span("No registrations yet.");
             container.add(emptySpan);
             return;
         }

@@ -1,0 +1,8 @@
+{
+  "name": "zerozstack-archetype-smoke",
+  "private": true,
+  "description": "Browser driver for the archetype smoke test. Run npm install here, not in some other project.",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

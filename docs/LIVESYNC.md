@@ -27,7 +27,40 @@ Deserialization on the client instantiates an APT-generated `<Model>_Live` subcl
 2. the session holds a declared write role, if any (`@ClientWritable("editor")`);
 3. the proposed state passes the model's [validation annotations](VALIDATION.md), checked against a throwaway copy so a rejected mutation never touches server state.
 
-Accepted mutations are applied in place, announced to `LiveMutationListener` beans, and re-broadcast to all sessions. Rejected mutations answer the writer with a corrective sync that reverts its optimistic local change.
+Accepted mutations are applied in place, announced to `LiveMutationListener` beans, and re-broadcast to all sessions. Rejected mutations answer the writer with a corrective sync that reverts its optimistic local change, and with the reason.
+
+### When an edit does not land (0.8.0+)
+
+The change is put on the screen before it is sent, so a person can be looking at a value the server
+never received. Two things can go wrong, and both arrive in the same place:
+
+* **The server refused it** — not `@ClientWritable`, a missing role, or a value that fails the
+  model's validation. The server sends the current state back first, so the screen is corrected, and
+  the reason after it.
+* **The browser could not send it** — the change could not be put on the wire at all. The client
+  asks the server to re-send that object, which corrects the screen, and reports the failure.
+
+Either way the application is told:
+
+```java
+LiveMutationRefusals.onRefused((model, reason) -> toast.show("Not saved: " + reason));
+```
+
+Nothing is thrown: by the time the answer arrives, the setter call is long finished. **With no
+listener registered, every refusal is still written to the browser console as a sentence saying the
+change was not saved.** It is never silent — before 0.8.0 a failure to send *was* silent, which is
+how the whole up direction stayed broken for a version with nobody noticing.
+
+An edit made while the connection is **down** is a different thing and is not a refusal: it is kept
+and sent when the connection comes back. See [Reconnection](#reconnection).
+
+**Watch one happen.** The `chat-livesync` example registers this listener and shows the reason above
+the topic box. The topic is capped at eighty characters by an annotation on the model and the box
+does not stop you typing more, so typing a long sentence into it produces a real refusal: the server
+logs `Rejected invalid live mutation of ChatTopic`, sends its own value back, and the person is told
+the topic was not changed and why. The listener also puts the box itself back to the server's value,
+which matters because the box otherwise leaves itself alone while somebody is typing in it — and
+after a refusal what is in it is a value that exists nowhere else.
 
 ### Every object the change touches is checked, not just the outer one
 
@@ -120,8 +153,103 @@ Set `zeroz.livemutex.waitSeconds` to allow longer or shorter.
 Callers are served in the order they arrived, so a queue of editors does not starve the one who has been waiting longest.
 The server keeps a lock only while somebody holds it or is waiting for it, so finished edits leave nothing behind.
 
+Waiting for a lock does not hold up the rest of what that person is doing.
+The server normally handles one connection's messages one at a time in the order they were sent, but a lock request that is waiting steps aside and lets the messages behind it through.
+It has read something and changed nothing at that point, so nothing it did can arrive out of turn - and without this, one person waiting half a minute for a lock would freeze every other thing they touched on the screen.
+
+## Waiting, sending, and what it costs
+
+An edit made on the client waits a moment before it travels, so that a burst of typing becomes one
+message instead of dozens. Two numbers decide when it goes.
+
+| What it is | Default | What it does |
+|---|---|---|
+| the pause | 150 ms | how long the changes have to stop before they are sent |
+| the ceiling | 1000 ms | the longest anything waits, even while the changes keep coming |
+
+`LiveMutations.configure(pauseMillis, ceilingMillis)`, called before `Zeroz4jClient.connect`,
+changes them. A pause of `0` turns the waiting off and sends every setter call at once, which is
+what the framework did before 0.8.0.
+
+**The ceiling is the important one.** Without it, somebody typing steadily never pauses, so nothing
+is ever sent, and a dropped connection or a closed tab takes the whole paragraph. With it, a person
+who types without stopping still has their work sent about once a second, and never has more than
+about a second of typing that the server has not heard about.
+
+### Nothing you do next can arrive first
+
+A person types into a field and immediately presses a button that calls a service. The typing is
+still waiting; the button's call would reach the server first, the server would decide on the value
+the person has already replaced, and the screen would look as though the typing was ignored.
+
+That cannot happen, at either end. **Every outgoing call sends the waiting edits first** - RMI
+service calls, `LiveMutex` locks and shared-signal writes all go through it - and **the server
+handles one connection's messages one at a time, in the order they were sent** (0.8.0+). So the edit
+is applied before the call that followed it runs, and the call sees what the person actually typed.
+You write nothing, and you do not need a `LiveMutex` to get this.
+
+Before 0.8.0 the second half was not true: the server could handle up to 32 messages from one
+connection at once, so a service call could be decided on the value the person had already replaced.
+Measured in a browser, typing and pressing a button with no pause between them: the old server got
+the previous value 15 times out of 15. A `LiveMutex` was the only fix. That advice is now obsolete -
+take a lock when two *people* must not edit the same thing at the same time, not to order one
+person's own messages.
+
+Ordering is per connection. A slow call for one person never delays anybody else.
+
+### Leaving the page loses what was still waiting
+
+Somebody who closes the tab or follows a link mid-burst loses whatever had not been sent - at most
+the ceiling's worth, about a second of typing. **There is deliberately no rescue for this.** A
+handler on the browser's page-leaving events was built and measured: it runs, but whether the
+browser gets the bytes out of the WebSocket before it takes the page apart is the browser's
+decision, and on the same machine on the same day it went both ways for both a closed tab and a
+followed link. The one mechanism browsers do guarantee at unload speaks HTTP and cannot write to a
+WebSocket. Something that works half the time is worse than nothing here, because an application
+would come to rely on it. Lower the ceiling for a screen where even a second matters.
+
+### Do not write the server's value back into a box somebody is typing in
+
+This is the one thing an application has to get right itself, and it became easy to get wrong when
+edits started waiting. The server broadcasts every accepted edit back, including to the person who
+made it - and what comes back is what the server had a moment ago, not what is in the box now. An
+`Effect` that copies the incoming value into the field will delete whatever was typed since.
+
+So follow the incoming value everywhere *except* the field that has the keyboard in it:
+
+```java
+boolean[] beingTypedIn = {false};
+field.addDomEventListener("focus", e -> beingTypedIn[0] = true);
+field.addDomEventListener("blur", e -> beingTypedIn[0] = false);
+
+Effect.create(() -> {
+    String current = profile.getMission();
+    label.setText(current);                                   // always
+    if (!beingTypedIn[0] && !current.equals(field.getValue())) {
+        field.setValue(current);                              // only when nobody is typing
+    }
+});
+```
+
+Before 0.8.0 this mistake was nearly invisible, because the value came back after every single
+character and therefore almost always matched. Now it comes back up to a second late, and the
+mistake eats words. The `chat-livesync` example shows the pattern above.
+
 ## Rules and limits (stated plainly)
 
+* **A burst of edits is one message, not one per keystroke (0.8.0+).** A change is not sent the
+  instant a setter returns. It waits for a short pause - **150 ms** by default - and everything
+  changed during that burst goes in one message. Typing a short sentence into a field bound straight
+  to a live object used to send one whole-object message per character; it now sends a handful.
+  Measured on the `chat-livesync` example, in a real browser, counting on the server: **38
+  characters typed at ordinary speed sent 38 messages before this change and 4 after it.**
+  See [Waiting, sending, and what it costs](#waiting-sending-and-what-it-costs).
+* **One connection's messages are handled in the order they were sent (0.8.0+).** Anything a browser
+  sends after a live edit - a service call, a lock, a signal write - is handled after that edit, so a
+  service method sees what the person actually typed. Before 0.8.0 the server could handle up to 32
+  messages from one connection at once and the call could win the race; measured in a browser, it won
+  it 15 times out of 15. Ordering is per connection, so one person's slow call never delays anybody
+  else.
 * **Setters are the tracking boundary.** Mutations must go through setters. In-place collection edits (`obj.getTags().add(...)`) are invisible — reassign via the setter or call `LiveMutationTracker.touch(obj)` afterward. Tracked collections are planned.
 * **Whole-object, last-write-wins.** Mutations replace the object's state; two unlocked concurrent editors race and the later write wins. Serialize editors with `LiveMutex` (see the collab-editor example pattern) where that matters. Field-level merging and version-conflict rejection (`MUTATE`/`ACK`/`REJECT` versions) are reserved in the protocol but not yet implemented.
 * **Re-rendering is automatic.** A `@LiveSync` object is a reactive dependency: read one of its getters inside an `Effect` or `Computed` and an inbound sync re-runs it. Notification is per object, not per field.
@@ -129,6 +257,9 @@ The server keeps a lock only while somebody holds it or is waiting for it, so fi
 * **Every object a change reaches is checked, not just the outermost one.** A model nested inside a `@ClientWritable` model needs its own `@ClientWritable` before a client can edit it, and one refusal refuses the whole change.
 * **Being sent an object is what earns the right to read it back.** The server remembers what it sent to which browser, and answers a re-read only from that record.
 * **Being sent an object is also what earns the right to lock it.** Same record, same rule. A lock request for an object this browser was never sent is refused immediately.
+* **Only a `@LiveSync` model and the objects inside one have a name.** Everything else on the wire is a value: it cannot be synced, mutated, locked or re-read, because there is nothing to name it by. This is what stops a screen that redraws itself from filling memory with objects nobody will ever ask for again.
+* **A name lasts as long as the object does, and no longer.** Neither tier keeps an object alive just because it once put it on the wire.
+* **Every model a client change reaches must be `@ClientWritable`, whether or not it came with a name.** A model the client invented on the spot is checked exactly like one it named, so an unmarked model cannot be smuggled into a marked one. A `record` is exempt: it has no setters and never changes, so it travels as a value.
 
 ## Reconnection
 
@@ -148,6 +279,34 @@ accepting edits. And if the **server itself restarted**, its handle registry is 
 cannot restore the objects — the application re-fetches them the way it first obtained them (the
 server log names how many handles were unknown).
 
+### The server keeps a name only while it still holds the object (0.8.0+)
+
+The handle registry no longer keeps objects alive. A live object's name lasts exactly as long as the
+application's own reference to it, on both sides.
+
+* **On the server**, an object your code has dropped is collected, and its name goes with it. A
+  re-sync naming it gets the same answer as after a restart: nothing comes back, the count is logged,
+  and the client re-fetches. This is not a new thing to do — keep live objects in your store, a root
+  object or a field, which is where they already are in any real application. An object built for one
+  call and never kept was never re-syncable in any meaningful sense.
+* **In the browser**, an object nothing on the screen refers to any more is collected too, and it is
+  not asked for after a reconnect. Before 0.8.0 the browser asked for everything it had ever been
+  sent, which is what made a long-lived tab unable to reconnect at all.
+
+Nothing an application can see changes while it holds its objects normally. What changes is the
+answer to "what happens to the ones it dropped": they used to stay for ever, and now they go.
+
+### A tab that has collected too much heals itself (0.8.0+)
+
+A re-sync request carries at most 10,000 handles. Past that the browser throws the list away instead
+of sending it and writes one line to the console saying that it did and why. Everything on the screen
+is re-fetched by the application the way it first obtained it, and the connection works again.
+
+This exists because the alternative is a tab that can never connect. An over-sized request is refused
+by the server, which closes the connection; the client reconnects and sends the identical request;
+the list never gets shorter. If that line ever appears, a screen is holding references to objects it
+stopped showing long ago — the log line is the place to start looking.
+
 ### What re-sync will and will not send back
 
 Every object travels with a name — a **handle** — and the client asks for objects back by naming them.
@@ -162,6 +321,10 @@ Three things follow, and only the third is likely to surprise anyone:
 
 The record is bounded: at most 10,000 objects per browser, and a browser's whole record is dropped after 24 hours of inactivity (`zeroz.disclosure.maxHandlesPerClient` and `zeroz.disclosure.idleHours`).
 A dropped record behaves exactly like a server restart — the client is told nothing was found and re-fetches.
+
+Since 0.8.0 far less goes into that record, because far less carries a name at all: only a live object
+and the objects inside it. An ordinary value returned from a service method is not named, cannot be
+asked for again, and does not use up a slot.
 
 ## Choosing a propagation feature
 

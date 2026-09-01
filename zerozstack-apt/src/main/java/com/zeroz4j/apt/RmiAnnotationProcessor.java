@@ -64,6 +64,12 @@ import java.util.*;
 public class RmiAnnotationProcessor extends AbstractProcessor {
 
     private final List<String> binaryModels = new ArrayList<>();
+    /** FQCNs of {@code record} models, for record-delegate registrar generation. */
+    private final List<String> binaryRecords = new ArrayList<>();
+    /** Sealed wire type FQCN to the FQCNs it permits, for permitted-set registrar generation. */
+    private final Map<String, List<String>> sealedBases = new LinkedHashMap<>();
+    /** Model FQCN to the FQCN of its generated {@code _Serializer}, which flattens nested names. */
+    private final Map<String, String> serializerNames = new LinkedHashMap<>();
     /** FQCNs of models with validation annotations, for registrar generation. */
     private final List<String> validatedModels = new ArrayList<>();
     /** FQCNs of @ClientWritable models, for live-supplier registrar generation. */
@@ -117,29 +123,91 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         // Process Portables
         Set<? extends Element> models = roundEnv.getElementsAnnotatedWith(DataModel.class);
         for (Element element : models) {
-            if (element.getKind() != ElementKind.CLASS) {
-                // Silence here was the defect. @DataModel on a record used to be skipped without a
-                // word: no serializer, no warning, and the failure arriving at the first call that
-                // tried to send it, far from the annotation. A record is the obvious shape to reach
-                // for, so this was a trap rather than an edge case.
+            ElementKind kind = element.getKind();
+            if (kind != ElementKind.CLASS && kind != ElementKind.RECORD
+                    && kind != ElementKind.INTERFACE) {
+                // Silence here was the defect: a @DataModel that quietly gets no serializer fails
+                // at the first call that tries to send it, far from the annotation.
                 env.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "@DataModel is only supported on a class. " + describeKind(element.getKind())
-                    + " cannot be given a generated serializer, and skipping it silently would fail "
-                    + "at runtime on the first call that sent one."
-                    + (element.getKind() == ElementKind.RECORD
-                        ? " Records are not yet supported as wire types: use a class with a public "
-                          + "no-argument constructor and getters. Note that a persistence root must "
-                          + "be a plain class in any case, because EclipseStore reaches fields "
-                          + "directly and the JVM refuses that for records."
-                        : ""),
+                    "@DataModel is only supported on a class, a record, or a sealed interface. "
+                    + describeKind(kind) + " cannot be given a generated serializer, and skipping "
+                    + "it silently would fail at runtime on the first call that sent one.",
                     element);
                 continue;
             }
-            if (element.getKind() == ElementKind.CLASS) {
-                TypeElement typeElement = (TypeElement) element;
-                String fqcn = typeElement.getQualifiedName().toString();
-                binaryModels.add(fqcn);
+
+            TypeElement typeElement = (TypeElement) element;
+            boolean sealed = typeElement.getModifiers().contains(Modifier.SEALED);
+
+            if (kind == ElementKind.INTERFACE) {
+                if (!sealed) {
+                    env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "An interface can only be a wire type when it is sealed. The permitted set "
+                        + "is what tells the receiver which classes it is allowed to build; without "
+                        + "it, anything at all could be named. Write "
+                        + "'sealed interface X permits A, B', or annotate the implementations "
+                        + "instead and declare the field as one of them.", element);
+                    continue;
+                }
+                collectSealedBase(typeElement, typeUtils);
+                continue;
+            }
+
+            if (sealed) {
+                if (!typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
+                    env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "A sealed class used as a wire type must be abstract. A base that is also a "
+                        + "value of its own would be neither in nor out of its permitted set.",
+                        element);
+                    continue;
+                }
+                collectSealedBase(typeElement, typeUtils);
+                continue;
+            }
+
+            if (kind == ElementKind.RECORD) {
+                String recordFqcn = typeElement.getQualifiedName().toString();
+                if (typeElement.getAnnotation(LiveSync.class) != null
+                        || typeElement.getAnnotation(ClientWritable.class) != null) {
+                    env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "@LiveSync and @ClientWritable cannot be used on a record. Live sync edits "
+                        + "one object in place through its setters and reports the change; a "
+                        + "record has no setters and never changes. Use a class for anything that "
+                        + "is edited after it is made.", element);
+                    continue;
+                }
+                binaryRecords.add(recordFqcn);
                 checkFieldTypes(typeElement, typeUtils);
+                try {
+                    generateRecordSerializer(typeElement, typeUtils);
+                } catch (IOException e) {
+                    env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Failed to generate serializer for " + recordFqcn + ": " + e.getMessage(),
+                        element);
+                }
+                try {
+                    if (generateRules(typeElement, typeUtils)) {
+                        validatedModels.add(recordFqcn);
+                    }
+                } catch (IOException e) {
+                    env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Failed to generate validation rules for " + recordFqcn + ": "
+                        + e.getMessage(), element);
+                }
+                continue;
+            }
+
+            {
+                String fqcn = typeElement.getQualifiedName().toString();
+                checkInheritance(typeElement, typeUtils);
+                checkFieldTypes(typeElement, typeUtils);
+                if (typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
+                    // An abstract model is never a value of its own — nothing can construct one, so
+                    // it gets no serializer and no entry in the registry. It exists to hand its
+                    // fields down, and getFields collects those into every concrete model below it.
+                    continue;
+                }
+                binaryModels.add(fqcn);
                 try {
                     generateSerializer(typeElement, typeUtils);
                 } catch (IOException e) {
@@ -207,7 +275,7 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         }
 
         // Generate Registrar on the final processing round or when models are collected
-        if (!binaryModels.isEmpty()) {
+        if (!binaryModels.isEmpty() || !binaryRecords.isEmpty() || !sealedBases.isEmpty()) {
             try {
                 generateRegistrar();
             } catch (IOException e) {
@@ -215,6 +283,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             }
             // Clear to avoid generating it again in the next round
             binaryModels.clear();
+            binaryRecords.clear();
+            sealedBases.clear();
+            serializerNames.clear();
             validatedModels.clear();
             clientWritableModels.clear();
             enumTypes.clear();
@@ -223,10 +294,165 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         return true;
     }
 
+    /**
+     * Reads a sealed {@code @DataModel} base — a sealed interface or sealed abstract class — into
+     * the permitted set the generated registrar will publish.
+     *
+     * <p>Everything refused here is refused because the receiver could not act on it safely. The
+     * whole point of a sealed wire type is that the complete set of classes it may become is known
+     * when the code is compiled, so a payload naming anything else can be turned away before it is
+     * built.</p>
+     */
+    private void collectSealedBase(TypeElement base, Types typeUtils) {
+        String baseFqcn = base.getQualifiedName().toString();
+        List<String> permitted = new ArrayList<>();
+        for (TypeMirror permittedType : base.getPermittedSubclasses()) {
+            Element permittedElement = typeUtils.asElement(permittedType);
+            if (!(permittedElement instanceof TypeElement)) {
+                continue;
+            }
+            TypeElement sub = (TypeElement) permittedElement;
+            String subFqcn = sub.getQualifiedName().toString();
+            if (sub.getModifiers().contains(Modifier.SEALED)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    baseFqcn + " permits " + subFqcn + ", which is itself sealed. A sealed wire "
+                    + "type has to be one level deep: a value on the wire names one base and the "
+                    + "receiver looks up one permitted set, so a family of families has no single "
+                    + "set to check against. Flatten it.", base);
+                continue;
+            }
+            if (sub.getAnnotation(DataModel.class) == null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    baseFqcn + " permits " + subFqcn + ", which is not annotated @DataModel. Every "
+                    + "class a sealed wire type permits must be a wire type itself, or a payload "
+                    + "naming it could not be built.", base);
+                continue;
+            }
+            if (sub.getModifiers().contains(Modifier.ABSTRACT)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    baseFqcn + " permits " + subFqcn + ", which is abstract. There is no value to "
+                    + "build for it.", base);
+                continue;
+            }
+            if (sub.getKind() != ElementKind.RECORD && !sub.getModifiers().contains(Modifier.FINAL)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    baseFqcn + " permits " + subFqcn + ", which is declared non-sealed. Classes "
+                    + "outside the permitted set can then extend it, and the receiver would have "
+                    + "no way to tell those apart from the ones it agreed to accept. Declare it "
+                    + "final.", base);
+                continue;
+            }
+            permitted.add(subFqcn);
+        }
+        if (permitted.isEmpty()) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                baseFqcn + " permits nothing that can cross the wire, so no value of it could ever "
+                + "be sent.", base);
+            return;
+        }
+        sealedBases.put(baseFqcn, permitted);
+    }
+
+    /**
+     * Generates {@code <Record>_Serializer} for a {@code record} model: a {@code write} that puts
+     * every component out in canonical order, and a {@code read} that pulls every component back
+     * and <i>then</i> calls the canonical constructor.
+     *
+     * <p>That ordering is the whole difference from a class. A class is built empty and filled, so
+     * the reader can hand out the instance before its fields arrive. A record's components are
+     * final, so it cannot exist until the last one has been read.</p>
+     */
+    private void generateRecordSerializer(TypeElement typeElement, Types typeUtils) throws IOException {
+        String packageName = getPackageName(typeElement);
+        String className = typeElement.getSimpleName().toString();
+        String serializerClassName = className + "_Serializer";
+        String modelName = typeElement.getQualifiedName().toString();
+        String serializerFqcn = packageName.isEmpty()
+                ? serializerClassName : packageName + "." + serializerClassName;
+        serializerNames.put(modelName, serializerFqcn);
+
+        List<FieldInfo> components = getRecordComponents(typeElement);
+
+        JavaFileObject builderFile = processingEnv.getFiler().createSourceFile(serializerFqcn);
+        try (Writer writer = builderFile.openWriter()) {
+            writer.write("package " + packageName + ";\n\n");
+            writer.write("import java.nio.ByteBuffer;\n");
+            writer.write("import com.zeroz4j.api.BinarySerializer;\n");
+            writer.write("import com.zeroz4j.api.GrowableBuffer;\n");
+            writer.write("import com.zeroz4j.api.ObjectMapper;\n\n");
+            writer.write("// Auto-generated by zeroz4j APT — do not edit\n");
+            writer.write("public class " + serializerClassName + " {\n\n");
+
+            writer.write("    public static void write(" + modelName + " obj, GrowableBuffer buffer, ObjectMapper mapper) {\n");
+            writer.write("        if (obj == null) {\n");
+            writer.write("            buffer.put((byte) 0);\n");
+            writer.write("            return;\n");
+            writer.write("        }\n");
+            writer.write("        buffer.put((byte) 1);\n");
+            for (FieldInfo component : components) {
+                collectEnumTypes(component.type);
+                writeSerializationCode(writer, component, getReadExpression(component, "obj"));
+            }
+            writer.write("    }\n\n");
+
+            writer.write("    public static " + modelName + " read(ByteBuffer buffer, ObjectMapper mapper) {\n");
+            writer.write("        if (buffer.get() == 0) {\n");
+            writer.write("            return null;\n");
+            writer.write("        }\n");
+            StringBuilder arguments = new StringBuilder();
+            int index = 0;
+            for (FieldInfo component : components) {
+                String local = "_c" + index++;
+                writer.write("        " + component.type + " " + local + " = "
+                        + defaultValueFor(component.type) + ";\n");
+                writeDeserializationCode(writer, component, local + " = ", "");
+                if (arguments.length() > 0) {
+                    arguments.append(", ");
+                }
+                arguments.append(local);
+            }
+            // Construct last: this is the line the whole record path exists for.
+            writer.write("        return new " + modelName + "(" + arguments + ");\n");
+            writer.write("    }\n");
+            writer.write("}\n");
+        }
+    }
+
+    /** The record's components, in canonical constructor order, read through their accessors. */
+    private List<FieldInfo> getRecordComponents(TypeElement typeElement) {
+        List<FieldInfo> components = new ArrayList<>();
+        for (RecordComponentElement component : typeElement.getRecordComponents()) {
+            components.add(new FieldInfo(
+                    component.getSimpleName().toString(),
+                    component.asType(),
+                    component.getAccessor().getSimpleName().toString(),
+                    null,
+                    true));
+        }
+        return components;
+    }
+
+    /** The value a local of this type starts at, before the component's bytes are read into it. */
+    private static String defaultValueFor(TypeMirror type) {
+        switch (type.toString()) {
+            case "int":     return "0";
+            case "long":    return "0L";
+            case "double":  return "0.0";
+            case "float":   return "0.0f";
+            case "boolean": return "false";
+            case "short":   return "(short) 0";
+            case "byte":    return "(byte) 0";
+            case "char":    return "(char) 0";
+            default:        return "null";
+        }
+    }
+
     private void generateSerializer(TypeElement typeElement, Types typeUtils) throws IOException {
         String packageName = getPackageName(typeElement);
         String className = typeElement.getSimpleName().toString();
         String serializerClassName = className + "_Serializer";
+        serializerNames.put(typeElement.getQualifiedName().toString(),
+                packageName.isEmpty() ? serializerClassName : packageName + "." + serializerClassName);
 
         JavaFileObject builderFile = processingEnv.getFiler().createSourceFile(packageName + "." + serializerClassName);
         try (Writer writer = builderFile.openWriter()) {
@@ -292,23 +518,40 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         } else if (isEnum(field.type)) {
             // TeaVM-safe scalar enum: write the constant name, no reflection, no registry tag.
             writer.write("        BinarySerializer.writeString(buffer, " + readExpr + " == null ? null : " + readExpr + ".name());\n");
-        } else if (isDataModel(field.type)) {
-            writer.write("        if (" + readExpr + " == null) {\n");
-            writer.write("            buffer.put((byte) 0);\n");
-            writer.write("        } else {\n");
-            writer.write("            buffer.put((byte) 1);\n");
-            writer.write("            " + typeStr + "_Serializer.write(" + readExpr + ", buffer, mapper);\n");
-            writer.write("        }\n");
         } else {
-            // Fallback
+            // Everything else goes out through the tagged path, models included.
+            //
+            // A model-typed field used to be written straight into the buffer instead, which was
+            // smaller by a few bytes and wrong in three ways. Nothing recorded what was already
+            // being written, so two models referring to each other recursed until the stack ran
+            // out. The same instance in two fields arrived as two objects. And the reader built the
+            // nested value with a plain constructor, so a model nested inside a live-synced one
+            // never became a tracked instance. The tagged path has always handled all three, which
+            // is why a model reached through a List or an Object-typed field behaved correctly
+            // while the same model in a declared field did not.
+            //
+            // What it costs is an id and a class name per nested model. Collections were already
+            // paying that, so this is bounded by the number of model-typed fields, not by how much
+            // data there is.
             writer.write("        BinarySerializer.writeValue(buffer, " + readExpr + ", mapper);\n");
         }
     }
 
     private void writeDeserializationCode(Writer writer, FieldInfo field, String objName) throws IOException {
+        writeDeserializationCode(writer, field,
+                getWriteStatementPrefix(field, objName), getWriteStatementSuffix(field));
+    }
+
+    /**
+     * Emits the statements that read one field or record component and store it.
+     *
+     * @param writeTarget everything up to the value — a setter call opener, a field assignment, or
+     *                    an assignment to a local while a record's components are being gathered
+     * @param suffix      the closing bracket when {@code writeTarget} opened a setter call
+     */
+    private void writeDeserializationCode(Writer writer, FieldInfo field,
+                                          String writeTarget, String suffix) throws IOException {
         String typeStr = field.type.toString();
-        String writeTarget = getWriteStatementPrefix(field, objName);
-        String suffix = getWriteStatementSuffix(field);
 
         if (typeStr.equals("int")) {
             writer.write("        " + writeTarget + "buffer.getInt()" + suffix + ";\n");
@@ -334,16 +577,14 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             writer.write("            String _raw = BinarySerializer.readString(buffer);\n");
             writer.write("            " + writeTarget + "(_raw == null ? null : " + typeStr + ".valueOf(_raw))" + suffix + ";\n");
             writer.write("        }\n");
-        } else if (isDataModel(field.type)) {
-            writer.write("        if (buffer.get() != 0) {\n");
-            writer.write("            " + typeStr + " nested = new " + typeStr + "();\n");
-            writer.write("            " + typeStr + "_Serializer.read(nested, buffer, mapper);\n");
-            writer.write("            " + writeTarget + "nested" + suffix + ";\n");
-            writer.write("        } else {\n");
-            writer.write("            " + writeTarget + "null" + suffix + ";\n");
-            writer.write("        }\n");
+        } else if (isSealedBase(field.type)) {
+            // Only a class this sealed type permits may be built here; readSealed refuses anything
+            // else before it reaches a constructor.
+            writer.write("        " + writeTarget + "(" + typeStr + ") BinarySerializer.readSealed(buffer, mapper, \""
+                    + sealedBaseNameOf(field.type) + "\")" + suffix + ";\n");
         } else {
-            // Fallback
+            // Matches the tagged write above. The tag is what carries a value's identity, so a
+            // loop closes on the same instance and a model sent twice arrives once.
             writer.write("        " + writeTarget + "(" + typeStr + ") BinarySerializer.readValue(buffer, mapper)" + suffix + ";\n");
         }
     }
@@ -866,6 +1107,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         JavaFileObject builderFile = processingEnv.getFiler().createSourceFile(packageName + "." + className);
         try (Writer writer = builderFile.openWriter()) {
             writer.write("package " + packageName + ";\n\n");
+            if (!binaryRecords.isEmpty()) {
+                writer.write("import com.zeroz4j.api.BinaryRecordDelegate;\n");
+            }
             writer.write("import com.zeroz4j.api.BinaryRegistry;\n");
             writer.write("import com.zeroz4j.api.BinaryRegistrar;\n");
             writer.write("import com.zeroz4j.api.BinarySerializerDelegate;\n");
@@ -881,20 +1125,51 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 writer.write("            obj -> " + model + "_Rules.validate((" + model + ") obj));\n");
             }
             for (String model : clientWritableModels) {
-                writer.write("        BinaryRegistry.registerLive(\"" + model + "\", " + model + "_Live::new);\n");
+                // Both names, because the browser holds the subclass and the wire carries
+                // the model: the writer needs the pair to put the model's own name on a
+                // client edit.
+                writer.write("        BinaryRegistry.registerLive(\"" + model + "\", \""
+                        + model + "_Live\", " + model + "_Live::new);\n");
             }
             for (String enumType : enumTypes) {
                 writer.write("        BinaryRegistry.registerEnum(\"" + enumType + "\", " + enumType + "::valueOf);\n");
             }
+            for (Map.Entry<String, List<String>> sealed : sealedBases.entrySet()) {
+                StringBuilder members = new StringBuilder();
+                for (String member : sealed.getValue()) {
+                    if (members.length() > 0) {
+                        members.append(", ");
+                    }
+                    members.append('"').append(member).append('"');
+                }
+                writer.write("        BinaryRegistry.registerSealed(\"" + sealed.getKey()
+                        + "\", new String[] { " + members + " });\n");
+            }
             for (String model : binaryModels) {
+                String serializer = serializerNames.getOrDefault(model, model + "_Serializer");
                 writer.write("        BinaryRegistry.register(\"" + model + "\", " + model + "::new, new BinarySerializerDelegate<" + model + ">() {\n");
                 writer.write("            @Override\n");
                 writer.write("            public void write(" + model + " obj, GrowableBuffer buffer, ObjectMapper mapper) {\n");
-                writer.write("                " + model + "_Serializer.write(obj, buffer, mapper);\n");
+                writer.write("                " + serializer + ".write(obj, buffer, mapper);\n");
                 writer.write("            }\n");
                 writer.write("            @Override\n");
                 writer.write("            public void read(" + model + " obj, ByteBuffer buffer, ObjectMapper mapper) {\n");
-                writer.write("                " + model + "_Serializer.read(obj, buffer, mapper);\n");
+                writer.write("                " + serializer + ".read(obj, buffer, mapper);\n");
+                writer.write("            }\n");
+                writer.write("        });\n");
+            }
+            for (String model : binaryRecords) {
+                String serializer = serializerNames.getOrDefault(model, model + "_Serializer");
+                // No supplier: there is no empty record to hand out, so the delegate returns the
+                // finished value instead of filling one.
+                writer.write("        BinaryRegistry.registerRecord(\"" + model + "\", new BinaryRecordDelegate<" + model + ">() {\n");
+                writer.write("            @Override\n");
+                writer.write("            public void write(" + model + " obj, GrowableBuffer buffer, ObjectMapper mapper) {\n");
+                writer.write("                " + serializer + ".write(obj, buffer, mapper);\n");
+                writer.write("            }\n");
+                writer.write("            @Override\n");
+                writer.write("            public " + model + " read(ByteBuffer buffer, ObjectMapper mapper) {\n");
+                writer.write("                return " + serializer + ".read(buffer, mapper);\n");
                 writer.write("            }\n");
                 writer.write("        });\n");
             }
@@ -917,6 +1192,8 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
     private String registrarSuffix() {
         java.util.TreeSet<String> all = new java.util.TreeSet<>();
         all.addAll(binaryModels);
+        all.addAll(binaryRecords);
+        all.addAll(sealedBases.keySet());
         all.addAll(enumTypes);
         all.addAll(clientWritableModels);
         all.addAll(validatedModels);
@@ -989,6 +1266,78 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
      * @param typeElement the model being processed
      * @param typeUtils   type utilities
      */
+    /**
+     * Refuses the two inheritance shapes whose fields cannot be carried honestly.
+     *
+     * <p>Both used to compile and lose data with no word said anywhere. The first is a base class
+     * that is not itself a {@code @DataModel}: there is no way to know its fields belong on the
+     * wire, so they were dropped. The second is a subclass redeclaring a field name the base
+     * already uses: both would be written, and both read back through whichever accessor won.</p>
+     */
+    private void checkInheritance(TypeElement typeElement, Types typeUtils) {
+        TypeElement base = superclassOf(typeElement);
+        if (base != null && base.getAnnotation(DataModel.class) == null) {
+            List<String> lost = new ArrayList<>();
+            for (Element enclosed : base.getEnclosedElements()) {
+                if (enclosed.getKind() != ElementKind.FIELD) {
+                    continue;
+                }
+                Set<Modifier> mods = enclosed.getModifiers();
+                if (!mods.contains(Modifier.STATIC) && !mods.contains(Modifier.TRANSIENT)) {
+                    lost.add(enclosed.getSimpleName().toString());
+                }
+            }
+            if (!lost.isEmpty()) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    typeElement.getQualifiedName() + " extends "
+                    + base.getQualifiedName() + ", which is not a @DataModel, so its fields "
+                    + lost + " cannot be carried and would go missing with nothing to explain it. "
+                    + "Annotate " + base.getSimpleName() + " with @DataModel, or move those fields "
+                    + "down into the subclass. A base class with no fields needs no annotation.",
+                    typeElement);
+            }
+            return;
+        }
+        if (base == null) {
+            return;
+        }
+        Map<String, String> seenNames = new LinkedHashMap<>();
+        for (TypeElement level = base; level != null; level = superclassOf(level)) {
+            if (level.getAnnotation(DataModel.class) == null) {
+                break;
+            }
+            for (Element enclosed : level.getEnclosedElements()) {
+                if (enclosed.getKind() != ElementKind.FIELD) {
+                    continue;
+                }
+                Set<Modifier> mods = enclosed.getModifiers();
+                if (mods.contains(Modifier.STATIC) || mods.contains(Modifier.TRANSIENT)) {
+                    continue;
+                }
+                seenNames.put(enclosed.getSimpleName().toString(),
+                        level.getQualifiedName().toString());
+            }
+        }
+        for (Element enclosed : typeElement.getEnclosedElements()) {
+            if (enclosed.getKind() != ElementKind.FIELD) {
+                continue;
+            }
+            Set<Modifier> mods = enclosed.getModifiers();
+            if (mods.contains(Modifier.STATIC) || mods.contains(Modifier.TRANSIENT)) {
+                continue;
+            }
+            String name = enclosed.getSimpleName().toString();
+            String declaredBy = seenNames.get(name);
+            if (declaredBy != null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    typeElement.getQualifiedName() + " declares a field '" + name
+                    + "' that " + declaredBy + " already declares. Both would be written, and both "
+                    + "read back through the same accessor, so one would overwrite the other. "
+                    + "Rename one of them.", typeElement);
+            }
+        }
+    }
+
     private void checkFieldTypes(TypeElement typeElement, Types typeUtils) {
         for (FieldInfo field : getFields(typeElement, typeUtils)) {
             TypeMirror type = field.type;
@@ -1016,8 +1365,21 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
         }
     }
 
+    /**
+     * Every field this model puts on the wire: the ones it inherits from a {@code @DataModel} base
+     * first, in base-to-subclass order, then its own.
+     *
+     * <p>Inherited fields used to be left out entirely, which meant the most ordinary refactor in
+     * Java — moving what several models share up into a base class — silently stopped that data
+     * arriving. A base class has no serializer of its own; what it declares is written as part of
+     * each concrete model below it.</p>
+     */
     private List<FieldInfo> getFields(TypeElement typeElement, Types typeUtils) {
         List<FieldInfo> fields = new ArrayList<>();
+        TypeElement base = superclassOf(typeElement);
+        if (base != null && base.getAnnotation(DataModel.class) != null) {
+            fields.addAll(getFields(base, typeUtils));
+        }
         for (Element enclosed : typeElement.getEnclosedElements()) {
             if (enclosed.getKind() == ElementKind.FIELD) {
                 VariableElement fieldVar = (VariableElement) enclosed;
@@ -1052,7 +1414,22 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 }
             }
         }
-        return null;
+        TypeElement superElement = superclassOf(typeElement);
+        return superElement == null ? null : findGetter(superElement, fieldName, fieldType, typeUtils);
+    }
+
+    /** The declared superclass as an element, or null at {@code java.lang.Object} and above. */
+    private static TypeElement superclassOf(TypeElement typeElement) {
+        TypeMirror superclass = typeElement.getSuperclass();
+        if (!(superclass instanceof DeclaredType)) {
+            return null;
+        }
+        Element element = ((DeclaredType) superclass).asElement();
+        if (!(element instanceof TypeElement)
+                || "java.lang.Object".equals(((TypeElement) element).getQualifiedName().toString())) {
+            return null;
+        }
+        return (TypeElement) element;
     }
 
     private String findSetter(TypeElement typeElement, String fieldName, TypeMirror fieldType, Types typeUtils) {
@@ -1068,7 +1445,8 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 }
             }
         }
-        return null;
+        TypeElement superElement = superclassOf(typeElement);
+        return superElement == null ? null : findSetter(superElement, fieldName, fieldType, typeUtils);
     }
 
     private String getReadExpression(FieldInfo field, String objName) {
@@ -1132,6 +1510,52 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
 
     private void collectEnumTypes(TypeMirror type) {
         collectEnumTypes(type, enumTypes);
+    }
+
+    /**
+     * True when the declared type is a sealed {@code @DataModel} base — a sealed interface or
+     * sealed abstract class. Such a field holds one of a known set of classes, so it travels
+     * through the tagged path carrying the base name rather than being written in place.
+     */
+    private boolean isSealedBase(TypeMirror type) {
+        if (!(type instanceof DeclaredType)) {
+            return false;
+        }
+        Element element = ((DeclaredType) type).asElement();
+        return element.getKind() != ElementKind.RECORD
+                && element.getModifiers().contains(Modifier.SEALED)
+                && element.getAnnotation(DataModel.class) != null;
+    }
+
+    /** The FQCN of a sealed base, generics erased, as the registrar and the wire name it. */
+    private String sealedBaseNameOf(TypeMirror type) {
+        return ((TypeElement) ((DeclaredType) type).asElement()).getQualifiedName().toString();
+    }
+
+    /** True when the declared type is a {@code record} annotated {@code @DataModel}. */
+    private boolean isRecordModel(TypeMirror type) {
+        if (!(type instanceof DeclaredType)) {
+            return false;
+        }
+        Element element = ((DeclaredType) type).asElement();
+        return element.getKind() == ElementKind.RECORD
+                && element.getAnnotation(DataModel.class) != null;
+    }
+
+    /**
+     * The FQCN of the {@code _Serializer} generated for a model type.
+     *
+     * <p>Generated serializers are always top-level classes in the model's own package, so a nested
+     * model {@code com.x.Outer.Item} gets {@code com.x.Item_Serializer}. Naming it from the model's
+     * canonical name instead would produce {@code com.x.Outer.Item_Serializer}, which does not
+     * exist.</p>
+     */
+    private String serializerFqcnFor(TypeMirror type) {
+        TypeElement element = (TypeElement) ((DeclaredType) type).asElement();
+        String packageName = getPackageName(element);
+        String simpleName = element.getSimpleName().toString();
+        return packageName.isEmpty()
+                ? simpleName + "_Serializer" : packageName + "." + simpleName + "_Serializer";
     }
 
     private boolean isDataModel(TypeMirror type) {

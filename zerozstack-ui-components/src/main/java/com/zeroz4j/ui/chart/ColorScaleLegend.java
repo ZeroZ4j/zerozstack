@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -116,9 +117,9 @@ public final class ColorScaleLegend extends Div {
     private void render() {
         removeAll();
         boolean vertical = orientation == Orientation.VERTICAL;
-        setClassName(vertical
-            ? "flex flex-col items-center gap-1.5 text-xs text-base-content/60"
-            : "flex items-center gap-2 text-xs text-base-content/60");
+        setClassName((vertical
+            ? "flex flex-col items-center gap-1.5 "
+            : "flex items-center gap-2 ") + TextStyle.CAPTION.getClassNames());
 
         if (caption != null && !caption.isEmpty()) {
             Div label = new Div(caption);
@@ -135,7 +136,7 @@ public final class ColorScaleLegend extends Div {
 
     private void renderRamp(boolean vertical) {
         Div low = new Div(format.format(min));
-        low.addClassName("shrink-0 font-mono text-[10px]");
+        low.addClassName("shrink-0 font-mono");
 
         Div bar = new Div();
         bar.addClassName(vertical ? "flex flex-col-reverse overflow-hidden rounded"
@@ -158,7 +159,7 @@ public final class ColorScaleLegend extends Div {
         }
 
         Div high = new Div(format.format(max));
-        high.addClassName("shrink-0 font-mono text-[10px]");
+        high.addClassName("shrink-0 font-mono");
 
         if (vertical) {
             add(high, bar, low);

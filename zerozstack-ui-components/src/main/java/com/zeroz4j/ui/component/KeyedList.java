@@ -19,6 +19,7 @@ package com.zeroz4j.ui.component;
 
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.component.HasComponents;
+import com.zeroz4j.api.Disposable;
 import com.zeroz4j.signals.Effect;
 import com.zeroz4j.signals.Signal;
 
@@ -33,8 +34,12 @@ import java.util.function.Function;
  * rebuilding: unchanged rows keep their DOM (and their event listeners, focus, animation
  * state), removed keys unmount, new keys mount in order. The standard way every dynamic
  * list in the Console renders.
+ *
+ * <p>It watches the signal for as long as it exists, so a screen that builds one has to
+ * {@link #dispose()} it when it leaves - normally from {@code onDetach}. Without that the list
+ * keeps rebuilding itself after the person has gone somewhere else.</p>
  */
-public final class KeyedList<T> {
+public final class KeyedList<T> implements Disposable {
 
     private final HasComponents container;
     private final Function<T, String> keyOf;
@@ -42,6 +47,7 @@ public final class KeyedList<T> {
     /** May be null: rows that support in-place update implement it to avoid re-rendering. */
     private final Updater<T> updater;
     private final Map<String, Component> mounted = new HashMap<>();
+    private final Disposable watching;
 
     public interface Updater<T> {
         void update(Component existing, T newItem);
@@ -59,7 +65,13 @@ public final class KeyedList<T> {
         this.keyOf = keyOf;
         this.render = render;
         this.updater = updater;
-        Effect.create(() -> patch(source.get()));
+        this.watching = Effect.create(() -> patch(source.get()));
+    }
+
+    /** Stops watching the signal. Safe to call more than once. */
+    @Override
+    public void dispose() {
+        watching.dispose();
     }
 
     private void patch(List<T> items) {

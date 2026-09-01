@@ -105,14 +105,11 @@ public class InventoryView extends Card {
         add(statusDiv);
         disposables.add(Effect.create(() -> {
             String msg = statusMessage.get();
-            statusDiv.getElement().setInnerHTML("");
+            statusDiv.removeAll();
             if (msg != null && !msg.trim().isEmpty()) {
-                Alert alert = new Alert(msg);
-                if (Boolean.TRUE.equals(statusSuccess.get())) {
-                    alert.addClassName("alert-success");
-                } else {
-                    alert.addClassName("alert-error");
-                }
+                Alert alert = Boolean.TRUE.equals(statusSuccess.get())
+                        ? Alert.success(msg)
+                        : Alert.danger(msg);
                 statusDiv.add(alert);
             }
         }));
@@ -388,7 +385,7 @@ public class InventoryView extends Card {
     }
 
     private void renderProductTable(Div container) {
-        container.getElement().setInnerHTML("");
+        container.removeAll();
         List<Product> list = filteredProducts.get();
 
         if (list == null || list.isEmpty()) {

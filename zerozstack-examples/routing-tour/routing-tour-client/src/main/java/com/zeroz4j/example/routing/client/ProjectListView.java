@@ -26,6 +26,7 @@ import com.zeroz4j.example.routing.model.Project;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,17 +58,17 @@ public class ProjectListView implements RouteView<List<Project>> {
         for (Project project : projects) {
             rows.add(Ui.box("flex items-center gap-3 p-3 rounded bg-base-200",
                     Ui.routerLink("/projects/" + project.getId(), project.getName()),
-                    Ui.text(project.getSummary(), "text-sm opacity-70 flex-1"),
+                    Ui.text(project.getSummary(), TextStyle.SECONDARY.getClassNames() + " flex-1"),
                     Ui.text(project.getOpenTasks() + " open", "badge badge-ghost")));
         }
 
         return Ui.box("flex flex-col gap-4 max-w-3xl",
-                Ui.text("Projects", "text-2xl font-bold"),
-                Ui.box("flex gap-3 text-sm",
-                        Ui.text("Sort:", "opacity-70"),
+                Ui.text("Projects", TextStyle.PAGE_TITLE.getClassNames()),
+                Ui.box("flex items-baseline gap-3",
+                        Ui.text("Sort:", TextStyle.SECONDARY.getClassNames()),
                         Ui.routerLink("/projects?sort=id", "by id"),
                         Ui.routerLink("/projects?sort=name", "by name"),
-                        Ui.text("currently: " + params.query("sort", "id"), "opacity-70")),
+                        Ui.text("currently: " + params.query("sort", "id"), TextStyle.SECONDARY.getClassNames())),
                 rows);
     }
 }

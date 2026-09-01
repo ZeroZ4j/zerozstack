@@ -72,6 +72,7 @@
         <module>zerozstack-apt</module>
         <module>zerozstack-client</module>
         <module>zerozstack-server-core</module>
+        <module>zerozstack-server-test</module>
         <module>zerozstack-server-jaxrs</module>
         <module>zerozstack-server-jakarta</module>
         <module>zerozstack-server-helidon</module>
@@ -84,8 +85,12 @@
     </modules>
 
     <properties>
-        <revision>0.8.0-SNAPSHOT</revision>
+        <revision>0.8.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Everything the build writes is UTF-8 too, javadoc included. Without this the
+             javadoc tool falls back through a chain of defaults to the platform encoding,
+             which on a Windows machine is a single-byte code page. -->
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <teavm.version>0.15.0</teavm.version>
         <!-- EclipseStore's serializer base, which carries the Lazy interface. MUST match the
              storage-embedded version in zerozstack-store-eclipsestore: server and client have to agree on
@@ -121,6 +126,11 @@
             <dependency>
                 <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-server-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-server-test</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

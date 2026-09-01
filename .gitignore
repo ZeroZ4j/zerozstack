@@ -8,5 +8,13 @@ target/
 # Archetype smoke-test screenshots
 /zerozstack-archetype/smoke/shots/
 
+# What running the archetype smoke test leaves in its own directory. All three are made by the
+# steps in zerozstack-archetype/smoke/README.md, and none of them belongs in the repository:
+# the browser driver it needs, the throwaway application it generates, and the private Maven
+# repository that application is built into so the throwaway artifacts never reach the shared one.
+/zerozstack-archetype/smoke/node_modules/
+/zerozstack-archetype/smoke/smokeapp/
+/zerozstack-archetype/smoke/.m2smoke/
+
 # Private Maven repository head used by worker sessions (see AGENTS.md)
 .m2head/

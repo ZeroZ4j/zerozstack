@@ -20,6 +20,7 @@ package com.zeroz4j.ui.chart;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.browser.Window;
@@ -64,7 +65,7 @@ public final class RefreshControl extends Div {
     public RefreshControl() {
         addClassName("flex items-center gap-1.5");
 
-        age.addClassName("font-mono text-[10px] text-base-content/40");
+        age.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
 
         intervalButton.addClassName("btn-xs btn-ghost");
         intervalButton.getElement().setAttribute("title", "Auto-refresh interval");

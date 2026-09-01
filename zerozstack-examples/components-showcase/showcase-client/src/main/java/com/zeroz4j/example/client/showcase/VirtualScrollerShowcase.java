@@ -23,6 +23,7 @@ import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import java.util.ArrayList;
 import java.util.List;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class VirtualScrollerShowcase extends ComponentShowcase {
 
@@ -34,6 +35,17 @@ public class VirtualScrollerShowcase extends ComponentShowcase {
             + "sticks to the bottom for live streams until the user scrolls up, and re-arms when "
             + "they come back.");
 
+        addWhatToCheck("What to watch while you scroll",
+                "Drag the scrollbar from top to bottom in one go. The rows must keep up; blank "
+                        + "space where rows should be means the window is being redrawn too slowly.",
+                "Stop halfway and read a row number. Scroll away and come back. The same number "
+                        + "should be in the same place.",
+                "Press the Jump buttons. The list should land exactly on the row named, not near it.",
+                "Tab into the list. The keyboard should be able to reach the rows and get out again.",
+                "Scroll with the keyboard alone: Page Down, Home and End.",
+                "Broken looks like: white gaps while scrolling, the list snapping back to the top, "
+                        + "or the keyboard getting stuck inside it.");
+
         List<String> rows = new ArrayList<>();
         for (int i = 0; i < 50_000; i++) {
             rows.add("row " + i);
@@ -44,7 +56,7 @@ public class VirtualScrollerShowcase extends ComponentShowcase {
             row.addClassName("flex items-center gap-3 border-b border-base-300/40 px-3 "
                 + "font-mono text-xs hover:bg-base-content/5");
             Span index = new Span(item);
-            index.addClassName("text-base-content/50");
+            TextStyle.CAPTION.applyTo(index);
             Span payload = new Span("payload for " + item);
             row.add(index, payload);
             return row;

@@ -90,44 +90,32 @@ class SilentSkipTest {
     }
 
     @Test
-    void aRecordIsRefusedRatherThanSkipped(@TempDir Path tempDir) throws Exception {
+    void aRecordIsAcceptedNow(@TempDir Path tempDir) throws Exception {
+        // It used to be refused, loudly, with an explanation. Since 0.8.0 the wire format builds a
+        // record by reading every component and then calling its constructor, so there is nothing
+        // left to refuse. Round-trip proof lives in RecordWireTest.
         List<String> errors = errorsFor(tempDir,
                 "package com.test;\n"
                 + "import com.zeroz4j.api.DataModel;\n"
                 + "@DataModel\n"
                 + "public record Money(long amount, String currency) {}\n");
 
-        String joined = String.join("\n", errors);
-        org.junit.jupiter.api.Assertions.assertTrue(joined.contains("@DataModel"), joined);
-        org.junit.jupiter.api.Assertions.assertTrue(joined.contains("record"),
-                "the message must name what was wrong with it: " + joined);
+        org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty(),
+                "a record is a supported wire type: " + errors);
     }
 
     @Test
-    void theRecordMessageExplainsThePersistenceRuleToo(@TempDir Path tempDir) throws Exception {
-        List<String> errors = errorsFor(tempDir,
-                "package com.test;\n"
-                + "import com.zeroz4j.api.DataModel;\n"
-                + "@DataModel\n"
-                + "public record Money(long amount) {}\n");
-
-        // Someone who hits this will next ask "can I use a record anywhere?" — answer it here rather
-        // than let them find the EclipseStore restriction the hard way.
-        org.junit.jupiter.api.Assertions.assertTrue(
-                String.join("\n", errors).contains("EclipseStore"),
-                "expected the persistence caveat in the message: " + errors);
-    }
-
-    @Test
-    void anInterfaceIsRefused(@TempDir Path tempDir) throws Exception {
+    void aPlainInterfaceIsRefusedAndPointsAtSealed(@TempDir Path tempDir) throws Exception {
         List<String> errors = errorsFor(tempDir,
                 "package com.test;\n"
                 + "import com.zeroz4j.api.DataModel;\n"
                 + "@DataModel\n"
                 + "public interface Marker {}\n");
 
-        org.junit.jupiter.api.Assertions.assertTrue(
-                String.join("\n", errors).contains("An interface"), errors.toString());
+        String joined = String.join("\n", errors);
+        org.junit.jupiter.api.Assertions.assertTrue(joined.contains("An interface"), joined);
+        org.junit.jupiter.api.Assertions.assertTrue(joined.contains("sealed"),
+                "the message must say what would work instead: " + joined);
     }
 
     @Test

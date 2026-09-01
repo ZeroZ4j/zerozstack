@@ -29,8 +29,19 @@ public class TextFieldShowcase extends ComponentShowcase {
         addTitle("TextField");
         addDescription("TextField is a standard text input component.");
 
+        addWhatToCheck("Try this",
+                "Tab onto every field, including the read-only one. The disabled one must be "
+                        + "skipped and the read-only one must not.",
+                "Click the words of a caption. The keyboard should land in the field they name.",
+                "The one marked wrong has to say why, under the field, in words.",
+                "The last one has a caption of 140 characters. It should wrap, not push the page out.",
+                "Type in the field that only has a placeholder and watch its only name disappear.",
+                "Broken looks like: a red border with no sentence, a required field with no mark, "
+                        + "or a disabled field that Tab still stops on.");
+
         // Basic TextField
-        TextField basicTextField = new TextField("Enter text...");
+        TextField basicTextField = new TextField("Enter text...")
+            .withLabel("A plain text field");
         addSection("Basic TextField", basicTextField);
 
         // Caption vs placeholder
@@ -70,15 +81,17 @@ public class TextFieldShowcase extends ComponentShowcase {
         formHost.add(form);
         addSection("A form: captions, required marks, explanations and a message", formHost);
 
+        addSection("Every state a text field really has", allStates());
+
         // Colors
-        TextField tfPrimary = new TextField("Primary").setThemeColor(ThemeColor.PRIMARY);
-        TextField tfSecondary = new TextField("Secondary").setThemeColor(ThemeColor.SECONDARY);
-        TextField tfAccent = new TextField("Accent").setThemeColor(ThemeColor.ACCENT);
-        TextField tfNeutral = new TextField("Neutral").setThemeColor(ThemeColor.NEUTRAL);
-        TextField tfInfo = new TextField("Info").setThemeColor(ThemeColor.INFO);
-        TextField tfSuccess = new TextField("Success").setThemeColor(ThemeColor.SUCCESS);
-        TextField tfWarning = new TextField("Warning").setThemeColor(ThemeColor.WARNING);
-        TextField tfError = new TextField("Error").setThemeColor(ThemeColor.ERROR);
+        TextField tfPrimary = new TextField("Primary").withLabel("Primary").setThemeColor(ThemeColor.PRIMARY);
+        TextField tfSecondary = new TextField("Secondary").withLabel("Secondary").setThemeColor(ThemeColor.SECONDARY);
+        TextField tfAccent = new TextField("Accent").withLabel("Accent").setThemeColor(ThemeColor.ACCENT);
+        TextField tfNeutral = new TextField("Neutral").withLabel("Neutral").setThemeColor(ThemeColor.NEUTRAL);
+        TextField tfInfo = new TextField("Info").withLabel("Info").setThemeColor(ThemeColor.INFO);
+        TextField tfSuccess = new TextField("Success").withLabel("Success").setThemeColor(ThemeColor.SUCCESS);
+        TextField tfWarning = new TextField("Warning").withLabel("Warning").setThemeColor(ThemeColor.WARNING);
+        TextField tfError = new TextField("Error").withLabel("Error").setThemeColor(ThemeColor.ERROR);
 
         addSection("Colors",
             tfPrimary, tfSecondary, tfAccent, tfNeutral,
@@ -86,10 +99,10 @@ public class TextFieldShowcase extends ComponentShowcase {
         );
 
         // Sizes
-        TextField tfXs = new TextField("Extra Small").setThemeSize(ThemeSize.XS);
-        TextField tfSm = new TextField("Small").setThemeSize(ThemeSize.SM);
-        TextField tfMd = new TextField("Medium").setThemeSize(ThemeSize.MD);
-        TextField tfLg = new TextField("Large").setThemeSize(ThemeSize.LG);
+        TextField tfXs = new TextField("Extra Small").withLabel("Extra small").setThemeSize(ThemeSize.XS);
+        TextField tfSm = new TextField("Small").withLabel("Small").setThemeSize(ThemeSize.SM);
+        TextField tfMd = new TextField("Medium").withLabel("Medium").setThemeSize(ThemeSize.MD);
+        TextField tfLg = new TextField("Large").withLabel("Large").setThemeSize(ThemeSize.LG);
 
         addSection("Sizes",
             tfXs, tfSm, tfMd, tfLg
@@ -108,10 +121,48 @@ public class TextFieldShowcase extends ComponentShowcase {
 
         // Data Binding Demo
         ValueSignal<String> signal = new ValueSignal<>("Hello");
-        TextField component = new TextField();
+        TextField component = new TextField()
+            .withLabel("Type here and watch the line below");
         component.bindValue(signal);
         Span output = new Span();
         output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
         addSection("Data Binding Demo", component, output);
+    }
+
+    /** The seven states, so none of them is met for the first time inside an application. */
+    private static Div allStates() {
+        TextField plain = new TextField().withLabel("Town");
+
+        TextField helped = new TextField().withLabel("Post code")
+            .withHelperText("Five digits, no spaces.");
+
+        TextField required = new TextField().withLabel("Street and number");
+        required.setRequiredIndicatorVisible(true);
+
+        TextField wrong = new TextField().withLabel("Post code");
+        wrong.setValue("ABC");
+        wrong.setRequiredIndicatorVisible(true);
+        wrong.setErrorMessage("A post code is five digits, like 10827.");
+
+        TextField disabled = new TextField().withLabel("Customer number (we set this)");
+        disabled.setValue("KD-4711-2026");
+        disabled.setEnabled(false);
+        disabled.setHelperText("Disabled: Tab skips it and it is not read out.");
+
+        TextField readOnly = FieldStates.readOnly(new TextField().withLabel("Your account number"));
+        readOnly.setValue("DE89 3704 0044 0532 0130 00");
+        readOnly.setHelperText("Read only: Tab still reaches it, so it can still be read out.");
+
+        TextField longCaption = new TextField().withLabel(FieldStates.LONG_CAPTION);
+        longCaption.setHelperText("A caption of 140 characters.");
+
+        return FieldStates.stack(
+            FieldStates.labelled("Caption only", plain),
+            FieldStates.labelled("Caption and helper text", helped),
+            FieldStates.labelled("Required", required),
+            FieldStates.labelled("Wrong, and saying why", wrong),
+            FieldStates.labelled("Disabled", disabled),
+            FieldStates.labelled("Read only", readOnly),
+            FieldStates.labelled("A very long caption", longCaption));
     }
 }

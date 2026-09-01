@@ -17,11 +17,22 @@
  */
 package com.zeroz4j.ui.component;
 
+/**
+ * A grey block standing in for something that has not arrived yet.
+ *
+ * <p>It is decoration and nothing else, so it is hidden from screen readers. A screen of these
+ * would otherwise be read out as a wall of empty boxes, which tells somebody who is waiting less
+ * than silence does.</p>
+ *
+ * <p>The word "Loading" belongs on the area around them, not on each block - a {@link Loading}
+ * spinner beside the heading, or a line of text the page replaces when the content lands.</p>
+ */
 public class Skeleton extends Component implements HasStyle, HasSize {
 
     public Skeleton() {
         super("div");
         addClassName("skeleton");
+        getElement().setAttribute("aria-hidden", "true");
     }
 
     @Override

@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import org.teavm.jso.dom.xml.Element;
@@ -163,7 +164,7 @@ public final class BarChart extends CartesianChart {
                 }
                 emit(x, y, Math.max(1, barWidth - 1.5), barHeight, item.colorOr(s), s, c);
                 if (valueLabels && barHeight > 12) {
-                    add(monoText(x + barWidth / 2, y - 7, yFormat().format(value), "middle", 9, 0.65));
+                    add(monoText(PlotText.CAPTION, x + barWidth / 2, y - 7, yFormat().format(value), "middle"));
                 }
             }
         }
@@ -186,7 +187,7 @@ public final class BarChart extends CartesianChart {
 
         for (int c = 0; c < categories.size(); c++) {
             double bandTop = plotTop() + c * bandHeight + (bandHeight - barArea) / 2;
-            add(text(marginLeft - 8, bandTop + barArea / 2, categories.get(c), "end", 10, 0.6));
+            add(text(PlotText.LABEL, marginLeft - 8, bandTop + barArea / 2, categories.get(c), "end"));
 
             double stackLeft = zeroX;
             for (int s = 0; s < series.size(); s++) {
@@ -212,8 +213,8 @@ public final class BarChart extends CartesianChart {
                 }
                 emit(x, y, barWidth, Math.max(1, barHeight - 1.5), item.colorOr(s), s, c);
                 if (valueLabels && barWidth > 24) {
-                    add(monoText(x + barWidth + 5, y + barHeight / 2,
-                        yFormat().format(value), "start", 9, 0.65));
+                    add(monoText(PlotText.CAPTION, x + barWidth + 5, y + barHeight / 2,
+                        yFormat().format(value), "start"));
                 }
             }
         }
@@ -246,14 +247,14 @@ public final class BarChart extends CartesianChart {
         Div content = new Div();
         content.addClassName("flex flex-col gap-0.5");
         Div category = new Div(categories.get(hit.categoryIndex()));
-        category.addClassName("text-[10px] text-base-content/50");
+        category.addClassName(TextStyle.CAPTION.getClassNames());
         Div row = new Div();
         row.addClassName("flex items-center gap-2");
         Div swatch = new Div();
         swatch.addClassName("h-2 w-2 shrink-0 rounded-sm");
         swatch.setStyle("background-color", item.colorOr(hit.seriesIndex()));
         Div name = new Div(item.name());
-        name.addClassName("text-base-content/70");
+        name.addClassName(TextStyle.CAPTION.getClassNames());
         Div value = new Div(yFormat().format(item.valueAt(hit.categoryIndex())));
         value.addClassName("ml-auto pl-3 font-mono font-semibold");
         row.add(swatch, name, value);

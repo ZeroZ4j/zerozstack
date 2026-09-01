@@ -24,6 +24,7 @@ import com.zeroz4j.example.routing.api.TourService;
 import com.zeroz4j.example.routing.api.TourService_Stub;
 import com.zeroz4j.example.routing.model.Account;
 import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.theme.TextStyle;
 
 /**
  * The chrome every view sits inside: a header naming the signed-in account, and the navigation.
@@ -46,9 +47,9 @@ public class AppShell implements RouteLayout<Account> {
     @Override
     public Component render(Account account, RouteParams params, Component child) {
         Component header = Ui.box("flex items-center gap-4 px-6 py-4 bg-base-200 border-b border-base-300",
-                Ui.text("zeroz4j routing tour", "font-semibold text-lg"),
+                Ui.text("zeroz4j routing tour", TextStyle.SECTION_TITLE.getClassNames()),
                 Ui.box("flex-1"),
-                Ui.text(account.getDisplayName(), "text-sm"),
+                Ui.text(account.getDisplayName(), TextStyle.SECONDARY.getClassNames()),
                 Ui.text(account.getPlan(), "badge badge-primary badge-sm"));
 
         Component nav = Ui.box("flex gap-4 px-6 py-3 bg-base-100 border-b border-base-300",

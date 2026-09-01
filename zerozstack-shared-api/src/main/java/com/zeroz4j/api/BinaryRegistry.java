@@ -18,8 +18,11 @@
 package com.zeroz4j.api;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -45,7 +48,43 @@ public class BinaryRegistry {
     private static final Map<String, Function<String, Enum<?>>> enumResolvers = new ConcurrentHashMap<>();
     /** Instrumented (mutation-tracking) suppliers for @ClientWritable models. */
     private static final Map<String, Supplier<Object>> liveSuppliers = new ConcurrentHashMap<>();
+
+    /**
+     * The model each generated {@code <Model>_Live} subclass stands for, keyed by the subclass name.
+     *
+     * <p>The browser never holds the class the developer wrote. Deserialization builds the generated
+     * subclass, so the runtime class of everything on a screen is a name the developer never typed
+     * and the registry has no serializer for. Writing one back up therefore has to translate: the
+     * subclass adds behavior, not state, and the model is what both tiers agree on.</p>
+     */
+    private static final Map<String, String> liveModelNames = new ConcurrentHashMap<>();
+
+    /**
+     * Class names whose instances are given a lasting handle when they go on the wire.
+     *
+     * <p>A handle exists so that a later message can name the same object again — a client edit
+     * coming back up, a re-sync after a reconnect, a lock request. That is exactly what a
+     * {@code @LiveSync} model is for, so the generated registrar marks those and nothing else.
+     * Everything else on the wire is a value: it is written with a name that means nothing outside
+     * the one message it traveled in, and the registry never hears about it.</p>
+     */
+    // Collections.newSetFromMap rather than ConcurrentHashMap.newKeySet(): TeaVM does not
+    // emulate newKeySet, and this class is compiled for the browser too.
+    private static final Set<String> handleBearing =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     private static volatile boolean preferLiveInstances = false;
+
+    /**
+     * Read/write pairs for {@code record} models, keyed by FQCN. Separate from {@code delegates}
+     * because a record is constructed from its components rather than filled in afterwards.
+     */
+    private static final Map<String, BinaryRecordDelegate<?>> recordDelegates = new ConcurrentHashMap<>();
+
+    /** For each sealed base FQCN, the class names it permits. Nothing else may be read for it. */
+    private static final Map<String, Set<String>> sealedPermitted = new ConcurrentHashMap<>();
+
+    /** Reverse of {@link #sealedPermitted}: the sealed base a permitted class belongs to. */
+    private static final Map<String, String> sealedBases = new ConcurrentHashMap<>();
 
     /** Tier-specific handling of EclipseStore {@code Lazy} fields; null when the tier has none. */
     private static volatile LazyAdapter lazyAdapter;
@@ -99,15 +138,67 @@ public class BinaryRegistry {
     }
 
     /**
-     * Registers the mutation-tracking supplier for a {@code @ClientWritable} model.
-     * Called by generated registrars; only used when {@link #setPreferLiveInstances(boolean)}
-     * has enabled live instantiation (the Wasm client tier).
+     * Registers the mutation-tracking subclass of a {@code @LiveSync} model, under both names it is
+     * known by. Called by generated registrars.
+     *
+     * <p>The supplier is used only when {@link #setPreferLiveInstances(boolean)} has enabled live
+     * instantiation, which is the browser tier. The name pair is used on both tiers, because the
+     * browser writes those instances back and {@link #wireNameOf(String)} is what turns the runtime
+     * class back into the model both tiers share.</p>
+     *
+     * @param className     the canonical FQCN of the model class
+     * @param liveClassName the canonical FQCN of the generated {@code <Model>_Live} subclass
+     * @param supplier      supplier for that subclass
+     */
+    public static void registerLive(String className, String liveClassName, Supplier<?> supplier) {
+        liveSuppliers.put(className, (Supplier<Object>) (Supplier<?>) supplier);
+        liveModelNames.put(liveClassName, className);
+        registerHandleBearing(className);
+    }
+
+    /**
+     * The name a value goes on the wire under.
+     *
+     * @param runtimeClassName the runtime class name of a value about to be written
+     * @return the model it stands for when it is a generated live subclass, otherwise the name
+     *         unchanged
+     *
+     * <p><b>Under the hood:</b> one map lookup. A generated {@code <Model>_Live} subclass has no
+     * serializer of its own and never will — it adds tracked getters and setters and not one field —
+     * so a client edit travelling back up is written as the model, which is the only name the
+     * receiving side can build. Without this the write threw
+     * {@code Unsupported type for GrowableBuffer}, the client swallowed it, and the whole up
+     * direction of LiveSync did nothing at all.</p>
+     */
+    public static String wireNameOf(String runtimeClassName) {
+        String model = liveModelNames.get(runtimeClassName);
+        return model != null ? model : runtimeClassName;
+    }
+
+    /**
+     * Marks a class whose instances need a lasting handle on the wire.
+     *
+     * <p>Called for you by {@link #registerLive(String, String, Supplier)}, which the generated
+     * registrar invokes for every {@code @LiveSync} model. It is public so a hand-written test that
+     * registers models itself can say the same thing.</p>
      *
      * @param className the canonical FQCN of the model class
-     * @param supplier  supplier for the generated {@code <Model>_Live} subclass
      */
-    public static void registerLive(String className, Supplier<?> supplier) {
-        liveSuppliers.put(className, (Supplier<Object>) (Supplier<?>) supplier);
+    public static void registerHandleBearing(String className) {
+        handleBearing.add(className);
+    }
+
+    /**
+     * @param className the runtime class name of a value about to be written
+     * @return true when instances of it are given a lasting handle rather than a name good for one
+     *         message
+     *
+     * <p><b>Under the hood:</b> a set membership test. On the browser tier the runtime class of a
+     * live instance is the generated {@code <Model>_Live} subclass, which is not in this set; the
+     * writer recognizes those by {@link LiveObservable} instead.</p>
+     */
+    public static boolean bearsHandle(String className) {
+        return handleBearing.contains(className);
     }
 
     /**
@@ -207,6 +298,101 @@ public class BinaryRegistry {
                 + ". Make sure it is registered via BinaryRegistry.registerEnum(...).");
         }
         return resolver.apply(name);
+    }
+
+    /**
+     * Registers the generated read/write pair for a {@code record} model. Called by generated
+     * registrars.
+     *
+     * @param <T>       the record type
+     * @param className the canonical FQCN of the record
+     * @param delegate  the compile-time generated record delegate
+     *
+     * <p><b>Under the hood:</b> Puts {@code delegate} into the {@code recordDelegates} map. A record
+     * has no entry in {@code suppliers}: there is no empty instance to supply, because every
+     * component is set by the canonical constructor.</p>
+     */
+    public static <T> void registerRecord(String className, BinaryRecordDelegate<T> delegate) {
+        recordDelegates.put(className, delegate);
+    }
+
+    /**
+     * Retrieves the generated read/write pair for a record model.
+     *
+     * @param <T>       the record type
+     * @param className the canonical FQCN of the record
+     * @return the registered {@link BinaryRecordDelegate}, or {@code null} if the class is not a
+     *         registered record model
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> BinaryRecordDelegate<T> getRecordDelegate(String className) {
+        return (BinaryRecordDelegate<T>) recordDelegates.get(className);
+    }
+
+    /**
+     * Registers the complete permitted set of a sealed {@link DataModel} base — a sealed interface
+     * or sealed abstract class — so the reader can accept those types and nothing else.
+     *
+     * @param baseClassName the FQCN of the sealed interface or sealed abstract class
+     * @param permitted     the FQCNs of every class it permits
+     * @throws IllegalStateException if a permitted class already belongs to a different sealed base;
+     *         the wire names a base and the reader resolves the type within it, so one class cannot
+     *         answer to two
+     *
+     * <p><b>Under the hood:</b> Stores the permitted set under the base name and the base name under
+     * each permitted class. The set is fixed at compile time — {@code sealed} means the compiler
+     * knows every member — which is what lets the reader refuse an unknown name outright rather than
+     * instantiating it and finding out later.</p>
+     */
+    public static void registerSealed(String baseClassName, String[] permitted) {
+        Set<String> members = new LinkedHashSet<>(Arrays.asList(permitted));
+        sealedPermitted.put(baseClassName, members);
+        for (String member : members) {
+            String existing = sealedBases.put(member, baseClassName);
+            if (existing != null && !existing.equals(baseClassName)) {
+                throw new IllegalStateException(member + " is permitted by two sealed wire types, "
+                        + existing + " and " + baseClassName
+                        + ". A value on the wire names one base, so a class can belong to only one.");
+            }
+        }
+    }
+
+    /**
+     * @param className a concrete model class name
+     * @return the sealed base it was registered under, or {@code null} if it belongs to none
+     */
+    public static String sealedBaseOf(String className) {
+        return sealedBases.get(className);
+    }
+
+    /**
+     * @param baseClassName the FQCN of a sealed base
+     * @return the classes that base permits, or {@code null} if the base is not registered
+     */
+    public static Set<String> permittedFor(String baseClassName) {
+        return sealedPermitted.get(baseClassName);
+    }
+
+    /**
+     * Refuses a class name the wire has offered for a sealed base unless that base permits it.
+     * Called before anything is instantiated, so a payload naming an unpermitted type never
+     * reaches a constructor.
+     *
+     * @param baseClassName the sealed base named by the payload
+     * @param className     the concrete class name the payload wants built
+     * @throws IllegalStateException if the base is unknown, or does not permit that class
+     */
+    public static void checkPermitted(String baseClassName, String className) {
+        Set<String> members = sealedPermitted.get(baseClassName);
+        if (members == null) {
+            throw new IllegalStateException("Unknown sealed wire type: " + baseClassName
+                    + ". Annotate the sealed interface or sealed abstract class with @DataModel so "
+                    + "its permitted set is registered.");
+        }
+        if (!members.contains(className)) {
+            throw new IllegalStateException("Refusing to build " + className + ": " + baseClassName
+                    + " does not permit it. Permitted: " + members + ".");
+        }
     }
 
     /**

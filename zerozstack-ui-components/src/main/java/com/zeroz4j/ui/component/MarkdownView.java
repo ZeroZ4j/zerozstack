@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -34,7 +36,8 @@ import org.teavm.jso.dom.xml.Text;
 public final class MarkdownView extends Div {
 
     public MarkdownView(String markdown) {
-        addClassName("md-view text-sm leading-relaxed space-y-2 break-words");
+        addClassName("md-view space-y-2 break-words "
+            + TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
         render(markdown == null ? "" : markdown);
     }
 
@@ -68,7 +71,8 @@ public final class MarkdownView extends Div {
                     case 1 -> "text-xl font-bold mt-3";
                     case 2 -> "text-lg font-bold mt-2";
                     case 3 -> "text-base font-semibold mt-2";
-                    default -> "text-sm font-semibold mt-1";
+                    default -> TextStyle.SECONDARY.getClassNames(Emphasis.FULL)
+                            + " font-semibold mt-1";
                 });
                 inline(h, trimmed.substring(level).trim());
                 getElement().appendChild(h);
@@ -97,7 +101,8 @@ public final class MarkdownView extends Div {
                 getElement().appendChild(list);
             } else if (trimmed.startsWith(">")) {
                 HTMLElement quote = element("div",
-                    "border-l-4 border-base-300 pl-3 text-base-content/70 italic");
+                    "border-l-4 border-base-300 pl-3 italic "
+                            + Emphasis.QUIET.getClassNames());
                 StringBuilder text = new StringBuilder();
                 while (i < lines.length && lines[i].trim().startsWith(">")) {
                     text.append(lines[i].trim().substring(1).trim()).append(' ');

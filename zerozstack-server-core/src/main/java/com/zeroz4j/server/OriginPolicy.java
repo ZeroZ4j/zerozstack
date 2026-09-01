@@ -17,8 +17,6 @@
  */
 package com.zeroz4j.server;
 
-import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -81,8 +79,8 @@ public final class OriginPolicy {
 
     private static final Logger LOG = Logger.getLogger(OriginPolicy.class.getName());
 
-    private static final String ORIGINS_PROPERTY = "zeroz.origins";
-    private static final String HOSTS_PROPERTY = "zeroz.hosts";
+    private static final String ORIGINS_PROPERTY = ServerSettings.ORIGINS;
+    private static final String HOSTS_PROPERTY = ServerSettings.HOSTS;
     private static final String ALLOW_ALL = "*";
 
     private OriginPolicy() {}
@@ -95,13 +93,25 @@ public final class OriginPolicy {
      * @return true when the connection is permitted
      */
     public static boolean isAllowed(String origin, String host) {
-        if (!isHostAllowed(host)) {
+        return isAllowed(ServerConfig.fromSystemProperties(), origin, host);
+    }
+
+    /**
+     * Decides whether a handshake may proceed, using one server's own settings.
+     *
+     * @param config the server's settings
+     * @param origin the {@code Origin} header, or null when absent
+     * @param host   the {@code Host} header, or null when absent
+     * @return true when the connection is permitted
+     */
+    public static boolean isAllowed(ServerConfig config, String origin, String host) {
+        if (!isHostAllowed(config, host)) {
             return false;   // this request was addressed to a name we do not answer for
         }
         if (origin == null || origin.isEmpty()) {
             return true;   // not a browser: no ambient cookie to steal
         }
-        Set<String> configured = configuredOrigins();
+        Set<String> configured = configuredOrigins(config);
         if (configured.contains(ALLOW_ALL)) {
             return true;
         }
@@ -127,7 +137,18 @@ public final class OriginPolicy {
      * @return true when the host is acceptable
      */
     public static boolean isHostAllowed(String host) {
-        Set<String> allowed = configuredHosts();
+        return isHostAllowed(ServerConfig.fromSystemProperties(), host);
+    }
+
+    /**
+     * Whether the {@code Host} a request was addressed to is one this server answers for.
+     *
+     * @param config the server's settings
+     * @param host   the {@code Host} header, or null when absent
+     * @return true when the host is acceptable
+     */
+    public static boolean isHostAllowed(ServerConfig config, String host) {
+        Set<String> allowed = configuredHosts(config);
         if (allowed.isEmpty() || allowed.contains(ALLOW_ALL)) {
             return true;                       // unset: behave exactly as every release before this
         }
@@ -147,8 +168,8 @@ public final class OriginPolicy {
         return false;
     }
 
-    private static Set<String> configuredHosts() {
-        return listProperty(HOSTS_PROPERTY, true);
+    private static Set<String> configuredHosts(ServerConfig config) {
+        return config.list(HOSTS_PROPERTY, true);
     }
 
     /**
@@ -159,13 +180,25 @@ public final class OriginPolicy {
      * @return a message naming what would have been accepted
      */
     static String explainRefusal(String origin, String host) {
-        Set<String> hosts = configuredHosts();
-        if (!isHostAllowed(host)) {
+        return explainRefusal(ServerConfig.fromSystemProperties(), origin, host);
+    }
+
+    /**
+     * Explains a refusal, for the one warning logged when a handshake is rejected.
+     *
+     * @param config the server's settings
+     * @param origin the refused origin
+     * @param host   the host the request was sent to
+     * @return a message naming what would have been accepted
+     */
+    static String explainRefusal(ServerConfig config, String origin, String host) {
+        Set<String> hosts = configuredHosts(config);
+        if (!isHostAllowed(config, host)) {
             return "Host '" + host + "' is not in " + HOSTS_PROPERTY + "=" + hosts
                     + ". Only those names are answered for; a request arriving under any other name "
                     + "is a DNS-rebinding attempt or a misconfigured proxy.";
         }
-        Set<String> configured = configuredOrigins();
+        Set<String> configured = configuredOrigins(config);
         if (!configured.isEmpty()) {
             return "Origin '" + origin + "' is not in " + ORIGINS_PROPERTY + "=" + configured + ".";
         }
@@ -174,29 +207,13 @@ public final class OriginPolicy {
                 + " when the page is served from a different host than the socket.";
     }
 
-    private static Set<String> configuredOrigins() {
-        Set<String> origins = listProperty(ORIGINS_PROPERTY, false);
+    private static Set<String> configuredOrigins(ServerConfig config) {
+        Set<String> origins = config.list(ORIGINS_PROPERTY, false);
         if (origins.contains(ALLOW_ALL) && origins.size() > 1) {
             LOG.warning("[zeroz4j] " + ORIGINS_PROPERTY + " contains '*' alongside explicit "
                     + "origins; '*' wins and no origin check is performed.");
         }
         return origins;
-    }
-
-    /** Reads a comma-separated system property into a set, dropping blanks. */
-    private static Set<String> listProperty(String name, boolean lowercase) {
-        String configured = System.getProperty(name);
-        if (configured == null || configured.trim().isEmpty()) {
-            return Collections.emptySet();
-        }
-        Set<String> values = new LinkedHashSet<>();
-        for (String part : configured.split(",")) {
-            String candidate = part.trim();
-            if (!candidate.isEmpty()) {
-                values.add(lowercase ? candidate.toLowerCase(Locale.ROOT) : candidate);
-            }
-        }
-        return values;
     }
 
     /** Strips the scheme, leaving {@code host[:port]} to compare against a {@code Host} header. */

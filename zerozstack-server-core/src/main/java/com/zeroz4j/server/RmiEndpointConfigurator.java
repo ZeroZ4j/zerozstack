@@ -115,8 +115,49 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         }
     }
 
-    /** Roles to check during handshake - populated by WasmRmiServerEngine at startup. */
-    static final Set<String> knownRoles = new LinkedHashSet<>();
+    /**
+     * The server this configurator belongs to, looked up once.
+     *
+     * <p>A handshake runs before the endpoint exists, so this object cannot be given the runtime;
+     * it asks CDI for it, which in every supported binding is this deployment's own container. Null
+     * when there is no container to ask, in which case the settings fall back to the system
+     * properties — exactly the behaviour of every release before 0.8.0.</p>
+     */
+    private volatile ServerRuntime runtime;
+    private volatile boolean runtimeResolved;
+
+    /** @return the server being connected to, or null when there is none to find */
+    private ServerRuntime runtime() {
+        if (!runtimeResolved) {
+            synchronized (this) {
+                if (!runtimeResolved) {
+                    runtime = ServerRuntime.fromCdi();
+                    runtimeResolved = true;
+                }
+            }
+        }
+        return runtime;
+    }
+
+    /** @return the settings of the server being connected to, or the system properties */
+    private ServerConfig config() {
+        ServerRuntime found = runtime();
+        return found != null ? found.config() : ServerConfig.fromSystemProperties();
+    }
+
+    /**
+     * The roles a handshake asks the container about.
+     *
+     * <p>Collected by this server's own engine from this server's own services. It used to be a
+     * static set, so two servers in one process each checked the other's role names as well as
+     * their own.</p>
+     *
+     * @return the role names, empty when the server cannot be found
+     */
+    private Set<String> knownRoles() {
+        ServerRuntime found = runtime();
+        return found != null ? found.knownRoleNames() : java.util.Collections.emptySet();
+    }
 
     /**
      * Modifies the WebSocket handshake request to store the caller's security principal and roles in user properties.
@@ -137,17 +178,18 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         // Origin first: a browser attaches the client-id cookie to any connection to this origin,
         // whichever page opened it, so which page opened it is the first thing decided.
         // Nothing else about the handshake matters if this fails.
+        ServerConfig settings = config();
         String origin = firstHeader(request, "Origin");
         String host = firstHeader(request, "Host");
-        if (!OriginPolicy.isAllowed(origin, host)) {
+        if (!OriginPolicy.isAllowed(settings, origin, host)) {
             LOG.warning("[zeroz4j] Refused WebSocket handshake. "
-                    + OriginPolicy.explainRefusal(origin, host));
+                    + OriginPolicy.explainRefusal(settings, origin, host));
             config.getUserProperties().put(REJECTED_KEY, Boolean.TRUE);
             // Which check refused decides the sentence the browser is closed with, and the two are
             // fixed in different settings: sending someone whose host name is not answered for to
             // read origin configuration wastes their afternoon.
             config.getUserProperties().put(WasmRmiServerEngine.REFUSED_BY_KEY,
-                    OriginPolicy.isHostAllowed(host)
+                    OriginPolicy.isHostAllowed(settings, host)
                             ? WasmRmiServerEngine.REFUSED_BY_ORIGIN
                             : WasmRmiServerEngine.REFUSED_BY_HOST);
             return;
@@ -185,7 +227,7 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
                 userRoles.clear();
                 tenantId = null;
             }
-        } else if (principal == null && DevAuth.isDevMode()) {
+        } else if (principal == null && DevAuth.isDevMode(settings)) {
             // Development fallback, used only when no provider is registered: credentials arrive as
             // user/password query parameters and are checked against DevAuth's demo users.
             java.util.Map<String, java.util.List<String>> params = request.getParameterMap();
@@ -205,7 +247,7 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         }
 
         if (principal != null && userRoles.isEmpty()) {
-            for (String role : knownRoles) {
+            for (String role : knownRoles()) {
                 if (request.isUserInRole(role)) {
                     userRoles.add(role);
                 }

@@ -49,7 +49,7 @@ classpath.
 
 ## Shape 2: a double-clickable executable (`jpackage`)
 
-For handing the application to someone as a file. Projects generated from the archetype (0.5.1+)
+For handing the application to someone as a file. Projects generated from the archetype (0.6.0+)
 carry a `package` profile:
 
 ```bash
@@ -113,13 +113,13 @@ shared. No shading anywhere — the container launches the same plain classpath 
 ## Settings a real deployment needs
 
 Whichever shape you ship, set these before anyone outside your machine can reach the application.
-They all default to the behaviour that is convenient during development, which is not the behaviour
+They all default to the behavior that is convenient during development, which is not the behavior
 you want in front of the internet.
 
 | Property | Set it to | What it does |
 |---|---|---|
 | `zeroz.hosts` | Every name the application is reached by, e.g. `app.example.com` | The server accepts a connection only when it was addressed to one of these names. Unset, it accepts any name at all. |
-| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Unset, a new one is made at every startup, so a restart gives everybody a new browser id and other nodes do not recognise this node's ids. |
+| `zeroz.clientId.secret` | A long random string, the same on every node | The key that signs the browser id. Unset, a new one is made at every startup, so a restart gives everybody a new browser id and other nodes do not recognize this node's ids. |
 | `zeroz.origins` | Leave unset, unless the page is served from a different host than the socket | Unset means the page must come from the same address as the socket, which is what you want. |
 | `zeroz.security.mode` | **Leave unset** | Setting it to `dev` switches on two built-in accounts whose passwords are printed in this documentation. |
 | `zeroz.ws.maxBinaryMessageBytes` | e.g. `8388608` | The largest message the server accepts. 4 MB unless you say otherwise; see below. |
@@ -153,7 +153,7 @@ default, and a fresh application needs none of them set.
 | `zeroz.hosts` | Which host names this deployment answers for. A comma-separated list; an entry with no port accepts that name on any port | any name is accepted |
 | `zeroz.ws.maxBinaryMessageBytes` | Largest message the server accepts | **4 MB (4,194,304 bytes)** |
 | `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
-| `zeroz.ws.maxConcurrentFramesPerSession` | Messages from one connection being handled at the same time | **32** |
+| `zeroz.ws.maxQueuedFramesPerSession` | Messages from one connection that may be waiting to be handled. Renamed in 0.8.0; the old name `zeroz.ws.maxConcurrentFramesPerSession` is still read | **32** |
 | `zeroz.ws.maxPendingFramesPerSession` | Messages that may be waiting to go out on one connection | **256** |
 | `zeroz.ws.maxPendingBytesPerSession` | Bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
 | `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive answers to one connection | **1000** |
@@ -368,15 +368,21 @@ or return identifiers and fetch details on demand.
     connection. Use [file upload](file-uploads.md), which posts to its own HTTP address and streams
     straight to disk.
 
-### How many messages one connection may be running at once
+### How many messages one connection may have waiting
 
-One connection may have **32** messages being decoded and executed at the same time
-(`zeroz.ws.maxConcurrentFramesPerSession`). A message that arrives while the connection is at its
-limit waits its turn — nothing is dropped and no call fails, so a burst is served a few at a time.
-The waiting happens on that one connection's read loop, so other connections carry on unaffected.
+**One connection's messages are handled one at a time, in the order they were sent** (0.8.0+). Up to
+**32** may be waiting their turn (`zeroz.ws.maxQueuedFramesPerSession`). A message that arrives when
+that is full makes the connection wait until there is room — nothing is dropped and no call fails, so
+a burst is served one after another. The waiting happens on that one connection's own read thread, so
+other connections carry on unaffected.
 
 Decoding is where a small message turns into a large object graph, so the size limit above is a real
-ceiling on memory only when the number of messages being decoded at once is bounded too.
+ceiling on memory only when the number of messages queued behind it is bounded too.
+
+**This setting was called `zeroz.ws.maxConcurrentFramesPerSession` before 0.8.0**, when it capped how
+many messages from one connection ran at the same time. There is no such concurrency now — exactly
+one runs — so the name changed. **A deployment that set the old name keeps working: it is still read
+when the new one is not set.** Nothing has to change.
 
 ### The idle timeout
 

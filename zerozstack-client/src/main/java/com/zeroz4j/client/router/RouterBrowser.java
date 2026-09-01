@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.client.router;
 
+import com.zeroz4j.ui.component.Component;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
@@ -80,23 +81,24 @@ final class RouterBrowser {
         + "});")
     static native void interceptRouteLinks(PathCallback callback);
 
-    /** Replaces the container's contents with the rendered view. */
-    static void mount(String containerId, HTMLElement element) {
+    /**
+     * Replaces the container's contents with the rendered view, shutting the old one down.
+     *
+     * <p>Emptying the container by hand would leave the view the person just left running - its
+     * timers, its effects, its subscriptions - so {@code Component.replaceContents} does it
+     * instead, which runs {@code onDetach} on the old view and everything inside it.</p>
+     */
+    static void mount(String containerId, Component view) {
         HTMLElement container = elementById(containerId);
         if (container == null) {
             warn("[zeroz4j] Router cannot mount: no element with id '" + containerId + "'.");
             return;
         }
-        clearChildren(container);
-        container.appendChild(element);
+        Component.replaceContents(container, view);
     }
 
     @JSBody(params = { "id" }, script = "return document.getElementById(id);")
     static native HTMLElement elementById(String id);
-
-    @JSBody(params = { "element" }, script =
-        "while (element.firstChild) { element.removeChild(element.firstChild); }")
-    static native void clearChildren(HTMLElement element);
 
     /** Writes a diagnostic line to the browser console. */
     @JSBody(params = { "message" }, script = "console.warn(message);")

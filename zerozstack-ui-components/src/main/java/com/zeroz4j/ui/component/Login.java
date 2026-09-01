@@ -17,8 +17,10 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.VerticalLayout;
+import com.zeroz4j.ui.theme.TextStyle;
 import org.teavm.jso.dom.events.KeyboardEvent;
 
 /**
@@ -91,10 +93,13 @@ public class Login extends Card {
 
         layout.add(new CardTitle(title));
 
-        usernameField = new TextField("Username");
+        // The single-argument constructor sets a placeholder, and a placeholder stops naming the
+        // box the moment somebody types in it. The library's own sign-in screen should not be the
+        // example of that.
+        usernameField = new TextField().withLabel("Username");
         usernameField.addClassName("w-full");
 
-        passwordField = new TextField("Password");
+        passwordField = new TextField().withLabel("Password");
         passwordField.getElement().setAttribute("type", "password");
         passwordField.addClassName("w-full");
 
@@ -113,11 +118,15 @@ public class Login extends Card {
 
         errorDiv = new Div();
         errorDiv.addClassName("text-error");
-        errorDiv.addClassName("text-sm");
+        // FULL, not the size's own fade: fading the one line that says what went wrong is
+        // exactly backwards.
+        errorDiv.addClassName(TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
+        // A sign-in that failed has to be heard, not only seen. An alert is read out the moment
+        // the message appears, wherever the person's attention happens to be at the time.
+        errorDiv.getElement().setAttribute("role", "alert");
 
         hintDiv = new Div();
-        hintDiv.addClassName("text-sm");
-        hintDiv.addClassName("opacity-60");
+        TextStyle.SECONDARY.applyTo(hintDiv);
 
         layout.add(usernameField, passwordField, submitButton, errorDiv, hintDiv);
         add(layout);

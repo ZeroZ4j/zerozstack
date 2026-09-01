@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.7.0**. The Java UI is
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.8.0**. The Java UI is
 compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket RPC protocol,
 and the server persists a live object graph with EclipseStore. You write no JavaScript, JSON, REST
 routes or SQL.
@@ -50,13 +50,14 @@ cache.
 | `zerozstack-ui-components` | Java component library styled with Tailwind/DaisyUI. Components wrap a TeaVM `HTMLElement`, reachable via `getElement()`; there is no server-side DOM state. |
 | `zerozstack-bom` | Dependency BOM — the intended way for applications to import versions. |
 | `zerozstack-server-core` | CDI engine, RMI dispatcher, `SyncEngine`, `EventPublisher`, dev auth. **Carries no JAX-RS or servlet type**, which is what makes it safe inside somebody else's WAR. |
+| `zerozstack-server-test` | Test harness. `TestServer` starts an isolated server in-process, `TestConnection` stands in for a browser. Application takes it with **test scope**; it starts a bean container and must never reach a production classpath. See docs/guides/testing.md. |
 | `zerozstack-server-jaxrs` | The JAX-RS catch-all at `/` serving the client bundle and the shell. A standalone server wants it; a WAR with its own servlets must be able to leave it out, which is why it is separate. |
 | `zerozstack-server-jakarta` | Servlet-container binding: WebSocket registration, serializer bootstrap, the container `ManagedThreadFactory`, and an optional shell servlet. Take this instead of `-helidon` for a WAR. |
 | `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. Depends on `-jaxrs`. |
 | `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
-| `zerozstack-examples` | Eleven runnable reference applications. |
+| `zerozstack-examples` | Twelve runnable reference applications. |
 
 An application has three modules: **shared** (`@DataModel` classes, `@RmiService` interfaces),
 **client** (the UI, compiled for the browser by TeaVM), **server** (`@ApplicationScoped`
@@ -64,8 +65,14 @@ implementations).
 
 ## Non-negotiable rules
 
-1. **Every type crossing the wire is `@DataModel`** with a public no-arg constructor plus getters and
-   setters. Without it, serialization throws at runtime.
+1. **Every type crossing the wire is `@DataModel`.** Three shapes qualify, and nothing else:
+   a **class** with a public no-arg constructor plus getters and setters; a **record** (0.8.0+),
+   which needs none of that ceremony; and a **sealed interface or sealed abstract class** (0.8.0+),
+   which declares "one of these types" and carries no fields of its own unless it is an abstract
+   class. Without the annotation, serialization throws at runtime. A record may not be `@LiveSync`
+   or `@ClientWritable` — those edit an object in place and a record never changes — and a record
+   may not be part of a reference cycle; the send is refused with an explanation, so use a class
+   where the loop closes. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
 2. **Do not wrap client event handlers in your own thread.** `Component.addDomEventListener` already
    wraps every DOM listener via `Component.threaded(...)`, so a handler body runs on a suspendable
    TeaVM green thread — which is why a suspending RMI call works directly inside it. An extra thread is
@@ -82,6 +89,36 @@ implementations).
    `BinaryPackableRegistrar` or `WasmRmiClient.initialize` yourself — registrars are discovered via
    `META-INF/services`.
 8. **Get an RMI stub with `new MyService_Stub()`.** There is no `WasmRmiClient.create(Class)`.
+9. **Never empty an element by hand.** `getElement().setInnerHTML("")` takes what was inside off
+   the page without telling it, so its `onDetach` never runs and its timers, effects and
+   subscriptions keep running against a screen nobody is looking at. Swap contents with
+   `container.replaceContents(next)`, or `Component.replaceContents(element, next)` for a plain
+   element such as an application's root `<div>`; empty one with `removeAll()`. Both run `onDetach`
+   on everything leaving, nested parts included. `DetachContractTest` reads every Java file in the
+   checkout on every build and fails it otherwise. Only components put in with `add(...)` get a
+   lifecycle - appending an element straight to `getElement()` does not.
+10. **Never put a click listener on a `Div`.** A control has to be reachable with Tab and pressed
+   with Enter, and has to have words that say what it does. Use a `Button` - `btn-ghost` and
+   `btn-link` make one look like anything. `KeyboardAndNamingContractTest` reads every component
+   on every build and fails it otherwise, and every control also has to appear on the browser
+   proof page in `tools/ui-proof`. Full rule:
+   [docs/guides/ui-keyboard-and-naming.md](docs/guides/ui-keyboard-and-naming.md).
+11. **Name every input with `withLabel(...)`, not with the constructor argument** (0.8.0+).
+   `new TextField("Email address")` sets the *placeholder* — example text inside the empty box that
+   disappears the moment somebody types and is announced by nothing. The caption is
+   `new TextField().withLabel("Email address")`. `setHelperText`, `setRequiredIndicatorVisible` and
+   `setErrorMessage` carry the other three things a field says, and a `Binder` sets the last of them
+   for you. Every input in the library has all four.
+12. **Ask for a text size by name; never write out your own** (0.8.0+). Five in
+   `com.zeroz4j.ui.theme.TextStyle` - `PAGE_TITLE`, `SECTION_TITLE`, `BODY`, `SECONDARY`, `CAPTION` -
+   used as `TextStyle.SECONDARY.paragraph("...")`, `TextStyle.CAPTION.span("...")` or
+   `TextStyle.CAPTION.applyTo(existingComponent)`. How loud is a *separate* question,
+   `com.zeroz4j.ui.theme.Emphasis` - `FULL`, `QUIET`, `FAINT` - passed as a second argument only
+   where the text disagrees with its size, such as an error line that is small but must be read.
+   Never write `text-sm text-base-content/60` or any hand-picked fade: that names a color, and it
+   goes wrong on a tinted notice or a dark page. Text drawn *inside* a chart has its own four names,
+   `com.zeroz4j.ui.chart.PlotText` - `FIGURE`, `LABEL`, `CAPTION`, `MESSAGE` - because class names do
+   not reach a drawing; a test fails the build if a chart draws text without naming a role.
 
 ## Persistence and transactions
 
@@ -284,8 +321,6 @@ internally for every navigation.
 
 ## When nothing happens
 
-| Symptom | Cause |
-|---|---|
 Most of these now throw. The ones that remain are the genuinely silent cases.
 
 | Symptom | Cause |
@@ -331,11 +366,20 @@ out), shared signals re-subscribed, live objects re-synced in place, offline sig
 `LiveMutex` (`setLostListener`), and re-fetching live objects after a full **server restart**, which
 empties the handle registry that re-sync restores from.
 
+**Only a `@LiveSync` model and the objects inside one carry a handle (0.8.0+),** and the registry
+holds them weakly on both tiers. Everything else on the wire is a value with a name good for its own
+message: it cannot be synced, locked or re-read, and a client sending one back as a call argument
+hands over a copy rather than reaching into the server's instance. Keep live objects in your store or
+a field — an object the server has dropped answers a re-sync the way a restarted server does. A
+re-sync request carries at most 10,000 handles; a client over that throws its list away and re-fetches
+rather than sending a message the connection would refuse. A test that registers models by hand calls
+`BinaryRegistry.registerHandleBearing(fqcn)` for the ones standing in for `@LiveSync` models.
+
 ## Running the examples
 
-All ten examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the root,
-the seven original ones have a `run.bat` (Windows) and serve on `http://localhost:8080`; run one at a
-time.
+All twelve examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
+root, the seven original ones and `payments-datamodels` have a `run.bat` (Windows). **Every example
+binds a port of its own (0.8.0+), so several can run at once** — the table below has the numbers.
 
 For those seven there is no executable jar and no `exec-maven-plugin` — `java -jar` and
 `mvn exec:java` both fail regardless of what older docs say. The working invocation is the one
@@ -346,18 +390,31 @@ cd zerozstack-examples/todo-signals/todo-signals-server
 java -cp "target/classes;target/libs/*" com.zeroz4j.example.server.ExampleServer   # ';' on Windows, ':' on POSIX
 ```
 
-They share the main class `com.zeroz4j.example.server.ExampleServer`. **The three added in 0.6.0 do
-not**: they build runnable jars and have their own main classes and ports, so two can run at once.
+They share the main class `com.zeroz4j.example.server.ExampleServer`. **The four added in 0.6.0 do
+not**: each has a main class of its own, and three of them also build a runnable jar.
+`payments-datamodels` has one of its own too, in its own package:
+`com.zeroz4j.example.payments.server.ExampleServer`.
 
-| Example | Run | Port |
-|---|---|---|
-| `routing-tour` | `java -jar routing-tour-server/target/routing-tour-server-0.7.0.jar` | 8080 |
-| `oidc-login` | `java -jar oidc-login-server/target/oidc-login-server-0.7.0.jar` | 8081 (needs Keycloak) |
-| `scoped-signals` | `java -jar scoped-signals-server/target/scoped-signals-server-0.7.0.jar` | 8082 |
+| Example | Port | Example | Port |
+|---|---|---|---|
+| `routing-tour` | 8091 | `job-monitor` | 8087 |
+| `oidc-login` | 8081 (needs Keycloak) | `form-signup` | 8088 |
+| `scoped-signals` | 8082 | `inventory-crud` | 8089 |
+| `pwa-install` | 8083 | `components-showcase` | 8090 |
+| `todo-signals` | 8084 | | |
+| `chat-events` | 8085 | | |
+| `chat-livesync` | 8086 | `payments-datamodels` | 8092 |
+
+`routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
+`java -jar routing-tour-server/target/routing-tour-server-0.8.0-SNAPSHOT.jar`.
+
+**To move one:** `--port 9000` on the command line, or `-Dzeroz.port=9000`, or — for the seven with
+a `run.bat` — `run.bat 9000`. Each server reads them in that order and falls back to its own
+`DEFAULT_PORT` constant.
 
 **Four of the seven originals require signing in:** `chat-events`, `chat-livesync`, `job-monitor` and
-`components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup` and
-`inventory-crud` connect anonymously. `routing-tour` and `scoped-signals` take credentials from the
+`components-showcase` show a client-side `Login` component. `todo-signals`, `form-signup`,
+`inventory-crud` and `payments-datamodels` connect anonymously. `routing-tour` and `scoped-signals` take credentials from the
 URL — `?user=admin&password=admin` — which is how you open two windows as different users.
 
 **No example enables the development logins by itself.** Pass `--dev-login` to the server main class
@@ -410,8 +467,17 @@ WebSocket layer is Tyrus, whose message-assembly limit is `Integer.MAX_VALUE` �
 socket is not the route for file uploads. `zeroz.ws.idleTimeoutMinutes` stops an abandoned tab
 holding a session forever; it stays unset by default, leaving the container's own value.
 
-**Per-connection ceilings (0.7.0+):** 32 messages from one connection may be handled at once
-(`zeroz.ws.maxConcurrentFramesPerSession`); 256 messages or 8 MB may be waiting to go out
+**One connection's messages are handled in order (0.8.0+).** The server handles a connection's
+messages one at a time, in the order the client wrote them, so anything a browser sends after a live
+edit - a service call, a lock, a signal write - is handled after that edit. Do not generate a
+`LiveMutex` to order one person's own messages; a lock is for two people editing the same thing.
+Ordering is per connection: a slow call for one person never delays anybody else. The keepalive is
+answered outside the queue, and a lock request that is waiting for somebody else lets the messages
+behind it past, because it has changed nothing yet.
+
+**Per-connection ceilings (0.7.0+):** 32 messages from one connection may be waiting to be handled
+(`zeroz.ws.maxQueuedFramesPerSession`, called `zeroz.ws.maxConcurrentFramesPerSession` before 0.8.0
+and still read under that name); 256 messages or 8 MB may be waiting to go out
 (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`), past which that one
 connection is closed with WebSocket code `1013`. An empty outgoing queue always accepts the next
 message however large, so a single big response is never refused.
@@ -431,6 +497,27 @@ server keeps a record per browser — 10,000 objects, dropped after 24 hours idl
 **A live change is checked against every object it reaches (0.7.0+),** not just the outermost one. A
 model nested inside a `@ClientWritable` model needs its own `@ClientWritable`, and one refusal
 refuses the whole change.
+
+**A burst of live edits is one message, not one per setter call (0.8.0+).** A `@ClientWritable`
+change waits for the editing to stop for 150 ms, or for 1 second whatever happens, whichever comes
+first, and everything changed in that burst travels together - measured at 38 messages before and 4
+after for a 38-character sentence typed into the `chat-livesync` topic box. Change it with
+`LiveMutations.configure(pauseMillis, ceilingMillis)`; `(0, 0)` restores a message per setter call.
+Anything the client sends afterwards - a service call, a lock, a signal write - goes on the wire
+behind the waiting edit, so do not generate flush-before-save plumbing. Two things this makes true:
+leaving the page loses what was still waiting (there is deliberately no unload flush - browsers do
+not reliably put bytes on a WebSocket while tearing a page down), and an `Effect` that copies the
+server's broadcast back into the field somebody is typing in now deletes what they typed since, so
+follow the incoming value everywhere except the focused field.
+
+**An edit that does not reach the server is reported, never dropped (0.8.0+).** Whether the server
+refused it or the browser could not send it, the screen is put back to the server's state and the
+reason goes to `LiveMutationRefusals.onRefused(model, reason)`; with no listener it is written to
+the console as a sentence. Nothing is thrown — the setter call finished long before the answer
+arrived. Do not generate retry or rollback plumbing for this. The generated registrar records both
+the model name and its `<Model>_Live` subclass name, and the writer puts the model name on the wire;
+that pairing is what makes the up direction work at all, so do not simplify `registerLive` back to
+one name.
 
 **Unexpected server exceptions reach the client as `The server could not complete this request.
 Reference: <code>` (0.7.0+),** with the real message in the log under that code. To send a sentence
@@ -455,7 +542,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 |---|---|
 | `todo-signals` | Local signals, `Computed`, `Effect` in isolation |
 | `chat-events` | `EventTopic` / `EventPublisher` / `ServerEvents`, deliberately without signals |
-| `chat-livesync` | `@LiveSync` down-direction driving an `Effect` directly |
+| `chat-livesync` | `@LiveSync` both ways: the message list comes down into an `Effect`, the topic box is `@ClientWritable` and goes up, and `LiveMutationRefusals` tells the person when the server would not have their edit |
 | `job-monitor` | `Signals.shared` driven from a server-side virtual thread |
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |
@@ -464,6 +551,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 | `scoped-signals` | `Signals.scoped` with `Scope.CLIENT` and `Scope.USER` beside a global `Signals.shared` |
 | `oidc-login` | `OidcClient` PKCE login against Keycloak, and `@Secured`/`@RolesAllowed` enforced from its claims |
 | `pwa-install` | `Pwa.install()`, `Pwa.installable()`, `PwaManifest` per request, push subscription, and the offline page |
+| `payments-datamodels` | The three shapes a wire type can take - `record`, sealed family, and a model extending another model - nested and in collections, both directions, with a `TestServer` test driving real frames |
 
 ## Not implemented — do not generate code against these
 
@@ -473,9 +561,10 @@ is built. See [docs/PWA.md](docs/PWA.md).
 - The route chain is **rebuilt on every navigation**; a layout is not kept mounted while its children
   swap, so its loader re-runs.
 - Routing has no wildcard or optional segments, no lazy loading, and one child per layout.
-- Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x15 REJECT`,
-  `0x16 SIGNAL_SUB` and `0x18 PUSH` are declared but unreferenced. There is no version field, no
-  acknowledgement and no conflict rejection in the implemented sync path.
+- Protocol opcodes `0x11 SNAPSHOT`, `0x12 UNSUBSCRIBE`, `0x13 MUTATE`, `0x14 ACK`, `0x16 SIGNAL_SUB`
+  and `0x18 PUSH` are declared but unreferenced. There is no version field, no acknowledgment and no
+  conflict rejection in the implemented sync path. `0x15 REJECT` **is** implemented: it carries the
+  reason a live mutation was refused.
 - LiveSync has no field-level merging and no version-conflict detection. Whole-object,
   last-write-wins.
 - Tracked collections do not exist.
@@ -483,8 +572,24 @@ is built. See [docs/PWA.md](docs/PWA.md).
 - No serialization support for object arrays (`String[]`, `MyModel[]` — use a `List`), or for
   `ZonedDateTime`, `OffsetDateTime`, `ZoneId`, `Period`, `java.util.Date`. Primitives, `String`,
   `UUID`, enums, `BigDecimal`, `BigInteger`, `Instant`, `LocalDate`, `LocalTime`, `LocalDateTime`,
-  `Duration`, `Optional`, `List`, `Set`, `Map`, all primitive arrays and EclipseStore `Lazy<T>`
-  **are** supported.
+  `Duration`, `Optional`, `List`, `Set`, `Map`, all primitive arrays, EclipseStore `Lazy<T>`,
+  **records** and **sealed hierarchies** (both 0.8.0+) **are** supported.
+- **A record cannot be part of a reference cycle**, and it cannot be a persistence root. Sending a
+  looped record is refused when it is sent, naming the record; use a class for the type that closes
+  the loop. The persistence rule is separate and unchanged: EclipseStore reaches fields directly and
+  the JVM refuses that for records.
+- **A sealed hierarchy must be one level deep**, every class it permits must be `final` and
+  `@DataModel`, and a sealed *class* base must be `abstract`. All four are compile errors, each
+  because the receiving side could not otherwise tell an allowed type from any other.
+- **A model may extend another model and the base's fields travel too** (0.8.0+; before that they
+  were silently dropped). An abstract model gets no serializer and no registry entry — it exists to
+  hand its fields down. Two shapes are now compile errors, both formerly silent data loss: extending
+  a class that is not a `@DataModel` and declares instance fields, and redeclaring a field name a
+  base class already uses.
+- **Object identity holds within one top-level value, not between two.** The same instance in two
+  fields of one model arrives once; the same instance as two elements of a top-level `List` arrives
+  twice. Never use `==` across a call boundary to decide whether two things are the same — compare by
+  id or `equals`.
 - A `Lazy<T>` field travels as a session-scoped handle, never its contents. The client resolves it
   with a suspending RMI round trip on first `get()`. Lazy references originate on the server; a client
   cannot create one and send it up.
@@ -492,9 +597,38 @@ is built. See [docs/PWA.md](docs/PWA.md).
   `ArrayList`, `LinkedHashSet` and `LinkedHashMap`, so a field typed `TreeSet` fails with a
   `ClassCastException` on deserialization.
 
+## What an application's own assistant reads
+
+This page is for working **on** the framework. Two other documents are for working **in** an
+application built on it, and neither is written by hand:
+
+- **`META-INF/zeroz4j/AGENTS.md` inside `zerozstack-shared-api`.** Generated during this build from
+  the `rules` array in `context7.json`, stamped with this build's version. Every application
+  resolves that artifact, so an assistant gets rules for the version the project actually depends
+  on rather than for whatever a documentation index is currently serving. Change `context7.json`
+  and the jar follows; there is nothing else to edit.
+- **`AGENTS.md` in a generated project.** The archetype writes it, with `${zeroz4jVersion}`
+  substituted. Source:
+  `zerozstack-archetype/src/main/resources/archetype-resources/AGENTS.md`. Its `##` headings are
+  wrapped in Velocity literal blocks because Velocity reads `##` as a comment and silently drops the
+  line; the file says so at the top.
+
+**Every version stated in prose is checked.** `VersionStatementTest` compares it against
+`<revision>` and fails the build, naming the file and line. A sentence about the past keeps its own
+number as long as it says so — `(0.6.0+)`, `since 0.5.0`, `before 0.8.0`, `added in 0.6.0`. A
+version with no such marker is read as a claim about the current release.
+
 ## Conventions
 
-- Apache 2.0 licence header on every new `.java` file; copy an existing one.
+- **Never name anything with a single letter inside a `@JSBody` script.** TeaVM inlines the script
+  as text and renames only the method's parameters, and a minified build — the compiler's default,
+  and therefore what every generated application does — renames them to single letters: `b` for the
+  first parameter, `c` for the second, and so on. A one-letter name inside the script becomes the
+  same name as a parameter, and one of them silently becomes the other. That is how the connection
+  bar came to read `[object HTMLDivElement]` for two releases, and how a file upload's progress
+  figure never moved. Use `idx`, `ignored`, `bar`, `node`. `JsBodyNamingContractTest` reads every
+  Java file in the checkout on every build and fails it otherwise.
+- Apache 2.0 license header on every new `.java` file; copy an existing one.
 - Javadoc on public API, including the wire opcode where a method sends a frame.
 - Documentation lives in `/docs` as plain Markdown. See
   [docs/contribute/docs-style-guide.md](docs/contribute/docs-style-guide.md).

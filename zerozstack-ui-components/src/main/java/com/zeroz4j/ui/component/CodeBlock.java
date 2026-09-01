@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
 import org.teavm.jso.browser.Window;
@@ -54,20 +56,29 @@ public final class CodeBlock extends Div {
 
         Div header = new Div();
         header.addClassName("flex items-center justify-between px-3 py-1 bg-base-300/50 "
-            + "text-xs text-base-content/60");
+            + TextStyle.CAPTION.getClassNames());
         Span langChip = new Span(lang.isEmpty() ? "text" : lang);
         langChip.addClassName("font-mono");
-        Div copy = new Div();
-        copy.addClassName("flex items-center gap-1 cursor-pointer hover:text-primary");
-        copy.add(Icon.of("copy", "w-3.5 h-3.5"));
-        Span copyLabel = new Span("copy");
-        copy.getElement().appendChild(copyLabel.getElement());
-        copy.getElement().addEventListener("click", threaded(e -> {
+        // A real <button>, not a styled box. The browser puts a button in the tab order and
+        // presses it on Enter and Space for nothing; a div with a click handler can only ever be
+        // used with a mouse. The class list is the one the box had, minus the "btn" a Button adds
+        // for itself, so it still reads as a quiet word in the header rather than a chunky button.
+        Button copyButton = new Button();
+        copyButton.setClassName("flex items-center gap-1 cursor-pointer hover:text-primary");
+        copyButton.getElement().setAttribute("type", "button");
+        copyButton.getElement().appendChild(Icon.of("copy", "w-3.5 h-3.5").getElement());
+        Span copyLabel = new Span("Copy");
+        // The word changes to "Copied" after the copy, and that is the only sign it worked. A
+        // polite live region means somebody using a screen reader is told, instead of being left
+        // wondering whether anything happened.
+        copyLabel.getElement().setAttribute("aria-live", "polite");
+        copyButton.getElement().appendChild(copyLabel.getElement());
+        copyButton.getElement().addEventListener("click", threaded(e -> {
             Js.copyToClipboard(code);
-            copyLabel.setText("copied!");
+            copyLabel.setText("Copied");
         }));
         header.getElement().appendChild(langChip.getElement());
-        header.add(copy);
+        header.add(copyButton);
         add(header);
 
         Div scroll = new Div();
@@ -80,7 +91,8 @@ public final class CodeBlock extends Div {
             HTMLElement lineEl = Window.current().getDocument().createElement("div");
             if (lineNumbers) {
                 HTMLElement num = Window.current().getDocument().createElement("span");
-                num.setClassName("inline-block w-8 pr-3 text-right select-none opacity-30");
+                num.setClassName("inline-block w-8 pr-3 text-right select-none "
+                + Emphasis.FAINT.getClassNames());
                 num.appendChild(Window.current().getDocument().createTextNode(String.valueOf(i + 1)));
                 lineEl.appendChild(num);
             }
@@ -90,6 +102,13 @@ public final class CodeBlock extends Div {
         scroll.getElement().appendChild(pre);
         add(scroll);
     }
+
+    /**
+     * A comment is the one token in a code block that is quiet rather than coloured - strings,
+     * numbers and keywords all name a colour - so it asks for the quietest step on the emphasis
+     * scale instead of naming a faded colour of its own.
+     */
+    private static final String COMMENT_STYLE = Emphasis.FAINT.getClassNames() + " italic";
 
     /** Tokenizes one line into styled spans; returns whether a block comment is still open. */
     private static boolean renderLine(HTMLElement parent, String line, String lang, boolean inBlockComment) {
@@ -102,16 +121,16 @@ public final class CodeBlock extends Div {
                 int end = line.indexOf("*/", i);
                 if (end < 0) {
                     emit(parent, plain);
-                    token(parent, line.substring(i), "text-base-content/40 italic");
+                    token(parent, line.substring(i), COMMENT_STYLE);
                     return true;
                 }
                 emit(parent, plain);
-                token(parent, line.substring(i, end + 2), "text-base-content/40 italic");
+                token(parent, line.substring(i, end + 2), COMMENT_STYLE);
                 i = end + 2;
                 inBlockComment = false;
             } else if (c == '/' && i + 1 < n && line.charAt(i + 1) == '/' && isCodeLang(lang)) {
                 emit(parent, plain);
-                token(parent, line.substring(i), "text-base-content/40 italic");
+                token(parent, line.substring(i), COMMENT_STYLE);
                 return false;
             } else if (c == '/' && i + 1 < n && line.charAt(i + 1) == '*' && isCodeLang(lang)) {
                 emit(parent, plain);
@@ -119,7 +138,7 @@ public final class CodeBlock extends Div {
             } else if (c == '#' && (lang.equals("yaml") || lang.equals("yml") || lang.equals("sh")
                     || lang.equals("bash") || lang.equals("properties"))) {
                 emit(parent, plain);
-                token(parent, line.substring(i), "text-base-content/40 italic");
+                token(parent, line.substring(i), COMMENT_STYLE);
                 return false;
             } else if (c == '"' || c == '\'') {
                 emit(parent, plain);

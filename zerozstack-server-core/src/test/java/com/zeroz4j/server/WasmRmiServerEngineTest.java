@@ -62,6 +62,30 @@ import jakarta.websocket.WebSocketContainer;
 @EnableWeld
 public class WasmRmiServerEngineTest {
 
+    /**
+     * What a connection actually received, for an assertion about how many frames it received.
+     *
+     * <p>"expected: 2 but was: 1" says nothing about <i>which</i> frame is missing, and the two
+     * candidates - the AUTH frame the connection opens with, and the answer to the call - fail for
+     * entirely different reasons. This prints each frame's correlation id and opcode, and whether
+     * the connection still has a writer at all.</p>
+     *
+     * @param s the connection
+     * @return one line naming every frame it has received
+     */
+    static String diag(FakeSession s) {
+        StringBuilder sb = new StringBuilder("frames=");
+        for (ByteBuffer frame : s.basic.sentBuffers()) {
+            ByteBuffer reading = frame.duplicate();
+            reading.position(0);
+            sb.append("[id=").append(reading.getInt()).append(" op=")
+              .append(reading.remaining() > 0 ? Integer.toHexString(reading.get() & 0xFF) : "-")
+              .append(']');
+        }
+        return sb.append(" hasWriter=").append(WsWrites.hasWriter(s)).toString();
+    }
+
+
     @RmiService
     public interface MyTestService {
         String sayHello(String name);
@@ -125,6 +149,7 @@ public class WasmRmiServerEngineTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             WasmRmiServerEngine.class,
             SyncEngine.class,
             ObjectMapperProducer.class,
@@ -135,6 +160,9 @@ public class WasmRmiServerEngineTest {
 
     @Inject
     WasmRmiServerEngine engine;
+
+    @Inject
+    ServerRuntime runtime;
 
     @Inject
     ObjectMapper mapper;
@@ -153,6 +181,36 @@ public class WasmRmiServerEngineTest {
          * queues a frame and a per-connection writer thread puts it on the wire, so reading the
          * list straight after a call would race that thread.</p>
          */
+        /**
+         * Everything sent, once at least {@code count} frames have arrived.
+         *
+         * <p>Waiting on a latch counts <em>any</em> frame, so a frame still in flight from an
+         * earlier step -- the AUTH frame {@code onOpen} sends, most often -- satisfies a latch
+         * armed for the reply, and the assertion then runs before the reply has left. That is a
+         * race in this harness, not in the engine, and it appeared when writes stopped happening
+         * on the calling thread. Waiting for a count cannot be satisfied by the wrong frame.</p>
+         *
+         * @param count   how many frames must have arrived
+         * @param timeout how long to wait, in milliseconds
+         * @return every frame sent so far
+         */
+        public List<ByteBuffer> awaitFrames(int count, long timeout) {
+            long deadline = System.currentTimeMillis() + timeout;
+            while (System.currentTimeMillis() < deadline) {
+                WsWrites.awaitQuiet(owner);
+                if (recorded.size() >= count) {
+                    return recorded;
+                }
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            return recorded;
+        }
+
         public List<ByteBuffer> sentBuffers() {
             WsWrites.awaitQuiet(owner);
             return recorded;
@@ -318,11 +376,9 @@ public class WasmRmiServerEngineTest {
         BinarySerializer.writeString(buffer, "scopedCall");
         buffer.putInt(0);
 
-        fakeSession.basic.latch = new CountDownLatch(1);
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        ByteBuffer response = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(300, response.getInt());
         assertEquals((byte) 0x01, response.get(), "Must be a success frame, not ContextNotActiveException");
         assertEquals("request-scope-active", BinarySerializer.readValue(response, mapper));
@@ -339,15 +395,13 @@ public class WasmRmiServerEngineTest {
         buffer.putInt(1);
         BinarySerializer.writeValue(buffer, "World", mapper);
 
-        fakeSession.basic.latch = new CountDownLatch(1);
         
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
         
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.awaitFrames(2, 2000).size(), diag(fakeSession));
         
-        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        ByteBuffer response = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(100, response.getInt());
         assertEquals((byte) 0x01, response.get()); 
         assertEquals("Hello World", BinarySerializer.readValue(response, mapper));
@@ -364,15 +418,13 @@ public class WasmRmiServerEngineTest {
         BinarySerializer.writeString(buffer, "adminMethod");
         buffer.putInt(0); 
 
-        fakeSession.basic.latch = new CountDownLatch(1);
 
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
         
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.awaitFrames(2, 2000).size(), diag(fakeSession));
         
-        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        ByteBuffer response = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(101, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         String errorMsg = BinarySerializer.readString(response);
@@ -394,15 +446,13 @@ public class WasmRmiServerEngineTest {
         BinarySerializer.writeString(buffer, "throwError");
         buffer.putInt(0);
 
-        fakeSession.basic.latch = new CountDownLatch(1);
 
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
 
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
+        assertEquals(2, fakeSession.basic.awaitFrames(2, 2000).size(), diag(fakeSession));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        ByteBuffer response = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(102, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         String message = BinarySerializer.readString(response);
@@ -428,11 +478,9 @@ public class WasmRmiServerEngineTest {
         BinarySerializer.writeString(buffer, "refuseWithReason");
         buffer.putInt(0);
 
-        fakeSession.basic.latch = new CountDownLatch(1);
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
-        ByteBuffer response = fakeSession.basic.sentBuffers().get(1);
+        ByteBuffer response = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(103, response.getInt());
         assertEquals((byte) 0x0F, response.get());
         assertEquals("That invoice was already approved.", BinarySerializer.readString(response));
@@ -566,7 +614,7 @@ public class WasmRmiServerEngineTest {
         // Re-sync answers only for objects this client was actually sent. Normally the record is
         // written as a side effect of sending the object; here the object is planted directly in
         // the registry, so the record is planted with it.
-        Disclosures.record(fakeSession.getId(), "known-1");
+        runtime.disclosures().record(fakeSession.getId(), "known-1");
 
         GrowableBuffer buffer = new GrowableBuffer();
         buffer.putInt(0); // fire-and-forget
@@ -575,14 +623,12 @@ public class WasmRmiServerEngineTest {
         buffer.putInt(1);
         BinarySerializer.writeValue(buffer, List.of("known-1", "gone-since-restart"), mapper);
 
-        fakeSession.basic.latch = new CountDownLatch(1);
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(buffer.toByteArray()), fakeSession);
-        assertTrue(fakeSession.basic.latch.await(2, TimeUnit.SECONDS));
 
         // Frame 0 is the auth frame from onOpen; the resync answer is the only other one:
         // one frame for the known handle, none for the unknown.
-        assertEquals(2, fakeSession.basic.sentBuffers().size());
-        ByteBuffer frame = fakeSession.basic.sentBuffers().get(1);
+        assertEquals(2, fakeSession.basic.awaitFrames(2, 2000).size(), diag(fakeSession));
+        ByteBuffer frame = fakeSession.basic.awaitFrames(2, 2000).get(1);
         assertEquals(0, frame.getInt());
         assertEquals(com.zeroz4j.api.SyncFrameTypes.SUBSCRIBE, frame.get());
         assertEquals("current-state", BinarySerializer.readValue(frame, mapper));

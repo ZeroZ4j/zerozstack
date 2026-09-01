@@ -90,7 +90,7 @@ final class UploadBrowser {
      * @param element the drop area
      */
     @JSBody(params = { "element" }, script =
-        "var stop = function(e) { e.preventDefault(); e.stopPropagation(); };"
+        "var stop = function(evt) { evt.preventDefault(); evt.stopPropagation(); };"
         + "element.addEventListener('dragenter', stop);"
         + "element.addEventListener('dragover', stop);")
     static native void acceptDrops(HTMLElement element);
@@ -113,7 +113,7 @@ final class UploadBrowser {
      * @param input the {@code <input type="file">} element
      */
     @JSBody(params = { "input" }, script =
-        "input.addEventListener('click', function(e) { e.stopPropagation(); });")
+        "input.addEventListener('click', function(evt) { evt.stopPropagation(); });")
     static native void isolateClicks(HTMLElement input);
 
     /**
@@ -151,9 +151,16 @@ final class UploadBrowser {
         "var xhr = new XMLHttpRequest();"
         + "xhr.open('POST', url, true);"
         + "xhr.setRequestHeader('X-Zeroz4j-Upload-Pass', pass);"
-        + "xhr.upload.onprogress = function(e) {"
-        + "  if (e.lengthComputable && e.total > 0) {"
-        + "    onProgress(Math.round(e.loaded * 100 / e.total));"
+        // The browser's progress report is called "sent" and not "e", and that is not a matter of
+        // taste. TeaVM inlines this script as text and renames only the parameters, and a minified
+        // build - which every generated application's build is - renames them to single letters:
+        // "b" for the first, up to "e" for onProgress here. This callback's own argument was "e"
+        // until 0.8.0, so it hid onProgress, and what ran on every step of every upload was an
+        // attempt to call the progress report as if it were a function. The bar sat at zero.
+        // JsBodyNamingContractTest now fails the build on any single-letter name in a script.
+        + "xhr.upload.onprogress = function(sent) {"
+        + "  if (sent.lengthComputable && sent.total > 0) {"
+        + "    onProgress(Math.round(sent.loaded * 100 / sent.total));"
         + "  }"
         + "};"
         + "xhr.onload = function() { onDone(xhr.status, xhr.responseText || ''); };"
@@ -170,6 +177,6 @@ final class UploadBrowser {
      * @param handle the value {@link #send} returned; ignored when null
      */
     @JSBody(params = { "handle" }, script =
-        "if (handle) { try { handle.abort(); } catch (e) { } }")
+        "if (handle) { try { handle.abort(); } catch (ignored) { } }")
     static native void abort(JSObject handle);
 }

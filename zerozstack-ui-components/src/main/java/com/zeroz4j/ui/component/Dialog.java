@@ -17,11 +17,16 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.ui.theme.TextStyle;
+import com.zeroz4j.ui.component.mixin.HasLayer;
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Layer;
 import org.teavm.jso.dom.events.Event;
+import org.teavm.jso.dom.html.HTMLElement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A panel that takes over the page until it is answered.
@@ -56,12 +61,44 @@ import java.util.List;
  * {@link #setCloseOnEsc(boolean)}, {@link #setCloseOnOutsideClick(boolean)} — and remember to
  * leave the user a button when you do. {@link #setModal(boolean)} switches the native behaviour
  * off altogether and restores the appearance-only dialog of 0.7.0 and earlier.</p>
+ *
+ * <h2>The title, and what a screen reader says</h2>
+ *
+ * <p>Give the dialog a title and it gets three things at once: a heading at the top of the panel,
+ * a name a screen reader announces when the dialog opens, and something for a test to recognise it
+ * by.</p>
+ *
+ * <pre>{@code
+ * Dialog dialog = new Dialog("Delete the account?");
+ * }</pre>
+ *
+ * <p>Without a title the browser announces nothing but the word "dialog". If the design has no
+ * room for a visible heading, give it a name that is read but not shown with
+ * {@link #setAriaLabel(String)}.</p>
+ *
+ * <h2>Focus</h2>
+ *
+ * <p>Opening moves the keyboard into the dialog and closing puts it back on whatever opened it, so
+ * that pressing Escape leaves you where you were. While a modal dialog is open the browser holds
+ * the keyboard inside it: Tab walks round the dialog's own controls and never reaches the page
+ * behind. A dialog with {@link #setModal(boolean)} turned off still gets the keyboard moved in and
+ * put back, but nothing holds it in — that is what turning the browser's ownership off means.</p>
+ *
+ * <h2>Stacking</h2>
+ *
+ * <p>A modal dialog is in the browser's <b>top layer</b> and is therefore above everything the
+ * page can draw, whatever stacking numbers are involved — see {@link Layer}. A dialog with
+ * modality turned off has no such help, so it carries {@link Layer#OVERLAY} instead.</p>
  */
-public class Dialog extends Component implements HasComponents, HasStyle, HasSize {
+public class Dialog extends Component implements HasComponents, HasStyle, HasSize,
+        HasLayer<Dialog> {
+
+    private static final AtomicInteger DIALOG_ID_COUNTER = new AtomicInteger();
 
     private final Div modalBox;
     private final Div modalAction;
     private final Div content;
+    private final Heading heading;
 
     private final List<EventListener<ComponentEvent<Dialog>>> closeListeners = new ArrayList<>();
 
@@ -73,23 +110,47 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
     private boolean opened;
     /** True while the pointer went down on the overlay rather than inside the panel. */
     private boolean pressStartedOutside;
+    /** Where the keyboard was when this dialog opened, so it can be put back on close. */
+    private HTMLElement openedFrom;
+    /** The title text, or null when the dialog has none. */
+    private String title;
 
+    /** A dialog with no heading. Give it one with {@link #setTitle(String)} if it needs a name. */
     public Dialog() {
+        this(null);
+    }
+
+    /**
+     * A dialog with {@code title} as its heading and as the name a screen reader announces.
+     *
+     * @param title the heading, or null for a dialog with no heading
+     */
+    public Dialog(String title) {
         super("dialog");
         addClassName("modal");
+        setLayer(Layer.OVERLAY);
 
         modalBox = new Div();
         modalBox.addClassName("modal-box");
+
+        heading = new Heading();
+        heading.setId("zeroz-dialog-title-" + DIALOG_ID_COUNTER.incrementAndGet());
+        heading.addClassName(TextStyle.SECTION_TITLE.getClassNames());
+        heading.setVisible(false);
 
         content = new Div();
 
         modalAction = new Div();
         modalAction.addClassName("modal-action");
 
+        modalBox.add(heading);
         modalBox.add(content);
         modalBox.add(modalAction);
 
         getElement().appendChild(modalBox.getElement());
+        own(modalBox);
+
+        setTitle(title);
 
         // These four are registered straight on the element rather than through
         // addDomEventListener, which starts a green thread and therefore runs the body after the
@@ -131,14 +192,25 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
      * add it to a layout before opening it.</p>
      */
     public void open() {
+        HTMLElement wasFocused = Js.activeElement();
+        if (!opened) {
+            openedFrom = wasFocused;
+        }
+        boolean browserOwnsIt = false;
         if (modal) {
             // Deliberately not guarded by the opened flag: this is a no-op on a dialog that is
             // genuinely showing, and on one whose element was taken out of the page and put back
             // it is the repair that lets it show again.
-            Js.dialogShowModal(getElement());
+            browserOwnsIt = Js.dialogShowModal(getElement());
         }
         addClassName("modal-open");
         opened = true;
+        if (!browserOwnsIt) {
+            // showModal() moves the keyboard into the dialog by itself. Without it — modality
+            // turned off, or an element not on the page yet — nothing does, and the keyboard is
+            // left on the page behind, which is exactly the fault this dialog was rebuilt to end.
+            Js.focusFirstInside(modalBox.getElement());
+        }
     }
 
     /**
@@ -163,6 +235,7 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
         // Fires the element's 'close' event afterwards; opened is already false by then, so
         // onClosedByBrowser() ignores it and the listeners are notified exactly once, here.
         Js.dialogClose(getElement());
+        restoreFocus();
         fireClose(fromClient);
     }
 
@@ -172,7 +245,23 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
         }
         opened = false;
         removeClassName("modal-open");
+        restoreFocus();
         fireClose(true);
+    }
+
+    /**
+     * Puts the keyboard back on whatever opened the dialog.
+     *
+     * <p>The browser already does this for a dialog it owns, and doing it again costs nothing and
+     * lands on the same element. For one it does not own there is nothing else to do it, and
+     * without this the keyboard is left on a control that is no longer on the screen.</p>
+     */
+    private void restoreFocus() {
+        HTMLElement target = openedFrom;
+        openedFrom = null;
+        if (target != null && !Js.contains(getElement(), target)) {
+            Js.focus(target);
+        }
     }
 
     private void fireClose(boolean fromClient) {
@@ -282,7 +371,11 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
     @Override
     public void setWidth(String width) {
         modalBox.setStyle("width", width);
-        modalBox.setStyle("max-width", "100%");
+        // Measured against the window, not against the panel's parent. The overlay lays the panel
+        // out in a grid track sized by the panel itself, so "100%" of it is the panel's own width
+        // and clamps nothing: a panel asked to be 56rem stayed 56rem in a 380-pixel window and hung
+        // off both edges. The 2rem keeps a margin so the panel never touches the glass.
+        modalBox.setStyle("max-width", "calc(100vw - 2rem)");
     }
 
     /**
@@ -295,7 +388,7 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
     @Override
     public void setHeight(String height) {
         modalBox.setStyle("height", height);
-        modalBox.setStyle("max-height", "100%");
+        modalBox.setStyle("max-height", "calc(100vh - 2rem)");
     }
 
     /**
@@ -330,5 +423,80 @@ public class Dialog extends Component implements HasComponents, HasStyle, HasSiz
 
     public void addAction(Component component) {
         modalAction.add(component);
+    }
+
+    /**
+     * Sets the dialog's heading, which is also the name a screen reader announces when it opens.
+     *
+     * <p>The heading appears at the top of the panel, above anything added with
+     * {@link #add(Component...)}. Passing null removes it, and with it the name — after which the
+     * dialog announces itself as nothing but "dialog" unless {@link #setAriaLabel(String)} gives it
+     * one.</p>
+     *
+     * @param title the heading text, or null for no heading
+     */
+    public void setTitle(String title) {
+        this.title = title;
+        if (title == null || title.isEmpty()) {
+            heading.setText("");
+            heading.setVisible(false);
+            getElement().removeAttribute("aria-labelledby");
+            return;
+        }
+        heading.setText(title);
+        heading.setVisible(true);
+        // A name that is read wins over a heading that is pointed at, so a dialog given both keeps
+        // the one the application asked for explicitly.
+        if (getElement().getAttribute("aria-label") == null) {
+            getElement().setAttribute("aria-labelledby", heading.getId());
+        }
+    }
+
+    /**
+     * @return the heading text, or null if the dialog has none
+     * @see #setTitle(String)
+     */
+    public String getTitle() {
+        return title;
+    }
+
+    /**
+     * Names the dialog for a screen reader without showing the name on the screen.
+     *
+     * <p>Use this only where the design leaves no room for a heading. A visible
+     * {@link #setTitle(String)} is better: everybody gets it, not only the people listening. Set
+     * both and this one is what is announced.</p>
+     *
+     * @param ariaLabel the spoken name, or null to fall back to the heading
+     */
+    public void setAriaLabel(String ariaLabel) {
+        if (ariaLabel == null || ariaLabel.isEmpty()) {
+            getElement().removeAttribute("aria-label");
+            if (title != null && !title.isEmpty()) {
+                getElement().setAttribute("aria-labelledby", heading.getId());
+            }
+            return;
+        }
+        getElement().setAttribute("aria-label", ariaLabel);
+        getElement().removeAttribute("aria-labelledby");
+    }
+
+    /**
+     * @return the spoken name set with {@link #setAriaLabel(String)}, or null
+     */
+    public String getAriaLabel() {
+        return getElement().getAttribute("aria-label");
+    }
+
+    /** The heading at the top of the panel. A real {@code <h2>}, so the page has an outline. */
+    private static final class Heading extends Component implements HasStyle, HasText {
+        private Heading() {
+            super("h2");
+        }
+
+        @Override
+        public Component getComponent() {
+            return this;
+        }
     }
 }

@@ -23,6 +23,7 @@ import com.zeroz4j.api.GrowableBuffer;
 import org.teavm.interop.Async;
 import org.teavm.interop.AsyncCallback;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -197,13 +198,37 @@ public class WasmRmiClient {
     }
 
     /**
-     * Asks the server to re-send the current state of every object this client holds, by handle.
-     * Fire-and-forget: the answers are ordinary 0x10 update frames applied in place, so there is
-     * nothing to correlate. Objects the server no longer knows (it restarted) are logged there.
+     * Asks the server to re-send the current state of every object this client still holds, by
+     * handle. Fire-and-forget: the answers are ordinary 0x10 update frames applied in place, so
+     * there is nothing to correlate. Objects the server no longer knows (it restarted, or the
+     * application there has let go of them) are logged there.
+     *
+     * <p>"Still holds" is literal. The handle registry keeps its objects weakly, so a handle is on
+     * this list only while something on the screen — or something the application is holding for
+     * the screen — still refers to the object. Nothing that has been scrolled away, replaced or
+     * navigated off is asked for.</p>
+     *
+     * <p>If the list is nevertheless longer than {@link SyncFrameTypes#MAX_RESYNC_HANDLES}, it is
+     * thrown away rather than sent, and one line is logged saying so. That is the escape from a
+     * connection that can never succeed: an over-sized message is refused by the server, which
+     * closes the connection, and the client would otherwise reconnect and send the identical
+     * message forever. Throwing the list away costs the objects their handles — the application
+     * re-fetches them exactly as it does after a server restart — and the next connection works.</p>
      */
     private static void sendResyncRequest() {
         List<String> handles = MAPPER.ids();
         if (handles.isEmpty()) {
+            return;
+        }
+        if (handles.size() > SyncFrameTypes.MAX_RESYNC_HANDLES) {
+            System.out.println("[zeroz4j] Not asking the server to restore " + handles.size()
+                    + " objects: that is more than the " + SyncFrameTypes.MAX_RESYNC_HANDLES
+                    + " a request may carry, and a request that large is refused by the server, "
+                    + "which would leave this tab reconnecting forever. The list has been cleared "
+                    + "and the objects on screen will be fetched again the way they were first "
+                    + "obtained. If you see this line, a screen is holding on to objects it no "
+                    + "longer shows.");
+            MAPPER.clear();
             return;
         }
         try {
@@ -217,6 +242,41 @@ public class WasmRmiClient {
             System.out.println("[zeroz4j] Re-sync requested for " + handles.size() + " object(s)");
         } catch (Exception e) {
             System.err.println("[zeroz4j] Failed to request re-sync: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Asks the server to re-send one object's current state, so a screen showing a change the
+     * server never received is put back to the truth.
+     *
+     * <p>Used when a live edit could not be put on the wire at all. The answer is an ordinary
+     * update frame applied in place, which is exactly what the server sends by itself when it
+     * refuses an edit — one story for "your change did not happen", not two.</p>
+     *
+     * @param liveObject the object whose optimistic change has to be undone
+     * @return true when the request went out; false when the object has no handle to ask by, or the
+     *         connection is not open
+     */
+    static boolean requestResyncOf(Object liveObject) {
+        String handle = MAPPER.getId(liveObject);
+        if (handle == null || networkChannel == null || !networkChannel.isOpen()) {
+            return false;
+        }
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0); // fire-and-forget
+            BinarySerializer.writeString(buffer, SyncFrameTypes.RESYNC_SERVICE);
+            BinarySerializer.writeString(buffer, "sync");
+            buffer.putInt(1);
+            List<String> one = new ArrayList<>();
+            one.add(handle);
+            BinarySerializer.writeValue(buffer, one, MAPPER);
+            networkChannel.sendRawBytes(buffer.toByteArray());
+            return true;
+        } catch (Exception e) {
+            System.err.println("[zeroz4j] Could not ask the server to restore " + handle
+                    + " after a change that failed to send: " + e.getMessage());
+            return false;
         }
     }
 
@@ -276,6 +336,14 @@ public class WasmRmiClient {
                     + " refused: not connected to the server"));
             return;
         }
+
+        // A live edit waiting out its quiet period must not be overtaken by this call. Somebody
+        // types into a field and immediately presses a button; if the button's call went first,
+        // the server would decide on the value the person has already replaced, and every screen
+        // would say the typing was ignored. Sending the edits here puts them on the socket ahead
+        // of this call, so the server reads them in the order they happened. Does nothing, at the
+        // cost of one lock, when nothing is waiting.
+        LiveMutations.flushBeforeOutboundCall();
 
         int msgId = messageIdGenerator.incrementAndGet() & 0x7FFFFFFF;
         pendingRequests.put(msgId, new PendingRequest(callback, System.currentTimeMillis()));
@@ -383,6 +451,13 @@ public class WasmRmiClient {
                 // Sync notification from server (formerly SNAPSHOT)
                 // We just deserialize it, which will update the mapper instance inline!
                 BinarySerializer.readValue(buffer, MAPPER);
+            } else if (frameType == SyncFrameTypes.REJECT) {
+                // The server refused a live edit. The corrective state has already arrived on its
+                // own frame, so the screen is right; this frame is the sentence saying why, and it
+                // is the only thing that stops an edit springing back with no explanation.
+                String refusedModel = BinarySerializer.readString(buffer);
+                String reason = BinarySerializer.readString(buffer);
+                com.zeroz4j.api.LiveMutationRefusals.report(refusedModel, reason);
             } else if (frameType == SyncFrameTypes.PONG) {
                 // The keepalive's answer. Nothing to do: arriving at all was the point, and
                 // noteActivity() above has already recorded it. Handled explicitly rather than

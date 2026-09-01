@@ -17,66 +17,46 @@
  */
 package com.zeroz4j.example.client.showcase;
 
-import com.zeroz4j.ui.component.*;
-import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
+import com.zeroz4j.ui.component.Timeline;
+import com.zeroz4j.ui.layout.Div;
 
 public class TimelineShowcase extends ComponentShowcase {
 
     public TimelineShowcase() {
         addTitle("Timeline");
-        addDescription("Timeline component is used to show a list of events in chronological order.");
+        addDescription("Events in the order they happened, across the page or down it. Add them "
+            + "one at a time; the line joining them is drawn for you.");
 
-        Timeline timeline = new Timeline();
+        Timeline across = new Timeline();
+        across.addEvent("1984", "First Macintosh", "Apple released the first Macintosh computer.");
+        across.addEvent("2001", "iPod launched", "Apple announced a portable media player.");
+        across.addEvent("2007", "iPhone debut", "Steve Jobs introduced the iPhone.");
+        addSection("Across the page", host(across));
 
-        class TimelineItem extends Component {
-            public TimelineItem(String date, String title, String desc, boolean first, boolean last) {
-                super("li");
-                
-                if (!first) {
-                    Component hr1 = new Component("hr") {};
-                    getElement().appendChild(hr1.getElement());
-                }
+        Timeline down = new Timeline().vertical();
+        down.addEvent("09:14", "Order placed", "Paid by card, delivered to the office address.");
+        down.addEvent("11:02", "Picked", "Two of the three items were in the first warehouse.");
+        down.addEvent("14:30", "Left the depot", "On the van, seventh of nineteen stops.");
+        down.addEvent("Tomorrow", "Expected");
+        addSection("Down the page", host(down));
 
-                Div start = new Div();
-                start.addClassName("timeline-start");
-                start.getElement().setTextContent(date);
+        Timeline wordy = new Timeline().vertical();
+        wordy.addEvent("Monday, 3 August, 09:14 in the morning",
+            "The overnight reconciliation job finished with warnings",
+            "Four hundred and six rows matched, eleven did not, and one of those eleven is a "
+                + "duplicate payment against an invoice that was already settled in June. None of "
+                + "these words are shortened, cut or hidden behind a hover: the box stops growing "
+                + "at about twenty rem and the text wraps inside it.");
+        wordy.addEvent("Monday, 3 August, 09:20", "Somebody was told",
+            "The finance mailbox got the report.");
+        addSection("A deliberately long label - it wraps, and nothing is thrown away", host(wordy));
+    }
 
-                Div middle = new Div();
-                middle.addClassName("timeline-middle");
-                middle.getElement().setInnerHTML("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 20 20\" fill=\"currentColor\" class=\"h-5 w-5\"><path fill-rule=\"evenodd\" d=\"M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z\" clip-rule=\"evenodd\" /></svg>");
-
-                Div end = new Div();
-                end.addClassName("timeline-end");
-                end.addClassName("timeline-box");
-                
-                Div titleDiv = new Div();
-                titleDiv.addClassName("font-black");
-                titleDiv.getElement().setTextContent(title);
-                
-                Div descDiv = new Div();
-                descDiv.getElement().setTextContent(desc);
-                
-                end.add(titleDiv, descDiv);
-
-                getElement().appendChild(start.getElement());
-                getElement().appendChild(middle.getElement());
-                getElement().appendChild(end.getElement());
-
-                if (!last) {
-                    Component hr2 = new Component("hr") {};
-                    getElement().appendChild(hr2.getElement());
-                }
-            }
-        }
-
-        timeline.add(
-            new TimelineItem("1984", "First Macintosh", "Apple released the first Macintosh computer.", true, false),
-            new TimelineItem("2001", "iPod launched", "Apple announced the iPod portable digital media player.", false, false),
-            new TimelineItem("2007", "iPhone debut", "Steve Jobs introduced the iPhone.", false, true)
-        );
-
-        addSection("Horizontal Timeline", timeline);
+    /** A timeline is as wide as the space it is given. */
+    private static Div host(Timeline timeline) {
+        Div box = new Div();
+        box.addClassName("w-full");
+        box.add(timeline);
+        return box;
     }
 }

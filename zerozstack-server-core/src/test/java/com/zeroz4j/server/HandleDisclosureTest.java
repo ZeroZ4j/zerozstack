@@ -63,6 +63,9 @@ public class HandleDisclosureTest {
 
     @BeforeAll
     public static void registerModel() {
+        // Doc stands in for a @LiveSync model: it is synced and re-read by handle. The generated
+        // registrar marks those, and only those get a handle that outlives the message.
+        BinaryRegistry.registerHandleBearing(Doc.class.getName());
         BinaryRegistry.register(Doc.class.getName(), Doc::new,
                 new BinarySerializerDelegate<Doc>() {
                     @Override public void write(Doc obj, GrowableBuffer buffer, ObjectMapper mapper) {
@@ -76,19 +79,24 @@ public class HandleDisclosureTest {
 
     private WasmRmiServerEngine engine;
 
+    /** One server per test: its record of what was sent starts empty and cannot leak into the next. */
+    private ServerRuntime server;
+
     @BeforeEach
     public void setup() {
+        server = new ServerRuntime();
         engine = new WasmRmiServerEngine();
+        engine.injectedRuntime = server;
         engine.mapper = new ObjectMapper();
         engine.syncEngine = new SyncEngine();
         engine.syncEngine.mapper = engine.mapper;
-        Disclosures.resetForTesting();
+        engine.syncEngine.runtime = server;
         Disclosures.install();
     }
 
     @AfterEach
     public void teardown() {
-        Disclosures.resetForTesting();
+        server.shutDown();
     }
 
     /** A connection carrying a browser id, the way a real one does. */
@@ -96,7 +104,8 @@ public class HandleDisclosureTest {
         WasmRmiServerEngineTest.FakeSession session =
                 new WasmRmiServerEngineTest.FakeSession(sessionId);
         session.getUserProperties().put(RmiEndpointConfigurator.CLIENT_KEY, browserId);
-        Disclosures.sessionOpened(session);
+        server.addSessionForTesting(session);
+        server.disclosures().sessionOpened(session);
         return session;
     }
 
@@ -122,7 +131,7 @@ public class HandleDisclosureTest {
 
         assertEquals(0, frames(outsider),
                 "a handle learned some other way must not fetch the object");
-        assertFalse(Disclosures.wasDisclosedTo(outsider, handle),
+        assertFalse(server.disclosures().wasDisclosedToSession(outsider, handle),
                 "and the record must say so, because that is what a lock check will read too");
     }
 
@@ -135,7 +144,7 @@ public class HandleDisclosureTest {
         WasmRmiServerEngineTest.FakeSession holder = browserSession("s1", "browser-holder");
         engine.syncEngine.addSession(holder);
         engine.syncEngine.notifyChanged(doc, Scope.SESSION, "s1");
-        assertTrue(Disclosures.wasDisclosedTo(holder, handle));
+        assertTrue(server.disclosures().wasDisclosedToSession(holder, handle));
 
         doc.setText("hello again");
         holder.basic.sentBuffers().clear();
@@ -162,11 +171,11 @@ public class HandleDisclosureTest {
         // The socket drops. A reconnect is a brand new session id; the browser id is the same,
         // because it lives in a cookie that outlives the connection.
         engine.syncEngine.removeSession("s1");
-        Disclosures.sessionClosed("s1");
+        server.disclosures().sessionClosed("s1");
 
         WasmRmiServerEngineTest.FakeSession reconnected = browserSession("s2", "browser-A");
 
-        assertTrue(Disclosures.wasDisclosedTo(reconnected, handle),
+        assertTrue(server.disclosures().wasDisclosedToSession(reconnected, handle),
                 "keying the record by connection would make this false and break reconnection");
         engine.handleResync(List.of(handle), reconnected);
         assertEquals(1, frames(reconnected), "the reconnected client gets its objects back");
@@ -183,7 +192,7 @@ public class HandleDisclosureTest {
         engine.syncEngine.notifyChanged(doc, Scope.SESSION, "s1");
 
         WasmRmiServerEngineTest.FakeSession other = browserSession("s2", "browser-B");
-        assertFalse(Disclosures.wasDisclosedTo(other, handle));
+        assertFalse(server.disclosures().wasDisclosedToSession(other, handle));
         engine.handleResync(List.of(handle), other);
         assertEquals(0, frames(other));
     }
@@ -215,17 +224,17 @@ public class HandleDisclosureTest {
 
         WasmRmiServerEngineTest.FakeSession headless =
                 new WasmRmiServerEngineTest.FakeSession("s-headless");
-        Disclosures.sessionOpened(headless);
+        server.disclosures().sessionOpened(headless);
         engine.syncEngine.addSession(headless);
         engine.syncEngine.notifyChanged(doc, Scope.SESSION, "s-headless");
 
-        assertTrue(Disclosures.wasDisclosedTo(headless, handle),
+        assertTrue(server.disclosures().wasDisclosedToSession(headless, handle),
                 "it still works within one connection");
 
         WasmRmiServerEngineTest.FakeSession afterReconnect =
                 new WasmRmiServerEngineTest.FakeSession("s-headless-2");
-        Disclosures.sessionOpened(afterReconnect);
-        assertFalse(Disclosures.wasDisclosedTo(afterReconnect, handle),
+        server.disclosures().sessionOpened(afterReconnect);
+        assertFalse(server.disclosures().wasDisclosedToSession(afterReconnect, handle),
                 "and such a client re-fetches after a reconnect instead of re-syncing, which is the "
                         + "documented trade for having no cookie");
     }
@@ -235,15 +244,15 @@ public class HandleDisclosureTest {
     public void theRecordIsBounded() {
         System.setProperty(Disclosures.MAX_PER_CLIENT_PROPERTY, "5");
         try {
-            Disclosures.resetForTesting();
+            server.disclosures().clear();
             WasmRmiServerEngineTest.FakeSession session = browserSession("s1", "browser-cap");
             for (int i = 0; i < 50; i++) {
-                Disclosures.record("s1", "handle-" + i);
+                server.disclosures().record("s1", "handle-" + i);
             }
-            assertEquals(5, Disclosures.disclosedCount(session),
+            assertEquals(5, server.disclosures().disclosedCount(session),
                     "an unbounded record would grow for the life of the process");
-            assertTrue(Disclosures.wasDisclosedTo(session, "handle-49"), "the newest survive");
-            assertFalse(Disclosures.wasDisclosedTo(session, "handle-0"), "the oldest are dropped");
+            assertTrue(server.disclosures().wasDisclosedToSession(session, "handle-49"), "the newest survive");
+            assertFalse(server.disclosures().wasDisclosedToSession(session, "handle-0"), "the oldest are dropped");
         } finally {
             System.clearProperty(Disclosures.MAX_PER_CLIENT_PROPERTY);
         }

@@ -91,13 +91,17 @@ public class MainLayout extends HorizontalLayout {
 
         List<String> actions = Arrays.asList("btn", "link", "swap", "theme-controller");
         List<String> dataInput = Arrays.asList("checkbox", "file-input", "file-upload", "radio", "range", "rating", "select", "textarea", "input", "toggle");
-        List<String> dataDisplay = Arrays.asList("accordion", "alert", "avatar", "badge", "card", "carousel", "chat-bubble", "collapse", "countdown", "diff", "kbd", "loading", "progress", "radial-progress", "skeleton", "stat", "table", "timeline", "tooltip");
-        List<String> navigation = Arrays.asList("btm-nav", "breadcrumbs", "navbar", "pagination", "steps", "tab");
+        List<String> dataDisplay = Arrays.asList("accordion", "alert", "avatar", "badge", "card", "carousel", "chat-bubble", "collapse", "countdown", "diff", "kbd", "loading", "progress", "radial-progress", "skeleton", "stat", "table", "timeline", "tooltip", "type-scale");
+        List<String> navigation = Arrays.asList("btm-nav", "breadcrumbs", "menu", "navbar", "pagination", "steps", "tab");
         List<String> layout = Arrays.asList("artboard", "divider", "drawer", "footer", "hero", "indicator", "join", "stack");
         List<String> mockup = Arrays.asList("mockup-browser", "mockup-code", "mockup-phone", "mockup-window");
         List<String> feedback = Arrays.asList("dialog", "toast");
         List<String> charts = Arrays.asList("time-series", "rolling-chart", "gauge", "bar-gauge", "bar-chart", "heatmap", "state-timeline", "status-history", "donut", "histogram", "scatter", "treemap", "sparkline", "kpi-tile");
         List<String> dashboard = Arrays.asList("panel-frame", "time-range", "refresh-control", "metric-table", "log-viewer", "color-scale", "status-dot", "token-meter", "lane-timeline", "property-grid", "virtual-scroller", "svg-canvas");
+        // The hard pages. A component drawn on its own proves it renders; these ask whether it
+        // can still be used inside something else, while data moves, in a language with long
+        // words, in a window the width of a telephone.
+        List<String> underPressure = Arrays.asList("composition", "four-states", "hard-form", "moving-list", "long-text", "narrow");
 
         uiComponentsSubMenu.addSubMenu("Charts", createCategoryMenu(charts, currentComponentSignal, currentViewSignal));
         // "Dashboard Panels", not "Dashboard" — the top-level menu already has a Dashboard view,
@@ -112,6 +116,10 @@ public class MainLayout extends HorizontalLayout {
         uiComponentsSubMenu.addSubMenu("Mockups", createCategoryMenu(mockup, currentComponentSignal, currentViewSignal));
 
         menu.addSubMenu("UI Components", uiComponentsSubMenu);
+
+        Menu underPressureMenu = createCategoryMenu(underPressure, currentComponentSignal, currentViewSignal);
+        underPressureMenu.setAccordion(true);
+        menu.addSubMenu("Under pressure", underPressureMenu);
 
         if (RmiSecurityContext.hasAnyRole("admin")) {
             menu.addItem("Admin", e -> currentViewSignal.set(ViewType.ADMIN));
@@ -152,26 +160,31 @@ public class MainLayout extends HorizontalLayout {
         contentArea.addClassName("p-8");
         contentArea.addClassName("overflow-y-auto");
 
-        // Reactively switch content based on currentViewSignal
+        // Reactively switch content based on currentViewSignal.
+        //
+        // replaceContents, never setInnerHTML(""). Emptying the element by hand took the old page
+        // off the screen without telling it, so its timers and effects kept running and kept
+        // rebuilding it underneath whoever had moved on - which threw the keyboard back to the
+        // page body every couple of seconds. replaceContents runs onDetach on the page being left
+        // and on everything inside it.
         Effect.create(() -> {
-            contentArea.getElement().setInnerHTML(""); // clear
             ViewType view = currentViewSignal.get();
             if (view == ViewType.DASHBOARD) {
-                contentArea.add(dashboardView);
-
+                contentArea.replaceContents(dashboardView);
             } else if (view == ViewType.SHOWCASE) {
-                contentArea.add(showcaseView);
+                contentArea.replaceContents(showcaseView);
             } else if (view == ViewType.ADMIN) {
-                contentArea.add(adminView);
+                contentArea.replaceContents(adminView);
             } else if (view == ViewType.PROFILE) {
-                contentArea.add(profileView);
+                contentArea.replaceContents(profileView);
             } else if (view == ViewType.HTML_EXAMPLE) {
-                contentArea.add(htmlExampleView);
+                contentArea.replaceContents(htmlExampleView);
             } else if (view == ViewType.UI_COMPONENTS) {
                 Component showcase = ShowcaseRegistry.createShowcase(currentComponentSignal.get());
-                if (showcase != null) {
-                    contentArea.add(showcase);
-                }
+                contentArea.replaceContents(showcase == null ? new Component[0]
+                        : new Component[] { showcase });
+            } else {
+                contentArea.replaceContents();
             }
         });
 

@@ -4,10 +4,19 @@
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
         <title>zeroz4j scoped signals</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = { corePlugins: { preflight: false } }
-        </script>
+        <!--
+            The stylesheet. ZeroZ Stack ships no CSS of its own: its components wear Tailwind and
+            daisyUI class names, and the page they land on is what supplies those. These two lines
+            are that supply, and they are pinned to exact versions so an example cannot change
+            appearance on its own overnight.
+
+            Tailwind is doing its work here in the browser, as the page loads. That is the right
+            trade for an example — nothing to install, nothing to build, one file to copy — and the
+            wrong one for an application you ship, where you install Tailwind and build one finished
+            stylesheet so that visitors download CSS instead of a compiler. See "Where the styles
+            come from" in docs/UI_COMPONENTS.md.
+        -->
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.16"></script>
         <link href="https://cdn.jsdelivr.net/npm/daisyui@5.6.14/daisyui.css" rel="stylesheet" type="text/css" />
     </head>
     <body class="bg-base-100 min-h-screen m-0 p-0 text-base-content" data-theme="dark">

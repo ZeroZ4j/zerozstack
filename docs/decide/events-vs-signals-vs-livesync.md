@@ -184,7 +184,7 @@ sub.dispose();
 ```
 
 **Limits.** Delivery is at-most-once: a disconnected client misses events, and there is no queueing,
-acknowledgement or redelivery. Late subscribers receive nothing. Payloads must be `@DataModel` or a
+acknowledgment or redelivery. Late subscribers receive nothing. Payloads must be `@DataModel` or a
 built-in serializable type, and a payload that is not serializable **fails silently** — the
 exception is caught per session and logged on the server.
 
@@ -297,11 +297,13 @@ profile.setMission("Ship it");
 
 The client's instance is an APT-generated `TeamProfile_Live` subclass whose setters report changes.
 
-!!! note "One frame per setter, today"
-    The mutation path is designed to coalesce a burst of setter calls into a single frame, but the
-    coalescing only engages when a platform scheduler is installed — and nothing in the framework
-    currently installs one. In the present build each setter call flushes immediately, so a five-field
-    edit sends five whole-object mutation frames. Batch your own edits if that matters.
+!!! note "A burst of edits is one frame (0.8.0+)"
+    A change is not sent the moment a setter returns. It waits for the changes to stop for 150 ms,
+    or for 1000 ms whatever happens, whichever comes first — so a five-field edit, or a sentence
+    typed into a field, sends one frame rather than one per setter call. Anything else this client
+    sends afterwards, such as a service call, goes out behind the waiting edit. Change the two
+    numbers with `LiveMutations.configure(pauseMillis, ceilingMillis)`; a pause of `0` sends every
+    setter call at once, as before 0.8.0.
 
 The server stays authoritative and every
 mutation passes three gates: the class must be `@ClientWritable`, the session must hold a declared

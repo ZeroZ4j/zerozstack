@@ -40,6 +40,13 @@ import java.util.logging.Logger;
  * against that recipient, and a request to re-read an object is answered only when the record says
  * the object was sent there.</p>
  *
+ * <h2>One record per server (0.8.0)</h2>
+ *
+ * <p>The record used to live in {@code static} fields, which meant two servers in one process shared
+ * one record: an object server A sent could be read back from server B. Each server now owns its
+ * own, reached through {@link ServerRuntime#disclosures()}. The public question below still takes
+ * only a connection, because a connection knows which server it belongs to.</p>
+ *
  * <h2>Keyed by browser, not by connection</h2>
  *
  * <p>The record is kept under the connection's <b>browser id</b> — the signed identifier the server
@@ -63,7 +70,8 @@ import java.util.logging.Logger;
  * <p>Dropping a record is safe in the same way a server restart is: the client is told nothing was
  * found and re-fetches the objects the way it first obtained them.</p>
  *
- * <p>Framework-internal state, with one public question: {@link #wasDisclosedTo(Session, String)}.</p>
+ * <p>Framework-internal state, with one public question:
+ * {@link #wasDisclosedTo(Session, String)}.</p>
  */
 public final class Disclosures {
 
@@ -74,26 +82,35 @@ public final class Disclosures {
     /** How long a browser's record survives with no activity. */
     static final int DEFAULT_IDLE_HOURS = 24;
 
-    static final String MAX_PER_CLIENT_PROPERTY = "zeroz.disclosure.maxHandlesPerClient";
-    static final String IDLE_HOURS_PROPERTY = "zeroz.disclosure.idleHours";
+    static final String MAX_PER_CLIENT_PROPERTY = ServerSettings.DISCLOSURE_MAX_HANDLES_PER_CLIENT;
+    static final String IDLE_HOURS_PROPERTY = ServerSettings.DISCLOSURE_IDLE_HOURS;
+
+    /**
+     * The one hook the serializer offers is a single slot for the whole process, so the recorder
+     * installed in it must not belong to any one server. This one belongs to none: it looks up the
+     * server that is being written to right now and records against that server's own ledger.
+     */
+    private static final AtomicBoolean RECORDER_INSTALLED = new AtomicBoolean();
+
+    private final ServerRuntime runtime;
 
     /** WebSocket session id -> the ledger key its writes are recorded under. */
-    private static final Map<String, String> KEY_BY_SESSION = new ConcurrentHashMap<>();
+    private final Map<String, String> keyBySession = new ConcurrentHashMap<>();
 
     /** Ledger key (browser id, or a session-id fallback) -> what was sent there. */
-    private static final Map<String, Record> LEDGER = new ConcurrentHashMap<>();
+    private final Map<String, Record> ledger = new ConcurrentHashMap<>();
 
-    private static final AtomicBoolean FALLBACK_LOGGED = new AtomicBoolean();
-    private static final AtomicBoolean INSTALLED = new AtomicBoolean();
+    private final AtomicBoolean fallbackLogged = new AtomicBoolean();
 
     /** When the ledger was last swept for expired browsers. */
-    private static final java.util.concurrent.atomic.AtomicLong LAST_PRUNE =
+    private final java.util.concurrent.atomic.AtomicLong lastPrune =
             new java.util.concurrent.atomic.AtomicLong();
 
     /** Shortest gap between two sweeps. Recording happens per object written, sweeping need not. */
     private static final long PRUNE_INTERVAL_MILLIS = 60_000L;
 
-    private Disclosures() {
+    Disclosures(ServerRuntime runtime) {
+        this.runtime = runtime;
     }
 
     /** One browser's record: what it was sent, and when it was last active. */
@@ -134,41 +151,42 @@ public final class Disclosures {
     }
 
     /**
-     * Starts recording. Idempotent, and safe to call from anywhere that might run first.
+     * Starts recording, for every server in this process. Idempotent.
      *
-     * <p>Recording rides on the bracket the engine already puts around every write to a session
-     * ({@link LazyHandles#setCurrentSession(String)}), so no write site has to know this class
-     * exists.</p>
+     * <p>Recording rides on the bracket the engine already puts around every write to a connection
+     * ({@code LazyHandles}), so no write site has to know this class exists — and that bracket names
+     * the server as well as the connection, which is how a handle lands in the right server's
+     * ledger.</p>
      */
     public static void install() {
-        if (INSTALLED.compareAndSet(false, true)) {
+        if (RECORDER_INSTALLED.compareAndSet(false, true)) {
             ObjectMapper.setDisclosureRecorder(Disclosures::recordForCurrentWrite);
         }
     }
 
     /**
-     * Notes which browser a session belongs to, so its writes land in the right record.
+     * Notes which browser a connection belongs to, so its writes land in the right record.
      *
      * @param session a connection that has just opened
      */
-    public static void sessionOpened(Session session) {
+    public void sessionOpened(Session session) {
         if (session == null) {
             return;
         }
         install();
-        KEY_BY_SESSION.put(session.getId(), keyFor(session));
+        keyBySession.put(session.getId(), keyFor(session));
     }
 
     /**
-     * Forgets the session-to-browser mapping. The browser's record is deliberately kept: the whole
-     * point of keying by browser is that the next connection can still re-read what this one was
-     * sent.
+     * Forgets the connection-to-browser mapping. The browser's record is deliberately kept: the
+     * whole point of keying by browser is that the next connection can still re-read what this one
+     * was sent.
      *
      * @param sessionId the connection that closed
      */
-    public static void sessionClosed(String sessionId) {
+    public void sessionClosed(String sessionId) {
         if (sessionId != null) {
-            KEY_BY_SESSION.remove(sessionId);
+            keyBySession.remove(sessionId);
         }
     }
 
@@ -181,11 +199,29 @@ public final class Disclosures {
      * dropped; in both cases the correct response is to act as though the handle is unknown, not to
      * report an error.</p>
      *
+     * <p>Asked of the server the connection belongs to, so an object one server sent is not readable
+     * from another server running beside it.</p>
+     *
+     * @param session  the connection presenting the handle
+     * @param handleId the handle it presented
+     * @return true when this browser was sent that object and the record still holds it
+     * @throws IllegalStateException when the connection belongs to no running server
+     */
+    public static boolean wasDisclosedTo(Session session, String handleId) {
+        if (session == null || handleId == null) {
+            return false;
+        }
+        return ServerRuntime.of(session).disclosures().wasDisclosedToSession(session, handleId);
+    }
+
+    /**
+     * The same question, asked of this one server.
+     *
      * @param session  the connection presenting the handle
      * @param handleId the handle it presented
      * @return true when this browser was sent that object and the record still holds it
      */
-    public static boolean wasDisclosedTo(Session session, String handleId) {
+    public boolean wasDisclosedToSession(Session session, String handleId) {
         if (session == null || handleId == null) {
             return false;
         }
@@ -206,7 +242,7 @@ public final class Disclosures {
      * @param handleId  the handle the client presented
      * @return true when this browser was sent that object and the record still holds it
      */
-    public static boolean wasDisclosedTo(String clientId, String sessionId, String handleId) {
+    public boolean wasDisclosedTo(String clientId, String sessionId, String handleId) {
         if (handleId == null) {
             return false;
         }
@@ -215,74 +251,79 @@ public final class Disclosures {
             return false;
         }
         pruneExpired();
-        Record record = LEDGER.get(key);
+        Record record = ledger.get(key);
         return record != null && record.contains(handleId);
     }
 
     /**
-     * Records a handle as sent to a session. Called by the recorder; exposed for tests and for
-     * bindings that write outside the engine's own brackets.
+     * Records a handle as sent to a connection.
      *
      * @param sessionId the recipient connection
      * @param handleId  the handle written toward it
      */
-    public static void record(String sessionId, String handleId) {
+    public void record(String sessionId, String handleId) {
         if (sessionId == null || handleId == null) {
             return;
         }
         pruneExpired();
-        String key = KEY_BY_SESSION.get(sessionId);
+        String key = keyBySession.get(sessionId);
         if (key == null) {
-            // A write for a session that never came through onOpen: record under the session id, so
-            // the disclosure is at least remembered for this connection's lifetime.
+            // A write for a connection that never came through onOpen: record under the connection
+            // id, so the disclosure is at least remembered for this connection's lifetime.
             key = sessionId;
         }
-        LEDGER.computeIfAbsent(key, k -> new Record(maxPerClient())).add(handleId);
+        final int max = maxPerClient();
+        ledger.computeIfAbsent(key, k -> new Record(max)).add(handleId);
     }
 
     /**
      * @param session a connection
      * @return how many handles that connection's browser is currently remembered as holding
      */
-    public static int disclosedCount(Session session) {
-        Record record = session == null ? null : LEDGER.get(keyFor(session));
+    public int disclosedCount(Session session) {
+        Record record = session == null ? null : ledger.get(keyFor(session));
         return record == null ? 0 : record.size();
     }
 
-    /** Clears every record. Test support only. */
-    public static void resetForTesting() {
-        KEY_BY_SESSION.clear();
-        LEDGER.clear();
-        FALLBACK_LOGGED.set(false);
-        LAST_PRUNE.set(0L);
+    /** Empties this server's record. */
+    public void clear() {
+        keyBySession.clear();
+        ledger.clear();
+        fallbackLogged.set(false);
+        lastPrune.set(0L);
     }
 
     // ------------------------------------------------------------------ internals
 
+    /**
+     * Records a handle against the server currently being written to.
+     *
+     * <p>The write bracket names both the server and the connection. Outside a write there is
+     * neither, which means the handle is not being disclosed to anybody — a serializability probe,
+     * or a server-side copy — so there is nothing to remember.</p>
+     */
     private static void recordForCurrentWrite(String handleId) {
-        String sessionId = LazyHandles.currentSession();
-        if (sessionId == null) {
-            // Not a write toward a client: a serializability probe, or a server-side copy. Nothing
-            // was disclosed to anybody, so there is nothing to remember.
+        LazyHandles.Write write = LazyHandles.currentWrite();
+        if (write == null) {
             return;
         }
-        record(sessionId, handleId);
+        write.runtime().disclosures().record(write.sessionId(), handleId);
     }
 
     /**
-     * The browser id this session carries, or its session id when it carries none.
+     * The browser id this connection carries, or its connection id when it carries none.
      */
-    private static String keyFor(Session session) {
+    private String keyFor(Session session) {
         return keyFor((String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY),
                 session.getId());
     }
 
     /** The ledger key for an identity: the browser id when there is one, else the connection id. */
-    private static String keyFor(String clientId, String sessionId) {
+    private String keyFor(String clientId, String sessionId) {
         if (clientId != null && !clientId.isEmpty()) {
             return clientId;
         }
-        if (FALLBACK_LOGGED.compareAndSet(false, true)) {
+        if (fallbackLogged.compareAndSet(false, true)) {
             LOG.info("[zeroz4j] A connection carries no browser id, so what was sent to it is "
                     + "remembered per connection instead. Such a client re-fetches its objects after "
                     + "a reconnect rather than re-syncing them. Browsers always carry one; this "
@@ -297,38 +338,28 @@ public final class Disclosures {
      * <p>Called from the recording path, which runs once per object written, so it sweeps at most
      * once a minute rather than walking the ledger on every object of every frame.</p>
      */
-    private static void pruneExpired() {
-        if (LEDGER.isEmpty()) {
+    private void pruneExpired() {
+        if (ledger.isEmpty()) {
             return;
         }
         long now = System.currentTimeMillis();
-        long last = LAST_PRUNE.get();
-        if (now - last < PRUNE_INTERVAL_MILLIS || !LAST_PRUNE.compareAndSet(last, now)) {
+        long last = lastPrune.get();
+        if (now - last < PRUNE_INTERVAL_MILLIS || !lastPrune.compareAndSet(last, now)) {
             return;
         }
         long cutoff = now - idleMillis();
-        LEDGER.entrySet().removeIf(entry -> entry.getValue().lastTouchedMillis < cutoff);
+        ledger.entrySet().removeIf(entry -> entry.getValue().lastTouchedMillis < cutoff);
     }
 
-    private static int maxPerClient() {
-        return positiveIntProperty(MAX_PER_CLIENT_PROPERTY, DEFAULT_MAX_PER_CLIENT);
+    private int maxPerClient() {
+        return config().positiveInt(MAX_PER_CLIENT_PROPERTY, DEFAULT_MAX_PER_CLIENT);
     }
 
-    private static long idleMillis() {
-        return positiveIntProperty(IDLE_HOURS_PROPERTY, DEFAULT_IDLE_HOURS) * 60L * 60L * 1000L;
+    private long idleMillis() {
+        return config().positiveInt(IDLE_HOURS_PROPERTY, DEFAULT_IDLE_HOURS) * 60L * 60L * 1000L;
     }
 
-    private static int positiveIntProperty(String name, int fallback) {
-        String configured = System.getProperty(name);
-        if (configured == null || configured.trim().isEmpty()) {
-            return fallback;
-        }
-        try {
-            int value = Integer.parseInt(configured.trim());
-            return value > 0 ? value : fallback;
-        } catch (NumberFormatException ex) {
-            LOG.warning("[zeroz4j] Ignoring non-numeric " + name + "='" + configured + "'.");
-            return fallback;
-        }
+    private ServerConfig config() {
+        return runtime != null ? runtime.config() : ServerConfig.fromSystemProperties();
     }
 }

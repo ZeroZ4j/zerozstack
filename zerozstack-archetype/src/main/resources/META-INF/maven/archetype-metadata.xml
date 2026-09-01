@@ -10,11 +10,15 @@
     </requiredProperty>
   </requiredProperties>
   <fileSets>
-    <!-- Filtered so ${package} and ${rootArtifactId} resolve inside the Dockerfile. -->
+    <!-- Filtered so ${package}, ${rootArtifactId} and ${zeroz4jVersion} resolve. AGENTS.md is
+         filtered for the version above all: a generated project's instructions to an AI coding
+         assistant are worth little unless they name the framework version that project actually
+         resolves, since the published documentation runs ahead of released versions. -->
     <fileSet filtered="true" packaged="false">
       <directory></directory>
       <includes>
         <include>Dockerfile</include>
+        <include>AGENTS.md</include>
       </includes>
     </fileSet>
   </fileSets>

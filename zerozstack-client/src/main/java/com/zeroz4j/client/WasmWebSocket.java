@@ -105,7 +105,7 @@ public class WasmWebSocket {
     @JSBody(params = { "ws" }, script =
         "try {" +
         "  if (ws.readyState === 0 || ws.readyState === 1) { ws.close(1000, 'Client closed'); }" +
-        "} catch (e) { }"
+        "} catch (ignored) { }"
     )
     private static native void closeSocket(JSObject ws);
 

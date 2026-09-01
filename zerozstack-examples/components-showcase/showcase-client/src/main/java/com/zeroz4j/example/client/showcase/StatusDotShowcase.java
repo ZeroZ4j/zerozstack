@@ -20,6 +20,7 @@ package com.zeroz4j.example.client.showcase;
 import com.zeroz4j.ui.component.StatusDot;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.TextStyle;
 
 public class StatusDotShowcase extends ComponentShowcase {
 
@@ -42,7 +43,10 @@ public class StatusDotShowcase extends ComponentShowcase {
         addSection("Waiting",
             labelled("PENDING"), labelled("READY"), labelled("INTAKE"), labelled("SOMETHING_ELSE"));
 
-        addSection("The colour and the words are separate - hover each of these",
+        addSection("Given only a state, the dot writes the hover text itself - hover these",
+            labelled("DESIGN_REVIEW"), labelled("FINAL_INTEGRATION"), labelled("TEST_AUTHORING"));
+
+        addSection("Better still, give it the words - hover each of these",
             described("DISPATCHED", "Sent to a worker"),
             described("EXECUTING", "Working on it now"),
             described("SUPERSEDED", "Replaced by a newer attempt"),
@@ -53,8 +57,7 @@ public class StatusDotShowcase extends ComponentShowcase {
     private Div described(String state, String label) {
         Div row = new Div();
         row.addClassName("flex items-center gap-2");
-        Span caption = new Span(label);
-        caption.addClassName("text-xs text-base-content/70");
+        Span caption = TextStyle.CAPTION.span(label);
         row.add(new StatusDot(state, label), caption);
         return row;
     }
@@ -62,8 +65,8 @@ public class StatusDotShowcase extends ComponentShowcase {
     private Div labelled(String state) {
         Div row = new Div();
         row.addClassName("flex items-center gap-2");
-        Span caption = new Span(state);
-        caption.addClassName("font-mono text-xs text-base-content/70");
+        Span caption = TextStyle.CAPTION.span(state);
+        caption.addClassName("font-mono");
         row.add(new StatusDot(state), caption);
         return row;
     }

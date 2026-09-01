@@ -17,84 +17,106 @@
  */
 package com.zeroz4j.example.client.showcase;
 
-import com.zeroz4j.ui.component.*;
-import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
+import com.zeroz4j.ui.component.Component;
+import com.zeroz4j.ui.component.Footer;
+import com.zeroz4j.ui.component.Link;
+import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.layout.Span;
 
+/**
+ * A footer is mostly links, so this page is mostly about links having somewhere to go. Every one
+ * here does; a link with no destination cannot be reached with the keyboard at all.
+ */
 public class FooterShowcase extends ComponentShowcase {
+
+    private static final String HERE = "#footer-showcase";
 
     public FooterShowcase() {
         super();
+        setId("footer-showcase");
         addTitle("Footer");
-        addDescription("Footer is a container for links, copyright notices, and website maps at the bottom of pages.");
+        addDescription("The strip at the bottom of a page: columns of links, a legal line, and "
+                + "sometimes a language chooser. Long names in several languages are in here on "
+                + "purpose.");
 
-        // Section 1: Standard Footer
-        Footer standardFooter = new Footer();
-        standardFooter.addClassName("p-10");
-        standardFooter.addClassName("bg-neutral");
-        standardFooter.addClassName("text-neutral-content");
-        standardFooter.addClassName("rounded-box");
+        addWhatToCheck("Try this",
+                "Tab through the whole footer. Every link takes its turn, in reading order.",
+                "Make the window narrow. The columns stack; nothing runs off the side.",
+                "The German and Japanese entries are longer than the column they sit in. They may "
+                        + "wrap, but they must stay inside their column.",
+                "Broken looks like: a link Tab walks past, or a column pushing the page sideways.");
 
-        // Column 1
-        Div col1 = new Div();
-        col1.addClassName("flex");
-        col1.addClassName("flex-col");
-        col1.addClassName("gap-2");
-        
-        Div header1 = new Div("Services");
-        header1.addClassName("footer-title");
-        
-        Link link1 = new Link();
-        link1.setText("Branding");
-        link1.addClassName("link-hover");
-        
-        Link link2 = new Link();
-        link2.setText("Design");
-        link2.addClassName("link-hover");
-        
-        col1.add(header1, link1, link2);
+        addSection("Three columns of links", threeColumns());
+        addSection("A footer with a legal line under it", withLegalLine());
+        addSection("Long names in several languages", longNames());
+    }
 
-        // Column 2
-        Div col2 = new Div();
-        col2.addClassName("flex");
-        col2.addClassName("flex-col");
-        col2.addClassName("gap-2");
-        
-        Div header2 = new Div("Company");
-        header2.addClassName("footer-title");
-        
-        Link link3 = new Link();
-        link3.setText("About us");
-        link3.addClassName("link-hover");
-        
-        Link link4 = new Link();
-        link4.setText("Contact");
-        link4.addClassName("link-hover");
-        
-        col2.add(header2, link3, link4);
+    // ------------------------------------------------------------------ sections
 
-        // Column 3
-        Div col3 = new Div();
-        col3.addClassName("flex");
-        col3.addClassName("flex-col");
-        col3.addClassName("gap-2");
-        
-        Div header3 = new Div("Legal");
-        header3.addClassName("footer-title");
-        
-        Link link5 = new Link();
-        link5.setText("Terms of use");
-        link5.addClassName("link-hover");
-        
-        Link link6 = new Link();
-        link6.setText("Privacy policy");
-        link6.addClassName("link-hover");
-        
-        col3.add(header3, link5, link6);
+    private static Component threeColumns() {
+        Footer footer = new Footer();
+        footer.setId("footer-columns");
+        footer.addClassName("p-10 bg-neutral text-neutral-content rounded-box w-full "
+                + "grid grid-cols-1 sm:grid-cols-3 gap-8");
+        footer.add(
+                column("Services", link("Branding"), link("Design"), link("Marketing"),
+                        link("Advertisement")),
+                column("Company", link("About us"), link("Contact"), link("Jobs"),
+                        link("Press kit")),
+                column("Legal", link("Terms of use"), link("Privacy policy"),
+                        link("Cookie policy"), link("Imprint")));
+        return footer;
+    }
 
-        standardFooter.add(col1, col2, col3);
+    private static Component withLegalLine() {
+        Footer footer = new Footer();
+        footer.setId("footer-legal");
+        footer.addClassName("p-6 bg-base-200 rounded-box w-full flex flex-col gap-4");
 
-        addSection("Standard Footer with Columns", standardFooter);
+        Div row = new Div();
+        row.addClassName("flex flex-wrap gap-6");
+        row.add(column("Product", link("What it does"), link("Prices"), link("What changed")),
+                column("Help", link("Handbook"), link("Ask a question")));
+
+        Span legal = new Span("Copyright 2026 ZeroZ. All rights reserved.");
+        legal.addClassName("text-sm text-base-content/60");
+
+        footer.add(row, legal);
+        return footer;
+    }
+
+    private static Component longNames() {
+        Footer footer = new Footer();
+        footer.setId("footer-long");
+        footer.addClassName("p-6 bg-base-200 rounded-box w-full grid grid-cols-1 sm:grid-cols-2 gap-6");
+        footer.add(
+                column("Deutsch",
+                        link("Allgemeine Geschäftsbedingungen"),
+                        link("Datenschutzerklärung"),
+                        link("Widerrufsbelehrung für Verbraucherinnen und Verbraucher")),
+                column("日本語",
+                        link("利用規約"),
+                        link("個人情報の取り扱いについて"),
+                        link("特定商取引法に基づく表記")));
+        return footer;
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private static Component column(String heading, Component... links) {
+        Div column = new Div();
+        column.addClassName("flex flex-col gap-2 min-w-0");
+        Span title = new Span(heading);
+        title.addClassName("footer-title opacity-70");
+        column.add(title);
+        column.add(links);
+        return column;
+    }
+
+    /** Every link made here has a destination, because a link without one is not focusable. */
+    private static Link link(String text) {
+        Link link = new Link(text, HERE);
+        link.addClassName("link-hover break-words");
+        return link;
     }
 }

@@ -33,4 +33,4 @@ cd zerozstack-examples/form-signup/form-signup-server
 mvn exec:java -Dexec.mainClass="com.zeroz4j.example.server.ExampleServer"
 ```
 
-Open `http://localhost:8080` in your browser to test live signup validation and registration.
+Open `http://localhost:8088` in your browser to test live signup validation and registration.

@@ -18,6 +18,8 @@
 package com.zeroz4j.ui.chart;
 
 import com.zeroz4j.ui.layout.Div;
+import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -169,7 +171,7 @@ public final class StateTimeline extends CartesianChart {
         for (int r = 0; r < rows.size(); r++) {
             Row row = rows.get(r);
             double top = plotTop() + r * (rowHeight + rowGap);
-            add(text(marginLeft - 8, top + rowHeight / 2.0, row.label(), "end", 10, 0.65));
+            add(text(PlotText.LABEL, marginLeft - 8, top + rowHeight / 2.0, row.label(), "end"));
 
             // The lane's own background, so a gap in coverage is visibly a gap.
             Element lane = rect(plotLeft(), top, plotWidth(), rowHeight, Palette.BASE_300);
@@ -192,10 +194,12 @@ public final class StateTimeline extends CartesianChart {
                 hits.add(new Hit(left, top, bandWidth, rowHeight, r, band));
 
                 if (bandLabels && bandWidth > (band.state().length() * 6.4 + 12)) {
-                    Element caption = text(left + bandWidth / 2, top + rowHeight / 2.0,
-                        band.state(), "middle", 9, 1);
+                    // Full strength on purpose: these words sit on a filled block of their
+                    // own colour, so fading them against the plot behind would fade them against
+                    // something they are not on.
+                    Element caption = text(PlotText.CAPTION, Emphasis.FULL,
+                        left + bandWidth / 2, top + rowHeight / 2.0, band.state(), "middle");
                     caption.setAttribute("fill", Palette.BASE_100);
-                    caption.setAttribute("fill-opacity", "0.9");
                     add(caption);
                 }
             }
@@ -234,9 +238,9 @@ public final class StateTimeline extends CartesianChart {
         header.add(swatch, name);
 
         Div span = new Div(Scales.timestamp(band.from()) + " → " + Scales.timestamp(band.to()));
-        span.addClassName("font-mono text-[10px] text-base-content/50");
+        span.addClassName("font-mono " + TextStyle.CAPTION.getClassNames());
         Div held = new Div("held for " + Scales.duration(band.to() - band.from()));
-        held.addClassName("text-base-content/70");
+        held.addClassName(TextStyle.CAPTION.getClassNames());
 
         content.add(header, span, held);
         return content;

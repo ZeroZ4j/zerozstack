@@ -18,33 +18,71 @@
 package com.zeroz4j.ui.component;
 
 import com.zeroz4j.ui.component.Component;
+import java.util.ArrayList;
 import org.teavm.jso.dom.html.HTMLElement;
 
 /**
  * A component that can contain other components.
+ *
+ * <p>Adding and removing through these methods is what gives the things inside a lifecycle:
+ * {@link Component#onAttach()} when they go in, {@link Component#onDetach()} when they come out,
+ * and the same for everything nested inside them. Appending an element straight to
+ * {@code getElement()} skips all of that.</p>
  */
 public interface HasComponents {
-    
+
     Component getComponent();
-    
+
+    /** Puts each component in, at the end, and starts it. */
     default void add(Component... components) {
+        Component self = getComponent();
         for (Component c : components) {
-            getComponent().getElement().appendChild(c.getOuterElement());
-            c.onAttach();
+            self.getElement().appendChild(c.getOuterElement());
+            self.trackedChildren().add(c);
+            c.attach();
         }
     }
-    
+
+    /** Takes each component out and shuts it down, along with everything inside it. */
     default void remove(Component... components) {
+        Component self = getComponent();
         for (Component c : components) {
-            getComponent().getElement().removeChild(c.getOuterElement());
-            c.onDetach();
+            self.getElement().removeChild(c.getOuterElement());
+            self.trackedChildren().remove(c);
+            c.detach();
         }
     }
-    
+
+    /** Empties this container, shutting down everything that was in it. */
     default void removeAll() {
-        HTMLElement el = getComponent().getElement();
+        Component self = getComponent();
+        for (Component c : new ArrayList<>(self.trackedChildren())) {
+            c.detach();
+        }
+        self.trackedChildren().clear();
+        HTMLElement el = self.getElement();
         while (el.getLastChild() != null) {
             el.removeChild(el.getLastChild());
+        }
+    }
+
+    /**
+     * Empties this container and fills it with {@code newContents} instead.
+     *
+     * <p>This is the supported way to swap what is showing - a screen for another screen, a list
+     * for the rebuilt list. Use it instead of {@code getElement().setInnerHTML("")}: emptying an
+     * element by hand takes the old contents off the page without telling them, so their timers
+     * keep ticking, their effects keep firing and their subscriptions keep arriving, all
+     * rebuilding something nobody is looking at any more - and throwing the keyboard off whatever
+     * the person moved on to. Everything leaving gets its {@link Component#onDetach()}, nested
+     * parts included.</p>
+     *
+     * @param newContents what to show instead - none, one, or several
+     */
+    default void replaceContents(Component... newContents) {
+        removeAll();
+        if (newContents != null) {
+            add(newContents);
         }
     }
 }

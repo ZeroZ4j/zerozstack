@@ -180,14 +180,14 @@ public final class Gauge extends ChartBase {
         double innerDiameter = 2 * (radius - stroke / 2) * 0.92;
         double fontSize = Math.max(10, Math.min(radius * 0.40,
             innerDiameter / Math.max(1, reading.length() * 0.60)));
-        Element readingText = monoText(centreX, centreY - radius * 0.04, reading, "middle", fontSize, 1);
+        Element readingText = monoText(PlotText.FIGURE, fontSize,
+            centreX, centreY - radius * 0.04, reading, "middle");
         readingText.setAttribute("fill", known ? color : "currentColor");
-        readingText.setAttribute("font-weight", "700");
         add(readingText);
 
         if (label != null && !label.isEmpty()) {
-            add(text(centreX, centreY + radius * 0.34, label, "middle",
-                Math.max(9, radius * 0.15), 0.55));
+            add(text(PlotText.LABEL, Math.max(9, radius * 0.15),
+                centreX, centreY + radius * 0.34, label, "middle"));
         }
 
         if (showRange) {
@@ -195,8 +195,8 @@ public final class Gauge extends ChartBase {
             double labelRadius = radius * outerFactor + 2;
             double offsetX = labelRadius * 0.7071;
             double labelY = centreY + labelRadius * 0.7071 + 8;
-            add(monoText(centreX - offsetX, labelY, format.format(min), "middle", 9, 0.4));
-            add(monoText(centreX + offsetX, labelY, format.format(max), "middle", 9, 0.4));
+            add(monoText(PlotText.CAPTION, centreX - offsetX, labelY, format.format(min), "middle"));
+            add(monoText(PlotText.CAPTION, centreX + offsetX, labelY, format.format(max), "middle"));
         }
     }
 

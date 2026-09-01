@@ -122,6 +122,7 @@ public class DispatchHardeningTest {
 
     @WeldSetup
     public WeldInitiator weld = WeldInitiator.of(
+            ServerRuntime.class,
             WasmRmiServerEngine.class,
             SyncEngine.class,
             ObjectMapperProducer.class,
@@ -162,7 +163,7 @@ public class DispatchHardeningTest {
                     }
                 });
         engine.scanServiceRegistry();
-        WasmRmiServerEngine.clearKeepaliveBudgetForTesting();
+        engine.clearKeepaliveBudgetForTesting();
         HardeningServiceImpl.gate = new CountDownLatch(0);
         HardeningServiceImpl.inFlight.set(0);
         HardeningServiceImpl.highWaterMark.set(0);
@@ -177,6 +178,7 @@ public class DispatchHardeningTest {
             Logger.getLogger(WasmRmiServerEngine.class.getName()).removeHandler(logCapture);
         }
         engine.onClose(session);
+        System.clearProperty(WasmRmiServerEngine.MAX_QUEUED_FRAMES_PROPERTY);
         System.clearProperty(WasmRmiServerEngine.MAX_CONCURRENT_FRAMES_PROPERTY);
         System.clearProperty(WasmRmiServerEngine.PING_MIN_INTERVAL_PROPERTY);
     }
@@ -315,16 +317,16 @@ public class DispatchHardeningTest {
     // ---------------------------------------------------------------- in-flight bound
 
     @Test
-    @DisplayName("one connection can only have so many frames decoding at once")
+    @DisplayName("one connection can only have so many frames waiting, and handles one at a time")
     public void framesInFlightAreBoundedPerSession() throws Exception {
-        System.setProperty(WasmRmiServerEngine.MAX_CONCURRENT_FRAMES_PROPERTY, "4");
+        System.setProperty(WasmRmiServerEngine.MAX_QUEUED_FRAMES_PROPERTY, "4");
         WasmRmiServerEngineTest.FakeSession greedy = openSession("greedy", "mallory");
         WasmRmiServerEngineTest.FakeSession neighbour = openSession("neighbour", "bob");
         try {
             HardeningServiceImpl.gate = new CountDownLatch(1);
 
-            // Twenty frames pushed as fast as a client could write them. Each acquire blocks the
-            // pushing thread once the limit is reached, which is why this runs off the test thread.
+            // Twenty frames pushed as fast as a client could write them. Queueing blocks the
+            // pushing thread once the backlog is full, which is why this runs off the test thread.
             CountDownLatch pushed = new CountDownLatch(1);
             Thread pusher = new Thread(() -> {
                 for (int i = 0; i < 20; i++) {
@@ -338,11 +340,11 @@ public class DispatchHardeningTest {
 
             // Give the executor time to run everything it is allowed to run.
             Thread.sleep(300);
-            assertTrue(HardeningServiceImpl.highWaterMark.get() <= 4,
-                    "in flight at once: " + HardeningServiceImpl.highWaterMark.get()
-                            + " - unbounded concurrency multiplies the memory a single frame can "
-                            + "cost by however fast a client can write");
-            assertTrue(HardeningServiceImpl.highWaterMark.get() > 0, "work did start");
+            assertEquals(1, HardeningServiceImpl.highWaterMark.get(),
+                    "running at once: " + HardeningServiceImpl.highWaterMark.get()
+                            + " - one connection's frames are handled one at a time, in the order "
+                            + "they arrived, so that anything a browser sends after an edit is "
+                            + "decided on that edit");
 
             // A second connection is not affected by the first one's backlog.
             neighbour.basic.latch = new CountDownLatch(1);

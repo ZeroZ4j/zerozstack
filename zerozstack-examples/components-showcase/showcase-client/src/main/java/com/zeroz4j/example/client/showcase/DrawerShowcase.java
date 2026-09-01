@@ -19,97 +19,107 @@ package com.zeroz4j.example.client.showcase;
 
 import com.zeroz4j.ui.component.*;
 import com.zeroz4j.ui.layout.*;
-import com.zeroz4j.ui.theme.*;
-import com.zeroz4j.signals.*;
 
 public class DrawerShowcase extends ComponentShowcase {
 
-    private static class Label extends Component implements HasStyle, HasComponents, HasText {
-        public Label() {
-            super("label");
-        }
-        @Override
-        public Component getComponent() {
-            return this;
-        }
-    }
+    /** Counts every close, so the page shows that one close means one notification. */
+    private int closes;
 
     public DrawerShowcase() {
         super();
         addTitle("Drawer");
-        addDescription("Drawer is a grid layout that can show/hide a sidebar menu.");
+        addDescription("A drawer is a panel that slides in from the side of the window. It covers "
+                + "the page, dims it, and holds the keyboard until it is closed — Escape closes it, "
+                + "and so does clicking the dimmed page beside it.");
 
-        // Drawer Container
-        Drawer drawer = new Drawer();
-        drawer.addClassName("h-72");
-        drawer.addClassName("border");
-        drawer.addClassName("border-base-300");
-        drawer.addClassName("rounded-box");
-        drawer.addClassName("overflow-hidden");
+        Div log = new Div("Nothing closed yet.");
+        log.setId("drawer-close-log");
+        log.addClassName("text-sm text-base-content/70");
 
-        // Toggle Checkbox
-        Component toggle = new Component("input") {};
-        toggle.getElement().setAttribute("type", "checkbox");
-        toggle.getElement().setClassName("drawer-toggle");
-        toggle.getElement().setId("my-drawer-showcase");
+        addSection("Default", defaultDrawer(log));
+        addSection("A drawer that must be answered", mustAnswerDrawer(log));
+        addSection("A sidebar beside the page", sidebar());
+        addSection("Close events", log);
+    }
 
-        // Drawer Content
-        Div drawerContent = new Div();
-        drawerContent.addClassName("drawer-content");
-        drawerContent.addClassName("flex");
-        drawerContent.addClassName("flex-col");
-        drawerContent.addClassName("items-center");
-        drawerContent.addClassName("justify-center");
+    /**
+     * Everything here is the component's: the panel, the dim, the heading, the stacking and the
+     * keyboard. Before 0.8.0 an application had to build all of it out of a checkbox, three
+     * {@code div}s and a stacking number it picked itself.
+     */
+    private Component[] defaultDrawer(Div log) {
+        Drawer drawer = new Drawer("Navigation");
+        drawer.addClassName("h-72 border border-base-300 rounded-box overflow-hidden");
 
-        Label openButton = new Label();
-        openButton.addClassName("btn");
-        openButton.addClassName("btn-primary");
-        openButton.addClassName("drawer-button");
-        openButton.getElement().setAttribute("for", "my-drawer-showcase");
-        openButton.setText("Open drawer");
+        drawer.add(navItem("Dashboard"), navItem("Settings"));
 
-        drawerContent.add(new Span("Main Content Area"), openButton);
+        Button open = new Button("Open drawer");
+        open.addClassName("btn-primary");
+        open.addClickListener(e -> drawer.open());
 
-        // Drawer Side
-        Div drawerSide = new Div();
-        drawerSide.addClassName("drawer-side");
-        drawerSide.addClassName("z-[2]");
+        Div page = new Div();
+        page.addClassName("flex flex-col items-center justify-center gap-4 h-full");
+        page.add(new Span("Main content area"), open);
+        drawer.addToPage(page);
 
-        Label overlay = new Label();
-        overlay.addClassName("drawer-overlay");
-        overlay.getElement().setAttribute("for", "my-drawer-showcase");
+        drawer.addCloseListener(e -> {
+            closes++;
+            log.getElement().setTextContent("Closed " + closes + " time(s); last close "
+                    + (e.isFromClient() ? "came from the user." : "was asked for by the code."));
+        });
 
-        Div menu = new Div();
-        menu.addClassName("menu");
-        menu.addClassName("p-4");
-        menu.addClassName("w-60");
-        menu.addClassName("min-h-full");
-        menu.addClassName("bg-base-200");
-        menu.addClassName("text-base-content");
-        menu.addClassName("gap-2");
+        return new Component[] { drawer };
+    }
 
-        Div title = new Div("Navigation");
-        title.addClassName("font-bold");
-        title.addClassName("mb-2");
-        
-        Div item1 = new Div("Dashboard");
-        item1.addClassName("p-2");
-        item1.addClassName("hover:bg-base-300");
-        item1.addClassName("rounded");
-        item1.addClassName("cursor-pointer");
+    /** Both exits taken away, so the button inside is the only way out. */
+    private Component[] mustAnswerDrawer(Div log) {
+        Drawer drawer = new Drawer("Unsaved changes");
+        drawer.addClassName("h-72 border border-base-300 rounded-box overflow-hidden");
+        drawer.setCloseOnEsc(false);
+        drawer.setCloseOnOutsideClick(false);
 
-        Div item2 = new Div("Settings");
-        item2.addClassName("p-2");
-        item2.addClassName("hover:bg-base-300");
-        item2.addClassName("rounded");
-        item2.addClassName("cursor-pointer");
+        Button done = new Button("Done");
+        done.addClassName("btn-primary");
+        done.addClickListener(e -> drawer.close());
+        drawer.add(new Span("Escape does nothing here and neither does clicking outside."), done);
 
-        menu.add(title, item1, item2);
-        drawerSide.add(overlay, menu);
+        Button open = new Button("Open drawer");
+        open.addClickListener(e -> drawer.open());
 
-        // Assemble Drawer
-        drawer.add(toggle, drawerContent, drawerSide);
+        Div page = new Div();
+        page.addClassName("flex flex-col items-center justify-center gap-4 h-full");
+        page.add(new Span("When you take both exits away, leave a button."), open);
+        drawer.addToPage(page);
 
-        addSection("Default Drawer Layout", drawer);
+        drawer.addCloseListener(e -> {
+            closes++;
+            log.getElement().setTextContent("Closed " + closes + " time(s).");
+        });
+
+        return new Component[] { drawer };
+    }
+
+    /**
+     * The panel lives beside the page rather than over it. No dim, the page stays in use, and the
+     * keyboard walks freely from one into the other — which is right, because nothing is blocked.
+     */
+    private Component[] sidebar() {
+        Drawer drawer = new Drawer("Sections");
+        drawer.addClassName("h-72 border border-base-300 rounded-box overflow-hidden");
+        drawer.setModal(false);
+        drawer.add(navItem("Overview"), navItem("Reports"));
+
+        Div page = new Div();
+        page.addClassName("flex items-center justify-center h-full p-4");
+        page.add(new Span("The sidebar is always there and the page beside it is always live."));
+        drawer.addToPage(page);
+
+        return new Component[] { drawer };
+    }
+
+    private static Button navItem(String label) {
+        Button item = new Button(label);
+        item.addClassName("btn-ghost justify-start w-full");
+        return item;
     }
 }

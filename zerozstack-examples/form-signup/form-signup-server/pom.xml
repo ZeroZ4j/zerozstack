@@ -91,6 +91,14 @@
             <artifactId>slf4j-simple</artifactId>
             <version>2.0.12</version>
         </dependency>
+        <!-- The in-process test server. Test scope only: it starts a bean container, so it must
+             never reach a production classpath. See docs/guides/testing.md. -->
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-server-test</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
