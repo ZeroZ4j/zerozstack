@@ -972,7 +972,33 @@ caller's language and the client does not change at all.
 
 ---
 
-## 8. Open questions for the owner
+## 8. Decisions
+
+Settled on 2026-09-01. Section 9 keeps the reasoning that led to each.
+
+1. **Remembered per browser, with a hook for applications.** Option B. The cookie is the behavior
+   nobody has to ask for; an application that wants the choice to follow a person to a second
+   computer implements `LocalePreferenceStore`. The framework does not learn to write application
+   data, which keeps the question the transactions design left open still closed.
+2. **The framework ships its own forty strings in English only, for now.** English is the fallback,
+   so a project that adds no language sees no change at all, and every string the framework shows
+   is one an application can override in its own catalog. Shipping a second language costs every
+   application that download forever, and we have no evidence yet which second language is wanted.
+   The example application demonstrates a second language, which is where it proves the mechanism
+   without charging everybody for it.
+3. **The catalog rides on the AUTH frame.** As designed. It is already sent, it already carries a
+   version byte, and a separate fetch would be a second round trip before the first screen.
+4. **Numbers, dates and money stay off unless a project asks.** One `MessageFormat` call makes the
+   download 43% bigger -- more than twenty languages of text. The price is written next to the
+   instructions, not buried.
+5. **English stays the fallback and today's behavior is unchanged.** A project that adds no
+   language keeps working exactly as it does now, including anything reading a message's wording.
+6. **The stale-label build check fails from the first day.** Nothing uses language support yet, so
+   there is no violation to grandfather in and no cost to being strict. Six checks added in 0.8.0
+   fail the build rather than warning, and every one of them earned its keep; a warning nobody
+   fails on is a warning nobody reads.
+
+## 9. How each decision was reached
 
 **1. Remembering the language per person needs somewhere to write it. Which?**
 
