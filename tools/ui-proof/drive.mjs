@@ -35,7 +35,12 @@ const PAGE_URL = 'file:///' + path.join(HERE, 'web', 'index.html').replace(/\\/g
 const args = process.argv.slice(2);
 const headed = args.includes('--headed');
 const pwIndex = args.indexOf('--playwright');
-const pwHome = pwIndex >= 0 ? args[pwIndex + 1] : 'G:/proj/trellis';
+// Playwright lives in the archetype smoke folder, which is the one place in this checkout
+// that installs it (npm install there; node_modules is ignored). It used to default to an
+// unrelated project on the machine that happened to have one, which is not something a
+// checkout can rely on.
+const pwHome = pwIndex >= 0 ? args[pwIndex + 1]
+    : path.join(HERE, '..', '..', 'zerozstack-archetype', 'smoke');
 
 const require = createRequire(path.join(pwHome, 'package.json'));
 const { chromium } = require('playwright');

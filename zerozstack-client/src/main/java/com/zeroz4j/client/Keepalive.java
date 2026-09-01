@@ -155,7 +155,7 @@ public final class Keepalive {
      * nothing in some engines and everything in others.
      */
     @JSBody(params = {"millis", "tick"}, script =
-            "setInterval(function () { try { tick(); } catch (e) { } }, millis);")
+            "setInterval(function () { try { tick(); } catch (ignored) { } }, millis);")
     private static native void every(int millis, Tick tick);
 
     /**

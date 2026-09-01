@@ -73,20 +73,55 @@ Then, with `playwright` installed:
 node smoke-test.mjs http://localhost:8100
 ```
 
-It exits non-zero if any check fails, and writes a screenshot to `shots/smokeapp.png`. Node resolves
-`playwright` from the script's own directory upwards, so either install it here or copy the script
-next to an installation.
+It exits non-zero if any check fails, and writes a screenshot to `shots/smokeapp.png`.
+
+## Installing the browser driver
+
+Install it **here**, in this folder:
+
+```bash
+npm install
+```
+
+That is all it takes. `package.json` and `package-lock.json` are checked in and name the version,
+`node_modules/` is ignored, and Node looks for `playwright` from the script's own folder upwards, so
+both scripts find it with no further arrangement.
+
+Do not borrow an installation from another project on the machine. That habit is the reason this
+folder had no `package.json` for four releases: nobody installed anything, so nobody noticed that
+`node_modules/` was not ignored and would have been committed by the next person who ran `git add`.
+
+The three things a run leaves behind here — `node_modules/`, the generated `smokeapp/`, and the
+`.m2smoke/` repository it is built into — are all ignored, so `git status` stays clean and you can
+delete all three in one go when you are done.
 
 ## Drop-recovery test
 
 The second script proves the connection recovery added in 0.5.0 end to end: it starts the server
-itself, kills it mid-session, asserts the built-in banner appears, restarts it, and asserts the
-banner clears and shared-signal updates flow again — across a **full server restart**, the harshest
-case. Stop any already-running smoke server first; this script owns the server lifecycle:
+itself, kills it mid-session, asserts the built-in banner appears **and says the right thing**,
+restarts it, and asserts the banner clears and shared-signal updates flow again — across a **full
+server restart**, the harshest case. Stop any already-running smoke server first; this script owns
+the server lifecycle:
 
 ```bash
 node drop-recovery-test.mjs /path/to/smokeapp/smokeapp-server
 ```
+
+Seven checks, expected 7/7. It also writes `shots/banner-during-drop.png`, which is the fastest way
+to see what a person would have been looking at when one of them fails.
+
+Two things about it are worth knowing, because getting either wrong has already cost a release:
+
+- **It reads whether the bar is on the screen from the size of its painted box**, not from any
+  particular style property. Until 0.7.0 the bar was an ordinary element and the script watched its
+  inline `display`; 0.8.0 moved the bar into the layer the browser keeps above everything else, so
+  nothing sets that property any more, and the check sat waiting for a value that no longer exists.
+  A painted height is true whichever way the bar is put on the screen, so the next change to that
+  mechanism will not silently disarm the check.
+- **It reads the words the bar shows.** Nothing ever had, which is exactly why every release before
+  0.8.0 shipped a bar reading `[object HTMLDivElement]` to every person who lost their connection. The
+  expected sentence is written at the top of the script; it has to match what `Zeroz4jClient` passes
+  to `ConnectionBanner.show(...)`, dash and ellipsis included.
 
 ## Packaged-app variant
 

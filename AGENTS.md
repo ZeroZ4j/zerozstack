@@ -617,6 +617,14 @@ version with no such marker is read as a claim about the current release.
 
 ## Conventions
 
+- **Never name anything with a single letter inside a `@JSBody` script.** TeaVM inlines the script
+  as text and renames only the method's parameters, and a minified build — the compiler's default,
+  and therefore what every generated application does — renames them to single letters: `b` for the
+  first parameter, `c` for the second, and so on. A one-letter name inside the script becomes the
+  same name as a parameter, and one of them silently becomes the other. That is how the connection
+  bar came to read `[object HTMLDivElement]` for two releases, and how a file upload's progress
+  figure never moved. Use `idx`, `ignored`, `bar`, `node`. `JsBodyNamingContractTest` reads every
+  Java file in the checkout on every build and fails it otherwise.
 - Apache 2.0 license header on every new `.java` file; copy an existing one.
 - Javadoc on public API, including the wire opcode where a method sends a frame.
 - Documentation lives in `/docs` as plain Markdown. See

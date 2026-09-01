@@ -58,8 +58,11 @@ node tools/ui-proof/drive.mjs     # drives it, and writes shots/
 nothing into the shared Maven repository: it packages the library, copies the jars into `lib/`, and
 builds this page against those copies.
 
-`drive.mjs` borrows Playwright from a checkout that already has it — `G:/proj/trellis` by default.
-Point it elsewhere with `--playwright <dir>`. Add `--headed` to watch it happen.
+`drive.mjs` takes Playwright from `zerozstack-archetype/smoke`, the one place in this checkout that
+installs it — run `npm install` there once and both this and the archetype smoke test find it.
+(It used to default to an unrelated project on the machine that happened to have one, which is not
+something a checkout can rely on.) Point it elsewhere with `--playwright <dir>`. Add `--headed` to
+watch it happen.
 
 It exits non-zero if any check fails, and prints one line per check either way.
 

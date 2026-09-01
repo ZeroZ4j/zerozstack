@@ -17,17 +17,41 @@
  */
 // End-to-end proof of connection recovery (0.5.0), driven against the generated smoke app:
 //   1. page works (tick advancing)
-//   2. server killed -> built-in banner appears, page does not error
+//   2. server killed -> built-in banner appears, says the right thing, page does not error
 //   3. server restarted -> banner disappears, tick advances again (signal re-subscribed)
 //
 // Usage: node drop-recovery-test.mjs <path-to-smokeapp-server-module>
 // The script starts and kills the server itself; do not start one beforehand.
+//
+// How the banner's visibility is read, and why it changed in 0.8.0.
+//
+// Until 0.7.0 the banner was an ordinary element and the script read its inline display, which
+// went 'block' and then 'none'. In 0.8.0 the banner became a popover so that it can be seen over
+// an open dialog, and a popover's visibility belongs to showPopover() and hidePopover(); nothing
+// sets an inline display any more, and ConnectionBanner says outright that nothing may. The old
+// check therefore waited for a value that no longer exists and timed out on a release where
+// recovery works perfectly.
+//
+// What it reads instead is the painted box: getBoundingClientRect().height. That is what a person
+// sees, it is true on both paths the banner can take (the popover in a current browser, the plain
+// fixed strip in one too old for popovers), and it needs no knowledge of how the banner is put on
+// the screen — so the next change to that mechanism will not silently disarm this check the way
+// the last one did.
+//
+// The wording is checked too, and that is new. Nothing had ever looked at what the banner said,
+// which is exactly why 0.6.0 and 0.7.0 both shipped it reading "[object HTMLDivElement]" to every
+// person who lost their connection. The expected sentence is the one Zeroz4jClient passes to
+// ConnectionBanner.show(...).
 import { chromium } from 'playwright';
 import { spawn } from 'child_process';
 
 const BASE = 'http://localhost:8100';
 const SERVER_DIR = process.argv[2];
 const CP_SEP = process.platform === 'win32' ? ';' : ':';
+
+// The sentence Zeroz4jClient hands to ConnectionBanner.show(...) while the channel is
+// RECONNECTING. Both the dash and the ellipsis are single characters, not "--" and not "...".
+const BANNER_TEXT = 'Connection lost — reconnecting…';
 
 function startServer() {
   const child = spawn('java', ['-cp', `target/classes${CP_SEP}target/libs/*`, 'com.smoke.server.ServerApp'],
@@ -75,19 +99,44 @@ await page.waitForTimeout(2500);
 const t2 = await page.evaluate(tickValue);
 check('baseline: ticks advancing', t2 > t1 && t1 >= 0, `${t1} -> ${t2}`);
 
-// 2. Kill the server: the banner must appear.
+// The height of the banner's painted box, or -1 when there is no banner element at all.
+const bannerHeight = () => {
+  const b = document.getElementById('zeroz4j-connection-banner');
+  return b ? Math.round(b.getBoundingClientRect().height) : -1;
+};
+
+const bannerWords = () => {
+  const b = document.getElementById('zeroz4j-connection-banner');
+  return b ? (b.textContent || '') : '(no banner element)';
+};
+
+// 2. Kill the server: the banner must appear, and must say what it is there to say.
 server.kill('SIGKILL');
 const bannerShown = await waitFor(page,
-  () => { const b = document.getElementById('zeroz4j-connection-banner'); return b && b.style.display !== 'none'; },
-  20000, 'banner visible');
-check('on drop: built-in banner appears', bannerShown);
+  () => {
+    const b = document.getElementById('zeroz4j-connection-banner');
+    return !!b && b.getBoundingClientRect().height > 0;
+  },
+  20000, 'banner taking up space on the page');
+check('on drop: built-in banner appears', bannerShown, `${await page.evaluate(bannerHeight)}px tall`);
+
+const words = await page.evaluate(bannerWords);
+check('on drop: the banner says the connection was lost', words === BANNER_TEXT,
+  words === BANNER_TEXT ? words : `expected ${JSON.stringify(BANNER_TEXT)}, read ${JSON.stringify(words)}`);
+
+// Written whether the checks passed or not: when this one fails, the picture is the fastest way
+// to see what a person would have been looking at.
+await page.screenshot({ path: 'shots/banner-during-drop.png' });
 
 // 3. Restart the server: banner must clear, ticks must resume.
 server = startServer();
 const bannerGone = await waitFor(page,
-  () => { const b = document.getElementById('zeroz4j-connection-banner'); return b && b.style.display === 'none'; },
-  40000, 'banner hidden');
-check('on recovery: banner disappears', bannerGone);
+  () => {
+    const b = document.getElementById('zeroz4j-connection-banner');
+    return !!b && b.getBoundingClientRect().height === 0;
+  },
+  40000, 'banner taking up no space again');
+check('on recovery: banner disappears', bannerGone, `${await page.evaluate(bannerHeight)}px tall`);
 
 // The restarted server's counter begins again at zero, so do not compare against pre-drop
 // values: sample twice after recovery and require advancement between the two samples.

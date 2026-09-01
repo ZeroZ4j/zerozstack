@@ -1237,11 +1237,11 @@ public final class KeyboardProofPage {
          */
         @JSBody(params = {"el"}, script =
                 "if (!el || !el.isConnected) { return false; }"
-                + "var s = window.getComputedStyle(el);"
-                + "if (s.display === 'none' || s.visibility === 'hidden') { return false; }"
-                + "if (parseFloat(s.opacity) === 0) { return false; }"
-                + "var r = el.getBoundingClientRect();"
-                + "return r.width > 0 && r.height > 0;")
+                + "var style = window.getComputedStyle(el);"
+                + "if (style.display === 'none' || style.visibility === 'hidden') { return false; }"
+                + "if (parseFloat(style.opacity) === 0) { return false; }"
+                + "var rect = el.getBoundingClientRect();"
+                + "return rect.width > 0 && rect.height > 0;")
         static native boolean visible(HTMLElement el);
 
         /**
@@ -1289,7 +1289,7 @@ public final class KeyboardProofPage {
         @JSBody(params = {"el"}, script =
                 "if (!el || !el.parentElement) { return -1; }"
                 + "var kids = el.parentElement.children;"
-                + "for (var i = 0; i < kids.length; i++) { if (kids[i] === el) { return i; } }"
+                + "for (var idx = 0; idx < kids.length; idx++) { if (kids[idx] === el) { return idx; } }"
                 + "return -1;")
         static native int indexAmongSiblings(HTMLElement el);
     }

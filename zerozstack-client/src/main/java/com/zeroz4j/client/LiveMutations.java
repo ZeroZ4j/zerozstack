@@ -403,6 +403,6 @@ public final class LiveMutations {
      * {@code setTimeout} callback cancels nothing in some engines and everything in others.
      */
     @JSBody(params = {"millis", "callback"}, script =
-            "setTimeout(function () { try { callback(); } catch (e) { } }, millis);")
+            "setTimeout(function () { try { callback(); } catch (ignored) { } }, millis);")
     private static native void setTimeout(int millis, Callback callback);
 }

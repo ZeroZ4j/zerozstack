@@ -74,10 +74,10 @@ final class OidcBrowser {
         + "  crypto.subtle.digest('SHA-256', data).then(function(buf) {"
         + "    var bytes = new Uint8Array(buf);"
         + "    var str = '';"
-        + "    for (var i = 0; i < bytes.length; i++) { str += String.fromCharCode(bytes[i]); }"
+        + "    for (var idx = 0; idx < bytes.length; idx++) { str += String.fromCharCode(bytes[idx]); }"
         + "    callback(btoa(str).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, ''));"
-        + "  }).catch(function(e) { callback(null); });"
-        + "} catch (e) { callback(null); }")
+        + "  }).catch(function(ignored) { callback(null); });"
+        + "} catch (ignored) { callback(null); }")
     static native void codeChallenge(String verifier, StringCallback callback);
 
     /**
@@ -95,11 +95,11 @@ final class OidcBrowser {
         + "  return response.text().then(function(text) {"
         + "    if (!response.ok) { callback(null, null, 0, 'HTTP ' + response.status + ': ' + text); return; }"
         + "    var json;"
-        + "    try { json = JSON.parse(text); } catch (e) { callback(null, null, 0, 'Malformed token response'); return; }"
+        + "    try { json = JSON.parse(text); } catch (ignored) { callback(null, null, 0, 'Malformed token response'); return; }"
         + "    if (!json.access_token) { callback(null, null, 0, 'Token response carried no access_token'); return; }"
         + "    callback(json.access_token, json.refresh_token || null, json.expires_in || 0, null);"
         + "  });"
-        + "}).catch(function(e) { callback(null, null, 0, String(e)); });")
+        + "}).catch(function(failure) { callback(null, null, 0, String(failure)); });")
     static native void postForm(String url, String body, TokenCallback callback);
 
     /** @return a query parameter of the current URL, or null */
@@ -126,15 +126,15 @@ final class OidcBrowser {
     static native void replaceUrl(String url);
 
     /** @return a value previously stored for this tab, or null */
-    @JSBody(params = { "key" }, script = "try { return sessionStorage.getItem(key); } catch (e) { return null; }")
+    @JSBody(params = { "key" }, script = "try { return sessionStorage.getItem(key); } catch (ignored) { return null; }")
     static native String storageGet(String key);
 
     /** Stores a value for this tab only, cleared when the tab closes. */
-    @JSBody(params = { "key", "value" }, script = "try { sessionStorage.setItem(key, value); } catch (e) { }")
+    @JSBody(params = { "key", "value" }, script = "try { sessionStorage.setItem(key, value); } catch (ignored) { }")
     static native void storageSet(String key, String value);
 
     /** Removes a stored value. */
-    @JSBody(params = { "key" }, script = "try { sessionStorage.removeItem(key); } catch (e) { }")
+    @JSBody(params = { "key" }, script = "try { sessionStorage.removeItem(key); } catch (ignored) { }")
     static native void storageRemove(String key);
 
     /** Runs a callback after a delay, for the silent token refresh. */
