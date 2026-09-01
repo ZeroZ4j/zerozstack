@@ -32,6 +32,19 @@ Available constraints (in `com.zeroz4j.api.validation`):
 
 Every annotation takes an optional `message` to override the generated default.
 
+!!! warning "Validation messages are one language, whichever you write them in"
+    The sentence a broken rule produces — the generated `fullName must not be blank`, or whatever
+    you put in `message` — is baked into the generated `<Model>_Rules` class at compile time and is
+    the same for every reader. It is used for a browser hint and for the server's rejection, and
+    neither is translated.
+
+    The refusal that carries them **is** translated: a caller reading German is told
+    `Prüfung fehlgeschlagen für Registration: ...` with the untranslated rule text after the colon.
+    Translating the rule text itself needs the annotations to name a catalog key rather than carry
+    a sentence, and that has not been built. Where it matters today, check the value inside your
+    service method and throw `ClientVisibleException` with a message from your own catalog. See
+    [Answering in the reader's language](guides/language.md).
+
 ## Client: binder integration
 
 Attach the generated rule to a field — the field then validates on every change, carries the `input-error` style class once the user has touched it, and reports validity:
@@ -54,7 +67,12 @@ Nothing to write. The RMI engine validates every incoming argument (including el
 
 For rules that span fields or need server data ("username already taken"), validate inside your service method — annotations cover per-field constraints; business logic stays business logic.
 
+The refusal the caller gets is `Validation failed for <Model>: <the broken rules, joined>`. That
+sentence is the framework's own and is translated into the caller's language; the broken rules
+inside it are the annotation messages and are not.
+
 ## Limits (current release)
 
 * Constraints apply to String and numeric fields; nested objects are validated only when they arrive as RMI arguments themselves (no deep graph walking).
 * The constraint set is deliberately small; it will grow as real usage demands (`@Pattern` is the likely next addition).
+* Constraint messages are not translatable. They are compiled into `<Model>_Rules` as written and read the same to every person.

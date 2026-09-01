@@ -18,6 +18,8 @@
 package com.zeroz4j.server;
 
 import com.zeroz4j.api.ClientWritable;
+import com.zeroz4j.api.i18n.FrameworkText;
+import com.zeroz4j.api.i18n.Message;
 import com.zeroz4j.api.ObjectMapper;
 
 import java.util.Arrays;
@@ -70,15 +72,15 @@ final class LiveMutationGuard implements ObjectMapper.ResolutionGuard, ObjectMap
     static final class Denied extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
-        private final String reason;
+        private final transient Message reason;
 
-        Denied(String reason) {
-            super(reason);
+        Denied(Message reason) {
+            super(ServerMessages.inEnglish(reason));
             this.reason = reason;
         }
 
-        /** @return the sentence to show the writer */
-        String reason() {
+        /** @return what to tell the writer, still unrendered so it can be said in their language */
+        Message reason() {
             return reason;
         }
     }
@@ -134,13 +136,11 @@ final class LiveMutationGuard implements ObjectMapper.ResolutionGuard, ObjectMap
         Class<?> type = canonical.getClass();
         ClientWritable writable = type.getAnnotation(ClientWritable.class);
         if (writable == null) {
-            throw new Denied("The change also alters a " + type.getSimpleName()
-                    + " that clients may not write. Nothing was changed.");
+            throw new Denied(FrameworkText.liveNestedNotWritable(type.getSimpleName()));
         }
         if (writable.value().length > 0 && !holdsAnyRole(writable.value())) {
-            throw new Denied("The change also alters a " + type.getSimpleName()
-                    + ", which needs one of the roles " + Arrays.toString(writable.value())
-                    + ". Nothing was changed.");
+            throw new Denied(FrameworkText.liveNestedRequiresRole(
+                    type.getSimpleName(), Arrays.toString(writable.value())));
         }
     }
 
@@ -165,13 +165,11 @@ final class LiveMutationGuard implements ObjectMapper.ResolutionGuard, ObjectMap
         }
         ClientWritable writable = type.getAnnotation(ClientWritable.class);
         if (writable == null) {
-            throw new Denied("The change also alters a " + type.getSimpleName()
-                    + " that clients may not write. Nothing was changed.");
+            throw new Denied(FrameworkText.liveNestedNotWritable(type.getSimpleName()));
         }
         if (writable.value().length > 0 && !holdsAnyRole(writable.value())) {
-            throw new Denied("The change also alters a " + type.getSimpleName()
-                    + ", which needs one of the roles " + Arrays.toString(writable.value())
-                    + ". Nothing was changed.");
+            throw new Denied(FrameworkText.liveNestedRequiresRole(
+                    type.getSimpleName(), Arrays.toString(writable.value())));
         }
     }
 

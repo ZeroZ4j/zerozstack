@@ -19,6 +19,7 @@ package com.zeroz4j.server;
 
 import java.security.Principal;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -37,6 +38,13 @@ public final class RmiRequestContext {
     private static final ThreadLocal<String> sessionIdHolder = new ThreadLocal<>();
     private static final ThreadLocal<String> tenantIdHolder = new ThreadLocal<>();
     private static final ThreadLocal<String> clientIdHolder = new ThreadLocal<>();
+    private static final ThreadLocal<Locale> localeHolder = new ThreadLocal<>();
+
+    /**
+     * What language to answer in when no call is in progress — a scheduled job writing a message,
+     * say. Set from {@code zeroz.i18n.defaultLocale} when a server starts.
+     */
+    private static volatile Locale deploymentDefaultLocale = Locale.ENGLISH;
 
     private RmiRequestContext() {}
 
@@ -77,8 +85,26 @@ public final class RmiRequestContext {
      */
     public static void setContext(Principal principal, Set<String> roles, String sessionId,
                                   String tenantId, String clientId) {
+        setContext(principal, roles, sessionId, tenantId, clientId, null);
+    }
+
+    /**
+     * Binds the caller's identity, roles, session, tenant, client id and language to the current
+     * thread.
+     *
+     * @param principal the authenticated principal, or null for an anonymous connection
+     * @param roles     the granted roles
+     * @param sessionId the WebSocket session id
+     * @param tenantId  the tenant reported by the {@link AuthenticationProvider}, or null
+     * @param clientId  the browser's client id, or null when the handshake carried none
+     * @param locale    the language this connection reads, or null to use the deployment's own
+     * @since 0.9.0
+     */
+    public static void setContext(Principal principal, Set<String> roles, String sessionId,
+                                  String tenantId, String clientId, Locale locale) {
         tenantIdHolder.set(tenantId);
         clientIdHolder.set(clientId);
+        localeHolder.set(locale);
         principalHolder.set(principal);
         rolesHolder.set(roles != null ? roles : Collections.emptySet());
         sessionIdHolder.set(sessionId);
@@ -143,6 +169,37 @@ public final class RmiRequestContext {
     }
 
     /**
+     * The language this call's caller reads.
+     *
+     * <p><b>Never null</b>, so nothing has to check. When no call is in progress it is the
+     * deployment's own language, from {@code zeroz.i18n.defaultLocale} — deliberately not the
+     * machine's, because a server in Frankfurt has a German JVM locale that has nothing to do with
+     * whoever is calling it.</p>
+     *
+     * <p>Resolved once, when the connection was opened, from what the browser sent. Take it from
+     * here and never from a method argument, for the same reason identity is taken from here: an
+     * argument is something the caller can lie about and the framework cannot default.</p>
+     *
+     * @return the caller's locale
+     * @since 0.9.0
+     */
+    public static Locale getLocale() {
+        Locale bound = localeHolder.get();
+        return bound != null ? bound : deploymentDefaultLocale;
+    }
+
+    /**
+     * Sets what language to answer in when no call is in progress. Called when a server starts,
+     * from its own {@code zeroz.i18n.defaultLocale}.
+     *
+     * @param locale the deployment's own language, or null for English
+     * @since 0.9.0
+     */
+    public static void setDeploymentDefaultLocale(Locale locale) {
+        deploymentDefaultLocale = locale != null ? locale : Locale.ENGLISH;
+    }
+
+    /**
      * Clears all thread-local context variables to prevent memory leaks in pooled threads.
      *
      * <p><b>Under the hood:</b> Invokes {@code remove()} on all ThreadLocal holders.</p>
@@ -153,5 +210,6 @@ public final class RmiRequestContext {
         sessionIdHolder.remove();
         tenantIdHolder.remove();
         clientIdHolder.remove();
+        localeHolder.remove();
     }
 }

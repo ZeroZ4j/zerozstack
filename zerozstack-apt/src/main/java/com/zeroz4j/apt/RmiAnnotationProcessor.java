@@ -59,8 +59,10 @@ import java.util.*;
 @SupportedAnnotationTypes({
     "com.zeroz4j.api.DataModel",
     "com.zeroz4j.api.RmiService",
-    "com.zeroz4j.api.Route"
+    "com.zeroz4j.api.Route",
+    "com.zeroz4j.api.i18n.MessageCatalog"
 })
+@javax.annotation.processing.SupportedOptions("zeroz4j.i18n.resources")
 public class RmiAnnotationProcessor extends AbstractProcessor {
 
     private final List<String> binaryModels = new ArrayList<>();
@@ -78,6 +80,8 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
     private final Set<String> enumTypes = new LinkedHashSet<>();
     /** One entry per @Route class, for route-table generation. */
     private final List<RouteEntry> routes = new ArrayList<>();
+    /** Catalogs already turned into classes, so a later round does not write the same file twice. */
+    private final Set<String> generatedCatalogs = new LinkedHashSet<>();
 
     /** What the processor learned about one {@code @Route} class. */
     private static final class RouteEntry {
@@ -272,6 +276,17 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                     "Failed to generate the route table: " + e.getMessage());
             }
             routes.clear();
+        }
+
+        for (Element element : roundEnv.getElementsAnnotatedWith(
+                com.zeroz4j.api.i18n.MessageCatalog.class)) {
+            if (element.getKind() != ElementKind.CLASS) {
+                env.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "@MessageCatalog is only supported on a class. " + describeKind(element.getKind())
+                    + " cannot have the catalog's methods written beside it.", element);
+                continue;
+            }
+            generateCatalog((TypeElement) element);
         }
 
         // Generate Registrar on the final processing round or when models are collected
@@ -1609,5 +1624,408 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             this.setter = setter;
             this.isPrivate = isPrivate;
         }
+    }
+
+    // ------------------------------------------------------------------ message catalogs
+
+    /**
+     * Turns one {@code @MessageCatalog} marker class into two classes beside it.
+     *
+     * <p>{@code AppText_Text} has one method per key, named by camel-casing the key, with one
+     * parameter per placeholder. Each returns a {@code Message} rather than a {@code String}, which
+     * is what lets a sentence be chosen deep inside a service and turned into words later, at the
+     * edge of the server, in the caller's own language.</p>
+     *
+     * <p>{@code AppText_Catalog} is the fallback language written out as a {@code switch}, which is
+     * what the browser reads before anything has come over the connection.</p>
+     *
+     * <p>Only the fallback file is read. Every other language is read by the server at run time, so
+     * adding French is dropping a file in and restarting - nothing is regenerated and the browser
+     * bundle does not grow.</p>
+     */
+    private void generateCatalog(TypeElement marker) {
+        com.zeroz4j.api.i18n.MessageCatalog declared =
+                marker.getAnnotation(com.zeroz4j.api.i18n.MessageCatalog.class);
+        String baseName = declared.baseName().trim();
+        if (baseName.isEmpty()) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "@MessageCatalog needs a baseName: the classpath path of the .properties files "
+                + "with no language suffix and no extension, such as i18n/app.", marker);
+            return;
+        }
+        if (baseName.indexOf('.') >= 0 && baseName.indexOf('/') < 0) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                "baseName " + baseName + " looks like a package name. It is a classpath path: "
+                + "i18n/app, not i18n.app.", marker);
+        }
+        String fqcn = marker.getQualifiedName().toString();
+        if (!generatedCatalogs.add(fqcn)) {
+            return;
+        }
+
+        String resource = baseName + ".properties";
+        String contents = readCatalogFile(resource, marker);
+        if (contents == null) {
+            return;
+        }
+
+        Map<String, String> entries = parseProperties(contents);
+        if (entries.isEmpty()) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                resource + " has no entries, so " + marker.getSimpleName()
+                + "_Text will have no methods.", marker);
+        }
+
+        Map<String, String> methodNames = new LinkedHashMap<>();
+        Map<String, String> claimedBy = new LinkedHashMap<>();
+        Map<String, Integer> placeholderCounts = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            String key = entry.getKey();
+            String method = methodNameFor(key);
+            if (method == null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "The key " + key + " in " + resource + " has no letters in it, so there is "
+                    + "no method name to give it. Use letters, with dots between the parts.", marker);
+                continue;
+            }
+            String already = claimedBy.get(method);
+            if (already != null) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "The keys " + already + " and " + key + " in " + resource
+                    + " both become the method " + method + "(). Rename one of them.", marker);
+                continue;
+            }
+            Integer count = placeholderCountOf(key, entry.getValue(), resource, marker);
+            if (count == null) {
+                continue;
+            }
+            claimedBy.put(method, key);
+            methodNames.put(key, method);
+            placeholderCounts.put(key, count);
+        }
+
+        try {
+            writeTextClass(marker, baseName, methodNames, placeholderCounts);
+            writeCatalogClass(marker, baseName, declared.fallback(), entries);
+        } catch (IOException e) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                "Failed to write the catalog classes for " + fqcn + ": " + e.getMessage(), marker);
+        }
+    }
+
+    /**
+     * Finds the fallback {@code .properties} file.
+     *
+     * <p>Four places, because build tools disagree about where a module's own resources are while
+     * the compiler is running: Maven has copied them into the output directory by then, Gradle and
+     * an IDE may have them only on the source path or the classpath.</p>
+     */
+    private String readCatalogFile(String resource, TypeElement marker) {
+        String configured = processingEnv.getOptions().get("zeroz4j.i18n.resources");
+        if (configured != null && !configured.isEmpty()) {
+            java.io.File direct = new java.io.File(configured, resource);
+            if (direct.isFile()) {
+                try {
+                    return new String(java.nio.file.Files.readAllBytes(direct.toPath()),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                } catch (IOException unreadable) {
+                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "Could not read " + direct + ": " + unreadable.getMessage(), marker);
+                    return null;
+                }
+            }
+        }
+        javax.tools.StandardLocation[] places = {
+            javax.tools.StandardLocation.CLASS_OUTPUT,
+            javax.tools.StandardLocation.CLASS_PATH,
+            javax.tools.StandardLocation.SOURCE_PATH,
+            javax.tools.StandardLocation.SOURCE_OUTPUT
+        };
+        for (javax.tools.StandardLocation place : places) {
+            try {
+                javax.tools.FileObject file =
+                        processingEnv.getFiler().getResource(place, "", resource);
+                java.io.Reader reader = file.openReader(true);
+                try {
+                    StringBuilder text = new StringBuilder();
+                    char[] chunk = new char[4096];
+                    int read;
+                    while ((read = reader.read(chunk)) >= 0) {
+                        text.append(chunk, 0, read);
+                    }
+                    return text.toString();
+                } finally {
+                    reader.close();
+                }
+            } catch (IOException | RuntimeException notThere) {
+                // Try the next place. Only running out of places is an error.
+            }
+        }
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+            "Could not find " + resource + " on the compile classpath. @MessageCatalog names the "
+            + "path of the .properties file with the fallback language - the one with no language "
+            + "suffix - and it has to be a resource of this module, usually "
+            + "src/main/resources/" + resource + ".", marker);
+        return null;
+    }
+
+    /**
+     * Reads a {@code .properties} file, keeping the order the keys were written in.
+     *
+     * <p>The values come from {@code java.util.Properties}, so every escape and every separator
+     * spelling behaves exactly as it does when the server reads the same file at run time. If the
+     * two disagreed, a sentence would come out one way in the browser and another way in the
+     * server's rejection of the same value, which is a defect this design must not be able to
+     * produce.</p>
+     *
+     * <p>The order comes from a scan of the text, because {@code Properties} is a hash table and
+     * would give a different order on a different day - which would make every build produce a
+     * different generated file.</p>
+     */
+    private static Map<String, String> parseProperties(String contents) {
+        java.util.Properties values = new java.util.Properties();
+        try {
+            values.load(new java.io.StringReader(contents));
+        } catch (IOException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        Map<String, String> entries = new LinkedHashMap<>();
+        for (String key : keysInOrder(contents)) {
+            String value = values.getProperty(key);
+            if (value != null) {
+                entries.put(key, value);
+            }
+        }
+        for (String key : values.stringPropertyNames()) {
+            entries.putIfAbsent(key, values.getProperty(key));
+        }
+        return entries;
+    }
+
+    /** The keys of a properties file, in the order somebody wrote them. */
+    private static List<String> keysInOrder(String contents) {
+        List<String> keys = new ArrayList<>();
+        boolean continued = false;
+        for (String rawLine : contents.split("\r\n|\n|\r", -1)) {
+            String line = rawLine;
+            boolean wasContinued = continued;
+            continued = line.endsWith("\\") && !line.endsWith("\\\\");
+            if (wasContinued) {
+                continue;
+            }
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!")) {
+                continue;
+            }
+            StringBuilder key = new StringBuilder();
+            for (int at = 0; at < trimmed.length(); at++) {
+                char here = trimmed.charAt(at);
+                if (here == '\\' && at + 1 < trimmed.length()) {
+                    key.append(trimmed.charAt(++at));
+                    continue;
+                }
+                if (here == '=' || here == ':' || here == ' ' || here == '\t') {
+                    break;
+                }
+                key.append(here);
+            }
+            if (key.length() > 0) {
+                keys.add(key.toString());
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Counts the blanks in one pattern, and refuses a pattern whose blanks are not a run from
+     * {@code {0}}.
+     *
+     * <p>A gap means a value nobody can pass, so the message would always come out with a literal
+     * blank still in the middle of it.</p>
+     *
+     * @return how many values the method takes, or null when the pattern was refused
+     */
+    private Integer placeholderCountOf(String key, String pattern, String resource,
+                                       TypeElement marker) {
+        Set<Integer> found = new TreeSet<>();
+        int at = 0;
+        while (at < pattern.length()) {
+            int open = pattern.indexOf('{', at);
+            if (open < 0) {
+                break;
+            }
+            int close = pattern.indexOf('}', open);
+            if (close < 0) {
+                break;
+            }
+            String inside = pattern.substring(open + 1, close);
+            at = close + 1;
+            if (inside.indexOf(',') >= 0) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                    key + " in " + resource + " contains {" + inside + "}, which reads "
+                    + "like a MessageFormat pattern and is not one. Blanks here are {0}, {1} and "
+                    + "nothing else; format the value yourself and pass the words in.", marker);
+                continue;
+            }
+            boolean digitsOnly = !inside.isEmpty();
+            for (int scan = 0; scan < inside.length(); scan++) {
+                char here = inside.charAt(scan);
+                if (here < '0' || here > '9') {
+                    digitsOnly = false;
+                    break;
+                }
+            }
+            if (digitsOnly) {
+                try {
+                    found.add(Integer.valueOf(Integer.parseInt(inside)));
+                } catch (NumberFormatException tooBig) {
+                    digitsOnly = false;
+                }
+            }
+        }
+        int expected = 0;
+        for (Integer index : found) {
+            if (index.intValue() != expected) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    key + " in " + resource + " uses the blanks " + found + ". They have "
+                    + "to run from {0} with no gaps, or there is a value nobody can pass and the "
+                    + "sentence comes out with an empty blank still in it.", marker);
+                return null;
+            }
+            expected++;
+        }
+        return Integer.valueOf(expected);
+    }
+
+    /**
+     * The method name a key gets: the parts between dots, dashes, underscores and spaces, joined up
+     * with each part after the first starting with a capital.
+     *
+     * @param key the catalog key
+     * @return the name, or null when the key has nothing a method can be named after
+     */
+    static String methodNameFor(String key) {
+        StringBuilder name = new StringBuilder();
+        boolean nextIsUpper = false;
+        for (int at = 0; at < key.length(); at++) {
+            char here = key.charAt(at);
+            if (here == '.' || here == '-' || here == '_' || here == ' ') {
+                nextIsUpper = name.length() > 0;
+                continue;
+            }
+            if (!Character.isLetterOrDigit(here)) {
+                continue;
+            }
+            if (name.length() == 0) {
+                if (!Character.isLetter(here)) {
+                    continue;
+                }
+                name.append(Character.toLowerCase(here));
+            } else if (nextIsUpper) {
+                name.append(Character.toUpperCase(here));
+                nextIsUpper = false;
+            } else {
+                name.append(here);
+            }
+        }
+        if (name.length() == 0) {
+            return null;
+        }
+        String candidate = name.toString();
+        return SourceVersion.isKeyword(candidate) ? candidate + "_" : candidate;
+    }
+
+    private void writeTextClass(TypeElement marker, String baseName, Map<String, String> methodNames,
+                                Map<String, Integer> placeholderCounts) throws IOException {
+        String packageName = getPackageName(marker);
+        String className = marker.getSimpleName() + "_Text";
+        JavaFileObject file = processingEnv.getFiler()
+                .createSourceFile(packageName.isEmpty() ? className : packageName + "." + className,
+                        marker);
+        try (Writer writer = file.openWriter()) {
+            if (!packageName.isEmpty()) {
+                writer.write("package " + packageName + ";\n\n");
+            }
+            writer.write("// Auto-generated by zeroz4j APT from " + baseName
+                    + ".properties - do not edit\n");
+            writer.write("public final class " + className + " {\n\n");
+            writer.write("    /** The catalog these messages come from. */\n");
+            writer.write("    public static final java.lang.String BASE_NAME = \""
+                    + escape(baseName) + "\";\n\n");
+            writer.write("    private " + className + "() {}\n\n");
+            for (Map.Entry<String, String> entry : methodNames.entrySet()) {
+                String key = entry.getKey();
+                String method = entry.getValue();
+                int count = placeholderCounts.get(key).intValue();
+                writer.write("    /** The message named " + escapeJavadoc(key) + ". */\n");
+                writer.write("    public static com.zeroz4j.api.i18n.Message " + method + "(");
+                for (int index = 0; index < count; index++) {
+                    writer.write((index == 0 ? "" : ", ") + "java.lang.Object arg" + index);
+                }
+                writer.write(") {\n");
+                writer.write("        return new com.zeroz4j.api.i18n.Message(BASE_NAME, \""
+                        + escape(key) + "\"");
+                for (int index = 0; index < count; index++) {
+                    writer.write(", arg" + index);
+                }
+                writer.write(");\n");
+                writer.write("    }\n\n");
+            }
+            writer.write("}\n");
+        }
+    }
+
+    private void writeCatalogClass(TypeElement marker, String baseName, String fallback,
+                                   Map<String, String> entries) throws IOException {
+        String packageName = getPackageName(marker);
+        String className = marker.getSimpleName() + "_Catalog";
+        JavaFileObject file = processingEnv.getFiler()
+                .createSourceFile(packageName.isEmpty() ? className : packageName + "." + className,
+                        marker);
+        try (Writer writer = file.openWriter()) {
+            if (!packageName.isEmpty()) {
+                writer.write("package " + packageName + ";\n\n");
+            }
+            writer.write("// Auto-generated by zeroz4j APT from " + baseName
+                    + ".properties - do not edit\n");
+            writer.write("public final class " + className + " {\n\n");
+            writer.write("    /** The catalog this is the fallback language of. */\n");
+            writer.write("    public static final java.lang.String BASE_NAME = \""
+                    + escape(baseName) + "\";\n\n");
+            writer.write("    /** The language written in the file with no suffix. */\n");
+            writer.write("    public static final java.lang.String FALLBACK_LANGUAGE = \""
+                    + escape(fallback) + "\";\n\n");
+            writer.write("    private " + className + "() {}\n\n");
+            writer.write("    /** @return every key in the fallback language */\n");
+            writer.write("    public static java.lang.String[] keys() {\n");
+            writer.write("        return new java.lang.String[] {");
+            boolean first = true;
+            for (String key : entries.keySet()) {
+                writer.write((first ? "\n" : ",\n") + "            \"" + escape(key) + "\"");
+                first = false;
+            }
+            writer.write(first ? "};\n" : "\n        };\n");
+            writer.write("    }\n\n");
+            writer.write("    /**\n");
+            writer.write("     * @param key the key\n");
+            writer.write("     * @return the fallback-language pattern, or null when there is none\n");
+            writer.write("     */\n");
+            writer.write("    public static java.lang.String lookup(java.lang.String key) {\n");
+            writer.write("        if (key == null) {\n            return null;\n        }\n");
+            writer.write("        switch (key) {\n");
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                writer.write("            case \"" + escape(entry.getKey()) + "\":\n");
+                writer.write("                return \"" + escape(entry.getValue()) + "\";\n");
+            }
+            writer.write("            default:\n                return null;\n");
+            writer.write("        }\n");
+            writer.write("    }\n");
+            writer.write("}\n");
+        }
+    }
+
+    /** Keeps a key out of the javadoc parser's way when it contains something that looks like a tag. */
+    private static String escapeJavadoc(String text) {
+        return text.replace("@", "&#64;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

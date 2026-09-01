@@ -39,6 +39,56 @@ upgrading.
   what you ship — and it says plainly that the quick check does not compile the user interface, so a
   mistake only the browser compiler can see will not surface until the next full build.
 
+### Added
+
+- **The server now answers in the language the person is reading.** Every refusal it produces —
+  access denied, not signed in, no such service, an argument that broke a rule, a live edit it
+  would not accept — is written in the caller's language on the wire and in English in the server
+  log, from one value. An application declares its own text as ordinary `.properties` files in its
+  shared module, marks them with `@MessageCatalog`, and gets one compile-checked method per key: a
+  misspelled key and a wrong number of values are both compile errors instead of something wrong on
+  somebody's screen. Throwing `new ClientVisibleException(AppText_Text.invoiceAlreadyApproved(id))`
+  is the whole of translating a refusal. The connection's language is decided once at the handshake
+  — a `lang` parameter, a `zeroz-lang` cookie, the browser's `Accept-Language` header,
+  `zeroz.i18n.defaultLocale`, then English — narrowed to what the deployment actually translated,
+  and readable in a service as `RmiRequestContext.getLocale()`, which is never null. Adding a
+  language is dropping a `.properties` file in and restarting: nothing is regenerated and no browser
+  download grows. Blanks in a sentence are `{0}`, `{1}` and nothing else, on purpose — one call into
+  Java's own message formatting makes the browser download 43 percent bigger, which is more than
+  twenty languages of translated text put together. Full instructions in
+  [docs/guides/language.md](docs/guides/language.md).
+- **`CatalogParity`, a three-line test that stops a translation drifting.** Only the fallback
+  language is read at compile time, so nothing about the others is checked by the compiler; a key
+  a translator missed leaves the fallback language showing mid-screen, and a sentence whose blanks
+  disagree either drops a value the reader needed or leaves a blank showing. Point the check at the
+  folder and the build fails naming the file, the key, and what is wrong with it.
+- **`TestServer.connectSpeaking(language, ...)` and `Refusals.assertRefusedWith(key, thrown)`**, so
+  one test can prove the same call is answered two ways, and so a test can assert on *which* refusal
+  happened rather than on the wording of it.
+- **`zeroz.i18n.defaultLocale`** — what language a deployment answers in when the browser has not
+  said. Default `en`. Deliberately not the machine's own locale: a server in Frankfurt has a German
+  JVM locale that has nothing to do with whoever is calling it.
+
+### Changed
+
+- **The framework's own refusals are now named, not just written.** They travel as a key plus values
+  and are turned into words at the edge of the server. Two new exception types carry the name:
+  `RefusedException` (a `SecurityException`, as before) and `NoSuchServiceMethodException` (a
+  `NoSuchMethodException`, as before), so everything that caught or tested for those still does, and
+  `getMessage()` on both is the same English sentence it always was.
+
+  **English is unchanged, character for character, for any project that adds no language** — every
+  one of this project's own tests that asserts on the wording of a refusal passes untouched.
+
+  **What to do:** nothing, unless you add a language. If you do, a test asserting on the exact
+  English of a framework refusal is now asserting on a translation, so replace it with
+  `Refusals.assertRefusedWith(FrameworkKeys.ACCESS_DENIED, thrown)`. The same applies to any client
+  code that compares an error message to a literal to decide what to show — that was always
+  fragile and is now wrong. And know that a validation message you wrote in a `@NotBlank(message =
+  "...")` is still one language whichever language the caller reads: it is compiled into the
+  generated rules as written. Check the value in your service method and throw
+  `ClientVisibleException` with a message from your own catalog where that matters.
+
 ### Fixed
 
 - **A client id set to expire immediately did not.** `zeroz.clientId.ttlDays` says how long an

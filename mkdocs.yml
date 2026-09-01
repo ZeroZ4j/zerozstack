@@ -90,6 +90,7 @@ nav:
       - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
       - Packaging and running: guides/packaging.md
+      - Answering in the reader's language: guides/language.md
       - Testing an application: guides/testing.md
       - Troubleshooting: guides/troubleshooting.md
       - Routing: ROUTING.md

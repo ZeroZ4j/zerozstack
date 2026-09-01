@@ -540,6 +540,22 @@ one name.
 Reference: <code>` (0.7.0+),** with the real message in the log under that code. To send a sentence
 the caller should read, throw `com.zeroz4j.server.ClientVisibleException`.
 
+**A refusal can be said in the caller's language.** Declare `.properties` files in the shared module
+(`i18n/app.properties`, `i18n/app_de.properties`) and mark them with an empty class annotated
+`@MessageCatalog(baseName = "i18n/app", fallback = "en")`; the processor writes `AppText_Text` with
+one camel-cased method per key, each taking one argument per `{0}` blank and returning a `Message`
+rather than a `String`. Throw `new ClientVisibleException(AppText_Text.invoiceApproved(id))` and the
+caller reads it in their language while the log keeps English; the `String` constructor stays correct
+for a one-language application. Blanks are `{0}`, `{1}` and nothing else - never `MessageFormat`,
+which costs 43% more browser download than every language of text put together. The connection's
+language is resolved once at the handshake (`lang` parameter, `zeroz-lang` cookie,
+`Accept-Language`, `zeroz.i18n.defaultLocale`, then `en`), narrowed to the languages files exist for,
+and read with `RmiRequestContext.getLocale()` - never from a method argument. Nothing checks the
+other languages, so add one test calling `CatalogParity.assertConsistent(folder, baseName)`.
+**English is byte-identical for a project that adds no language.** The browser half - a catalog on
+the wire, a language picker, live switching - does not exist yet; see
+[docs/guides/language.md](docs/guides/language.md).
+
 **Client identity without a login:** every connection carries a server-issued, HMAC-signed browser id
 in an `HttpOnly` cookie, readable as `RmiRequestContext.getClientId()` and used by `Scope.CLIENT`. It
 identifies a browser, not a person. Handshakes are also origin-checked; set `zeroz.origins` when the

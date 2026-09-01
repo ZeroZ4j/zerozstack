@@ -113,6 +113,14 @@ public final class TestConnection implements Session, AutoCloseable {
     }
 
     /**
+     * @return the language this connection reads, or null when it never said
+     * @since 0.9.0
+     */
+    public String language() {
+        return (String) properties.get("zeroz.locale");
+    }
+
+    /**
      * Everything the server has written to this connection so far.
      *
      * <p>Waits for the server's outbound writer to catch up first. Writing leaves the calling
@@ -230,8 +238,11 @@ public final class TestConnection implements Session, AutoCloseable {
 
     /** The endpoint configuration this connection is opened with. */
     EndpointConfig openingConfig(Principal principal, Set<String> roles, String tenant,
-                                 String browserId) {
+                                 String browserId, String language) {
         Map<String, Object> handshake = new HashMap<>();
+        if (language != null) {
+            handshake.put("zeroz.locale", language);
+        }
         if (principal != null) {
             handshake.put("zeroz.principal", principal);
         }

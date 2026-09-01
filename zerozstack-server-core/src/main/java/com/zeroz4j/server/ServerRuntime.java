@@ -179,6 +179,10 @@ public class ServerRuntime {
                     + "Configure it before the first connection is opened.");
         }
         this.config = newConfig;
+        // What language to answer in when nothing is in progress - a scheduled job writing a
+        // message, say. A call always carries its own caller's language and never reaches this.
+        RmiRequestContext.setDeploymentDefaultLocale(
+                LocaleResolution.localeOf(LocaleResolution.deploymentDefault(newConfig)));
     }
 
     // ------------------------------------------------------------------ lifecycle
