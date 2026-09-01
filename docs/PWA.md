@@ -159,8 +159,8 @@ Clicking it focuses an already-open window rather than opening a second copy of 
 | Anything cross-origin | never intercepted | a CDN, a font, an identity provider |
 | Any non-GET | never intercepted | a write must never be answered from a cache |
 
-The cache name carries the build version — `zeroz4j-shell-0.8.0` — so a deployment evicts the
-previous shell instead of serving stale JavaScript against a newer server. This is the trap that
+The cache name carries the build version — `zeroz4j-shell-0.9.0-SNAPSHOT` — so a deployment evicts
+the previous shell instead of serving stale JavaScript against a newer server. This is the trap that
 makes hand-rolled service workers a support burden, and it is handled.
 
 ## The offline page
@@ -220,7 +220,7 @@ and the offline page.
 
 ```bash
 mvn -pl zerozstack-examples/pwa-install/pwa-install-server -am install
-java -jar zerozstack-examples/pwa-install/pwa-install-server/target/pwa-install-server-0.8.0-SNAPSHOT.jar
+java -jar zerozstack-examples/pwa-install/pwa-install-server/target/pwa-install-server-0.9.0-SNAPSHOT.jar
 ```
 
 Then open <http://localhost:8083/>, install it, and stop the server and reload.

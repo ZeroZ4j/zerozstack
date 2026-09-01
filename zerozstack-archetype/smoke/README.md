@@ -39,10 +39,10 @@ REPO="-Dmaven.repo.local=$PWD/.m2smoke -Dmaven.repo.local.tail=$HOME/.m2/reposit
 
 Pin the plugin coordinates. The bare `archetype:generate` prefix resolves against the current
 project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
-Use the version the repository is on - `0.8.0-SNAPSHOT` while 0.8.0 is unreleased.
+Use the version the repository is on - `0.9.0-SNAPSHOT`, which is what a local build installs.
 
 ```bash
-mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.8.0-SNAPSHOT -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
+mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.9.0-SNAPSHOT -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
 ```
 
 Copy the fixtures over the generated sources, keeping each one's subdirectory — the fixture packages
@@ -133,8 +133,9 @@ Two things about it are worth knowing, because getting either wrong has already 
 
 - **It reads whether the bar is on the screen from the size of its painted box**, not from any
   particular style property. Until 0.7.0 the bar was an ordinary element and the script watched its
-  inline `display`; 0.8.0 moved the bar into the layer the browser keeps above everything else, so
-  nothing sets that property any more, and the check sat waiting for a value that no longer exists.
+  inline `display`; the change released in 0.8.0 moved the bar into the layer the browser keeps
+  above everything else, so nothing sets that property any more, and the check sat waiting for a
+  value that no longer exists.
   A painted height is true whichever way the bar is put on the screen, so the next change to that
   mechanism will not silently disarm the check.
 - **It reads the words the bar shows.** Nothing ever had, which is exactly why every release before
@@ -154,7 +155,7 @@ proves CDI discovery survives packaging. Build with `mvn verify -Ppackage`, star
 ## Also worth eyeballing
 
 - `smokeapp/AGENTS.md` should exist, and its second line under "The version this project is built
-  on" should name a real version — `0.8.0-SNAPSHOT`, not the literal `${zeroz4jVersion}`. It should
+  on" should name a real version — `0.9.0-SNAPSHOT`, not the literal `${zeroz4jVersion}`. It should
   also still have its six `##` headings. Velocity, which filters the file, reads `##` as the start
   of a comment and drops the rest of the line without a word, so the headings are escaped in the
   archetype's copy and an accidental un-escaping shows up here as missing headings and nothing else.

@@ -184,7 +184,7 @@ default, and a fresh application needs none of them set.
 | `zeroz.hosts` | Which host names this deployment answers for. A comma-separated list; an entry with no port accepts that name on any port | any name is accepted |
 | `zeroz.ws.maxBinaryMessageBytes` | Largest message the server accepts | **4 MB (4,194,304 bytes)** |
 | `zeroz.ws.idleTimeoutMinutes` | How long a silent connection is held before closing | the container's own timeout |
-| `zeroz.ws.maxQueuedFramesPerSession` | Messages from one connection that may be waiting to be handled. Renamed in 0.8.0; the old name `zeroz.ws.maxConcurrentFramesPerSession` is still read | **32** |
+| `zeroz.ws.maxQueuedFramesPerSession` | Messages from one connection that may be waiting to be handled. The name changed in 0.8.0; the old name `zeroz.ws.maxConcurrentFramesPerSession` is still read | **32** |
 | `zeroz.ws.maxPendingFramesPerSession` | Messages that may be waiting to go out on one connection | **256** |
 | `zeroz.ws.maxPendingBytesPerSession` | Bytes that may be waiting to go out on one connection | **8 MB (8,388,608 bytes)** |
 | `zeroz.ws.keepaliveMinIntervalMillis` | Shortest gap between two keepalive answers to one connection | **1000** |

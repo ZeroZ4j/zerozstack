@@ -144,8 +144,8 @@ a British word the list does not know, add the word — do not reach for a rule.
 [`CHANGELOG.md`](CHANGELOG.md) is the most-read page in this repository, and it is read by exactly
 one kind of person: somebody who has an application on the previous version and is deciding whether
 to move it. Write for them. It is also, in practice, how an AI coding agent with no training data on
-this framework learns what changed — several of the features in 0.8.0 were built by people and
-agents who had read nothing else.
+this framework learns what changed — several of the features released in 0.8.0 were built by people
+and agents who had read nothing else.
 
 Four rules. They are not style preferences; each one exists because dropping it made an entry
 useless.

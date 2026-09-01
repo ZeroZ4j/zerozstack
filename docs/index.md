@@ -5,8 +5,8 @@ your network layer is a binary RPC protocol over a persistent WebSocket, and you
 object graph on disk. You write no JavaScript, no JSON, no REST routes and no SQL.
 
 !!! warning "Experimental"
-    ZeroZ Stack is an experimental proof-of-concept at version **0.8.0**. It is a working demonstration,
-    not an industrialized production framework. Known gaps are listed in
+    ZeroZ Stack is an experimental proof-of-concept at version **0.9.0-SNAPSHOT**. It is a working
+    demonstration, not an industrialized production framework. Known gaps are listed in
     [Limitations](reference/limitations.md), and every page states its own limits where the feature is
     taught.
 
