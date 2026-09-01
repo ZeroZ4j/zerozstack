@@ -38,7 +38,24 @@ before the modules that consume them can compile, so `mvn clean test` on its own
 entry point.
 
 A full clean build of the reactor, including every example, takes about a minute on a warm Maven
-cache.
+cache. Compiling the twelve example clients for the browser is roughly **45 seconds** of that — the
+single largest item, and it is paid on every build of the reactor because the compiler has no
+usable incremental mode. There is no flag here that skips it; if you are only changing server-side
+code, build the modules you touched with `-pl <module> -am` rather than the whole reactor.
+
+### An application's build has two shapes; this repository's has one
+
+A project generated from the archetype builds its browser bundle at **`prepare-package`**, so
+`mvn compile` and `mvn test-compile` are `javac` and nothing else, and it builds that bundle
+**unoptimized and unminified by default**. `-Pproduction` is what turns on whole-program
+optimization and minification. That is the split an assistant working in a generated application
+has to understand: the quick check does not compile the user interface at all, a full
+`mvn install` does, and only `-Pproduction` produces the shape a user receives.
+
+This repository's own examples do not have that split. They compile at `process-classes` with
+`minifying=false` hardcoded, and that is deliberate: the browser proof page and the release gate
+read names out of the generated JavaScript. It does mean **no example in this repository can ever
+reproduce a minification bug**, which is exactly how the connection bar below shipped broken twice.
 
 ## Module map
 
@@ -621,13 +638,18 @@ version with no such marker is read as a claim about the current release.
 ## Conventions
 
 - **Never name anything with a single letter inside a `@JSBody` script.** TeaVM inlines the script
-  as text and renames only the method's parameters, and a minified build — the compiler's default,
-  and therefore what every generated application does — renames them to single letters: `b` for the
-  first parameter, `c` for the second, and so on. A one-letter name inside the script becomes the
-  same name as a parameter, and one of them silently becomes the other. That is how the connection
-  bar came to read `[object HTMLDivElement]` for two releases, and how a file upload's progress
-  figure never moved. Use `idx`, `ignored`, `bar`, `node`. `JsBodyNamingContractTest` reads every
-  Java file in the checkout on every build and fails it otherwise.
+  as text and renames only the method's parameters, and a minified build renames them to single
+  letters: `b` for the first parameter, `c` for the second, and so on. A one-letter name inside the
+  script becomes the same name as a parameter, and one of them silently becomes the other. That is
+  how the connection bar came to read `[object HTMLDivElement]` for two releases, and how a file
+  upload's progress figure never moved. Use `idx`, `ignored`, `bar`, `node`.
+  `JsBodyNamingContractTest` reads every Java file in the checkout on every build and fails it
+  otherwise.
+
+  **Nothing in this repository builds minified**, and a generated application only does so under
+  `-Pproduction`, so this class of bug is invisible in every ordinary build on both sides. The
+  contract test is the whole defense. Do not weaken it, and do not assume a working example proves
+  a `@JSBody` script is safe.
 - Apache 2.0 license header on every new `.java` file; copy an existing one.
 - Javadoc on public API, including the wire opcode where a method sends a frame.
 - Documentation lives in `/docs` as plain Markdown. See

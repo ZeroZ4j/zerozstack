@@ -14,6 +14,16 @@ Key things to know before generating ZeroZ Stack code:
   required because each example server's `target/libs` is never pruned.
 - An application has three modules: shared (`@DataModel` models, `@RmiService` interfaces), client
   (UI), server (`@ApplicationScoped` CDI implementations).
+- In a generated project, pick the build command deliberately: compiling the client for the browser
+  is most of what a build costs. `mvn compile` and `mvn test-compile` are `javac` only and do **not**
+  build the browser bundle — that is the command for an ordinary check, and about a third of the
+  time. `mvn install` builds a readable bundle and a runnable application. `mvn install -Pproduction`
+  optimizes and minifies it, and is the shape that ships. Measured on a freshly generated project
+  with a warm cache: about 5 seconds, 16 seconds and 17 seconds; 60 to 90 seconds for a full build on
+  a slow CI machine. Because the browser compiler accepts a smaller language than `javac`, client
+  code can pass the quick check and still fail to compile, so run a full build before calling client
+  work finished and give a pipeline `mvn verify` rather than `mvn test`. Build and run
+  `-Pproduction` before shipping: minification renames things and has broken this framework before.
 - A `@DataModel` may be a class, a `record`, or a `sealed` interface or abstract class listing its
   permitted types (records and sealed types both 0.8.0+). A record cannot be `@LiveSync`,
   `@ClientWritable`, part of a reference cycle, or a persistence root; use a class for those. A model
