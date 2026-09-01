@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.example.client;
 
+import com.zeroz4j.api.i18n.Message;
+import com.zeroz4j.example.api.AppText_Text;
 import com.zeroz4j.example.api.ChatService;
 import com.zeroz4j.example.api.ChatService_Stub;
 import com.zeroz4j.api.LiveMutationRefusals;
@@ -37,7 +39,15 @@ public class ChatView extends Card {
 
     private final ChatService chatService;
     private final ValueSignal<List<ChatMessage>> messagesSignal = new ValueSignal<>(new ArrayList<>());
-    private final ValueSignal<String> errorMessageSignal = new ValueSignal<>("");
+    /**
+     * What went wrong, held as a message rather than as words.
+     *
+     * <p>A message carries no language of its own, so it can be put here at the moment the call
+     * failed and turned into words later, in the effect that draws it. Words put here instead
+     * would be the words of whatever language was on screen when the failure happened, and they
+     * would still be those words after somebody switched.</p>
+     */
+    private final ValueSignal<Message> errorMessageSignal = new ValueSignal<>(null);
 
     /**
      * The reason the server gave for putting a topic edit back, or empty when nothing was refused.
@@ -65,16 +75,23 @@ public class ChatView extends Card {
         addClassName("flex");
         addClassName("flex-col");
 
-        add(new CardTitle("LiveSync Chat"));
+        CardTitle title = new CardTitle("");
+        title.setId("chat-title");
+        disposables.add(Effect.create(() -> title.setText(AppText_Text.chatTitle().text())));
+        add(title);
 
         // The up direction. Typing here calls a setter on this browser's own copy of the topic,
         // and that is the whole write path - the framework carries it to the server, which checks
         // it, applies it and tells every other browser. Nothing here calls a service.
-        topicField = new TextField().withLabel("Topic");
+        topicField = new TextField();
         topicField.setId("topic-input");
-        topicField.setHelperText("Anyone can change this. Every other window follows along. "
-                + "Over 80 characters and the server will not have it.");
         topicField.addClassName("mb-2");
+        // The caption and the explanation are read inside an effect, so switching language
+        // rewrites them and leaves whatever is typed in the box exactly where it is.
+        disposables.add(Effect.create(() -> {
+            topicField.setLabel(AppText_Text.chatTopicLabel().text());
+            topicField.setHelperText(AppText_Text.chatTopicHelp().text());
+        }));
         add(topicField);
 
         // Where a refused edit is told to the person. An edit is put on the screen the moment it is
@@ -88,7 +105,7 @@ public class ChatView extends Card {
             String reason = refusalSignal.get();
             refusalNotice.removeAll();
             if (reason != null && !reason.isEmpty()) {
-                refusalNotice.add(Alert.caution("The topic was not changed. " + reason));
+                refusalNotice.add(Alert.caution(AppText_Text.chatTopicRefused(reason).text()));
             }
         }));
 
@@ -111,11 +128,18 @@ public class ChatView extends Card {
         inputLayout.addClassName("gap-2");
         inputLayout.addClassName("w-full");
 
-        TextField inputField = new TextField("Type a message...");
+        TextField inputField = new TextField();
+        inputField.setId("message-input");
         inputField.addClassName("flex-1");
-        
-        Button sendButton = new Button("Send");
+
+        Button sendButton = new Button();
+        sendButton.setId("send-button");
         sendButton.addClassName("btn-primary");
+
+        disposables.add(Effect.create(() -> {
+            inputField.setPlaceholder(AppText_Text.chatMessagePlaceholder().text());
+            sendButton.setText(AppText_Text.chatSend().text());
+        }));
         
         inputLayout.add(inputField, sendButton);
         add(inputLayout);
@@ -125,7 +149,8 @@ public class ChatView extends Card {
         errorDiv.addClassName("text-error");
         errorDiv.addClassName("mt-2");
         disposables.add(Effect.create(() -> {
-            errorDiv.getElement().setInnerHTML(errorMessageSignal.get());
+            Message problem = errorMessageSignal.get();
+            errorDiv.setText(problem == null ? "" : problem.text());
         }));
         add(errorDiv);
 
@@ -137,7 +162,7 @@ public class ChatView extends Card {
                     chatService.sendMessage(text);
                 } catch (Exception ex) {
                     System.err.println("[zeroz4j] Chat error: " + ex.getMessage());
-                    errorMessageSignal.set("Failed to send message: " + ex.getMessage());
+                    errorMessageSignal.set(AppText_Text.chatSendFailed(ex.getMessage()));
                 }
             }
         };
@@ -189,7 +214,7 @@ public class ChatView extends Card {
             // One RMI call establishes the object handle. From here the server's
             // syncEngine.notifyChanged(state) reaches this instance.
             liveState = chatService.getState();
-            errorMessageSignal.set("");
+            errorMessageSignal.set(null);
 
             // A @LiveSync object is a reactive dependency: reading a getter inside an Effect
             // subscribes to it, so an inbound sync re-runs this automatically. No polling.
@@ -209,7 +234,10 @@ public class ChatView extends Card {
             topicField.addDomEventListener("blur", evt -> beingTypedIn[0] = false);
             disposables.add(Effect.create(() -> {
                 String current = liveTopic.getText() == null ? "" : liveTopic.getText();
-                topicDisplay.setText("Topic: " + (current.isEmpty() ? "(none yet)" : current));
+                // Two reads in one effect: the topic, which the server changes, and the words
+                // around it, which the language changes. Both are dependencies of this one line.
+                topicDisplay.setText(AppText_Text.chatTopicIs(current.isEmpty()
+                        ? AppText_Text.chatTopicNone().text() : current).text());
                 if (!beingTypedIn[0] && !current.equals(topicField.getValue())) {
                     topicField.setValue(current);
                 }
@@ -243,7 +271,7 @@ public class ChatView extends Card {
 
         } catch (Exception ex) {
             System.err.println("[zeroz4j] Chat error: " + ex.getMessage());
-            errorMessageSignal.set("Failed to initialize LiveSync: " + ex.getMessage());
+            errorMessageSignal.set(AppText_Text.chatSendFailed(ex.getMessage()));
         }
     }
 

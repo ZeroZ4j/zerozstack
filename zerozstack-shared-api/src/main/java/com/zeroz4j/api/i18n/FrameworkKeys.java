@@ -71,6 +71,9 @@ public final class FrameworkKeys {
     /** A live change that also reaches a nested model needing a role the writer has not got. */
     public static final String LIVE_NESTED_REQUIRES_ROLE = "live.nestedRequiresRole";
 
+    /** The name a language selector announces itself by. */
+    public static final String UI_LANGUAGE = "ui.language";
+
     private FrameworkKeys() {
     }
 }

@@ -139,6 +139,13 @@ public class WasmRmiClientTest {
     }
 
     /** Builds an AUTH frame the way the server does. */
+    /**
+     * An AUTH frame from a server that only knows version 2 - no catalog after the roles.
+     *
+     * <p>Deliberately still version 2: this is the older-server half of the protocol change, and a
+     * client that read past the end of one of these would report a broken connection where the only
+     * thing missing is a translation.</p>
+     */
     private static byte[] authFrame(boolean authenticated, String username, String... roles) {
         GrowableBuffer frame = new GrowableBuffer();
         frame.putInt(0); // Correlation ID (0 for broadcast)
@@ -163,6 +170,54 @@ public class WasmRmiClientTest {
         assertTrue(RmiSecurityContext.hasAnyRole("admin"));
         assertTrue(RmiSecurityContext.hasAnyRole("user"));
         assertFalse(RmiSecurityContext.hasAnyRole("guest"));
+    }
+
+    /**
+     * A version-3 AUTH frame: the roles, then the language, the languages on offer, and the words.
+     */
+    private static byte[] authFrameWithCatalog(String language, String greeting) {
+        GrowableBuffer frame = new GrowableBuffer();
+        frame.putInt(0);
+        frame.put((byte) 0x03);
+        frame.put((byte) 3);
+        frame.put((byte) 1);
+        BinarySerializer.writeString(frame, "alice");
+        frame.putInt(0);
+        BinarySerializer.writeString(frame, language);
+        frame.putInt(2);
+        BinarySerializer.writeString(frame, "en");
+        BinarySerializer.writeString(frame, "de");
+        frame.putInt(1);
+        BinarySerializer.writeString(frame, "i18n/app");
+        frame.putInt(1);
+        BinarySerializer.writeString(frame, "greet");
+        BinarySerializer.writeString(frame, greeting);
+        return frame.toByteArray();
+    }
+
+    /**
+     * The words arrive with the frame that says the connection is ready, and they are in hand
+     * <b>before</b> the application is told it may build a screen - which is the whole reason they
+     * ride on this frame rather than being fetched.
+     */
+    @Test
+    public void testAVersion3FrameCarriesTheWords() throws Exception {
+        com.zeroz4j.api.i18n.ClientMessages.forgetForTesting();
+        com.zeroz4j.api.i18n.ClientMessages.install();
+        RmiSecurityContext.clear();
+        String[] seenWhenTold = { null };
+        RmiSecurityContext.onResolved(() ->
+                seenWhenTold[0] = new com.zeroz4j.api.i18n.Message("i18n/app", "greet").text());
+
+        WasmRmiClient.routeIncomingMessage(authFrameWithCatalog("de", "Guten Tag"));
+
+        assertEquals("Guten Tag", seenWhenTold[0],
+                "the words must already be there when the application mounts its first screen, or "
+                        + "that screen is drawn in English and corrected a moment later");
+        assertEquals(java.util.Arrays.asList("en", "de"),
+                com.zeroz4j.api.i18n.ClientMessages.offeredLanguages(),
+                "a language selector offers exactly what the server said it can answer in");
+        com.zeroz4j.api.i18n.ClientMessages.forgetForTesting();
     }
 
     /**

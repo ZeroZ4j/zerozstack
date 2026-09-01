@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.example.client;
 
+import com.zeroz4j.example.api.AppText_Text;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.HorizontalLayout;
@@ -24,6 +25,7 @@ import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.layout.VerticalLayout;
 import com.zeroz4j.signals.Effect;
 import com.zeroz4j.signals.ValueSignal;
+import com.zeroz4j.ui.component.LanguageSelector;
 import com.zeroz4j.ui.component.Menu;
 import com.zeroz4j.ui.component.ThemeController;
 import org.teavm.jso.browser.Window;
@@ -69,7 +71,12 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.addClassName("mt-auto");
         themeLayout.addClassName("justify-between");
         
-        Span themeLabel = new Span("Dark Mode");
+        Span themeLabel = new Span("");
+        themeLabel.setId("dark-mode-label");
+        // Read inside an effect, so it comes back in the new language when somebody switches.
+        // Read at construction instead and it would sit there in the old language forever - the
+        // mistake MessageReadContractTest exists to stop.
+        Effect.create(() -> themeLabel.setText(AppText_Text.chatDarkMode().text()));
         themeLayout.add(themeLabel);
         
         ThemeController themeToggle = new ThemeController(true);
@@ -85,6 +92,26 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.add(themeToggle);
         themeItem.getElement().appendChild(themeLayout.getElement());
         menu.add(themeItem);
+
+        // The language picker. It offers exactly the languages this deployment has words for -
+        // the list arrived with the words when the connection opened - and it binds itself to the
+        // language, so this is the whole of adding one.
+        Component languageItem = new Component("li") {};
+        VerticalLayout languageLayout = new VerticalLayout();
+        languageLayout.addClassName("px-4");
+        languageLayout.addClassName("pb-4");
+        languageLayout.addClassName("gap-2");
+        languageLayout.add(new LanguageSelector());
+
+        Span switchHint = new Span("");
+        switchHint.setId("switch-hint");
+        switchHint.addClassName("text-xs");
+        switchHint.addClassName("opacity-70");
+        Effect.create(() -> switchHint.setText(AppText_Text.chatSwitchHint().text()));
+        languageLayout.add(switchHint);
+
+        languageItem.getElement().appendChild(languageLayout.getElement());
+        menu.add(languageItem);
 
         sidebar.add(menu);
 

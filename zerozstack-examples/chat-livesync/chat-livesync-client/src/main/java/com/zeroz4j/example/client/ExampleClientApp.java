@@ -17,7 +17,9 @@
  */
 package com.zeroz4j.example.client;
 
+import com.zeroz4j.api.i18n.ClientMessages;
 import com.zeroz4j.client.Zeroz4jClient;
+import com.zeroz4j.example.api.AppText_Catalog;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.component.Login;
 import com.zeroz4j.api.RmiSecurityContext;
@@ -30,6 +32,11 @@ public class ExampleClientApp {
     private static boolean started = false;
 
     public static void main(String[] args) {
+        // The English this build compiled in. Optional: every word arrives over the connection
+        // anyway. It is what the sign-in card below shows, because that card is drawn before there
+        // is a connection to receive anything on.
+        ClientMessages.useFallback(AppText_Catalog.BASE_NAME, AppText_Catalog::lookup);
+
         HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
 
         Login[] loginHolder = new Login[1];

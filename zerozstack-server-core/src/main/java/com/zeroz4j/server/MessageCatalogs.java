@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -78,6 +79,8 @@ final class MessageCatalogs implements Messages.Source {
     private static final Map<String, Properties> LOADED = new ConcurrentHashMap<>();
 
     private static volatile Set<String> offered;
+
+    private static volatile Set<String> catalogs;
 
     @Override
     public String pattern(String catalog, String key, String language) {
@@ -164,10 +167,131 @@ final class MessageCatalogs implements Messages.Source {
         return known;
     }
 
+    /**
+     * Every catalog on this deployment's classpath, by base name.
+     *
+     * <p>Read from the file names in {@code i18n/}, with the language suffix taken off, so an
+     * application declaring {@code @MessageCatalog(baseName = "i18n/app")} is found without saying
+     * so twice. Read once: a deployment does not grow a catalog while it is running.</p>
+     *
+     * @return the base names, for example {@code i18n/app} and {@code i18n/zeroz4j}
+     */
+    static Set<String> catalogNames() {
+        Set<String> known = catalogs;
+        if (known != null) {
+            return known;
+        }
+        Set<String> found = new LinkedHashSet<>();
+        try {
+            Enumeration<URL> folders = classLoader().getResources(CATALOG_FOLDER);
+            while (folders.hasMoreElements()) {
+                collectNamesFrom(folders.nextElement(), found);
+            }
+        } catch (IOException unreadable) {
+            LOG.log(Level.WARNING, "[zeroz4j] Could not list the message catalogs on the classpath;"
+                    + " the browser will be sent no words and will show the ones it compiled in.",
+                    unreadable);
+        }
+        known = Collections.unmodifiableSet(found);
+        catalogs = known;
+        return known;
+    }
+
+    /**
+     * Every catalog this deployment has, in one language, ready to put on the wire.
+     *
+     * <p>Each catalog is the language asked for laid over the file with no suffix, so a translation
+     * that is missing a key still shows the fallback sentence rather than the key. That is the same
+     * order {@link Messages#lookup} uses on the server, which is what makes a message read the same
+     * in a browser hint and in the server's refusal of the same value.</p>
+     *
+     * @param language an IETF language tag, or null for the fallback language
+     * @return catalog base name to key/value pairs; never null
+     */
+    static Map<String, Map<String, String>> allEntries(String language) {
+        Map<String, Map<String, String>> everything = new LinkedHashMap<>();
+        for (String catalog : catalogNames()) {
+            Map<String, String> words = new LinkedHashMap<>();
+            copyInto(read(catalog, null), words);
+            if (language != null && !language.isEmpty()) {
+                copyInto(read(catalog, language), words);
+            }
+            if (!words.isEmpty()) {
+                everything.put(catalog, words);
+            }
+        }
+        return everything;
+    }
+
+    private static void copyInto(Properties from, Map<String, String> into) {
+        for (String key : from.stringPropertyNames()) {
+            into.put(key, from.getProperty(key));
+        }
+    }
+
     /** Forgets what was read. Test support only: a test may put a new file on the classpath. */
     static void forgetForTesting() {
         LOADED.clear();
         offered = null;
+        catalogs = null;
+    }
+
+    private static void collectNamesFrom(URL folder, Set<String> found) {
+        String protocol = folder.getProtocol();
+        if ("file".equals(protocol)) {
+            try {
+                Path directory = Paths.get(folder.toURI());
+                if (!Files.isDirectory(directory)) {
+                    return;
+                }
+                try (DirectoryStream<Path> entries = Files.newDirectoryStream(directory)) {
+                    for (Path entry : entries) {
+                        baseNameOf(entry.getFileName().toString(), found);
+                    }
+                }
+            } catch (Exception unreadable) {
+                LOG.log(Level.FINE, "[zeroz4j] Could not list " + folder, unreadable);
+            }
+            return;
+        }
+        if (!"jar".equals(protocol)) {
+            return;
+        }
+        try {
+            URLConnection connection = folder.openConnection();
+            if (!(connection instanceof JarURLConnection)) {
+                return;
+            }
+            // Not closed, for the reason collectFromJar gives: the container shares this JarFile.
+            JarFile jar = ((JarURLConnection) connection).getJarFile();
+            Enumeration<JarEntry> entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                if (name.startsWith(CATALOG_FOLDER) && name.indexOf('/', CATALOG_FOLDER.length()) < 0) {
+                    baseNameOf(name.substring(CATALOG_FOLDER.length()), found);
+                }
+            }
+        } catch (Exception unreadable) {
+            LOG.log(Level.FINE, "[zeroz4j] Could not list " + folder, unreadable);
+        }
+    }
+
+    /**
+     * Reads the catalog name out of a file name: {@code app_pt_BR.properties} and
+     * {@code app.properties} are both the catalog {@code i18n/app}.
+     */
+    private static void baseNameOf(String fileName, Set<String> found) {
+        if (!fileName.endsWith(".properties")) {
+            return;
+        }
+        String stem = fileName.substring(0, fileName.length() - ".properties".length());
+        int underscore = stem.indexOf('_');
+        if (underscore > 0) {
+            stem = stem.substring(0, underscore);
+        }
+        if (!stem.isEmpty()) {
+            found.add(CATALOG_FOLDER + stem);
+        }
     }
 
     private static void collectFrom(URL folder, Set<String> found) {

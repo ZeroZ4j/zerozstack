@@ -309,12 +309,16 @@ public class WasmRmiServerEngineTest {
         ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
-        assertEquals((byte) 2, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 3, buf.get(), "AUTH protocol version");
         assertEquals((byte) 1, buf.get(), "authenticated flag");
         assertEquals("testUser", BinarySerializer.readString(buf));
         int numRoles = buf.getInt();
         assertEquals(1, numRoles);
         assertEquals("user", BinarySerializer.readString(buf));
+        // Version 3 appends the words for this connection's language. What is in that block is
+        // CatalogOnTheAuthFrameTest's business; that something follows the roles is this one's,
+        // because a version bump that forgot to write the payload would still pass everything above.
+        assertTrue(buf.hasRemaining(), "version 3 carries the catalog after the roles");
     }
 
     /**
@@ -335,7 +339,7 @@ public class WasmRmiServerEngineTest {
         ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
-        assertEquals((byte) 2, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 3, buf.get(), "AUTH protocol version");
         assertEquals((byte) 0, buf.get(),
                 "a declined connection must be marked unauthenticated, not merely role-less");
         assertEquals("anonymous", BinarySerializer.readString(buf));

@@ -158,3 +158,21 @@ are real and they are not checked anywhere yet.
 
 It covers the component library only. An application can still put a click listener on its own
 `Div`, and nothing will stop it.
+
+## A control whose name is translated
+
+`LanguageSelector` is the first control in this library whose accessible name is not a literal. It
+reads its name from the framework's own catalog inside an effect, so the name changes with the
+language like any other word on the screen — and `setLabel(...)` takes the built-in name away, the
+way `ThemeController` does, so the caption and the built-in name can never disagree.
+
+Two things follow for anything else that grows a translated name.
+
+**The name has to be read inside an effect.** Read at construction it is right once and wrong from
+the first language switch onward, and a screen reader announces the old language forever.
+`MessageReadContractTest` fails the build on that, and its javadoc is honest about the reads it
+cannot see.
+
+**Read it in the effect, not in a helper the effect calls.** The check reads one file's text and
+cannot follow an ordinary method call, so a helper is reported as a mistake even when it is correct.
+Putting the read in the effect body keeps the check useful instead of teaching people to silence it.

@@ -69,6 +69,13 @@ public final class TestConnection implements Session, AutoCloseable {
     public static final byte PUSH = 0x02;
     /** The opcode byte of the frame that says who the server decided you are. */
     public static final byte AUTH = 0x03;
+    /**
+     * The opcode byte of the frame carrying translated words.
+     *
+     * <p>Written only when somebody switches language on a connection that is already open, and
+     * always immediately before the {@link #SIGNAL_UPDATE} that puts the new language on screen.</p>
+     */
+    public static final byte CATALOG = 0x04;
     /** The opcode byte of a shared-signal value. */
     public static final byte SIGNAL_UPDATE = 0x17;
     /** The opcode byte of a LiveSync object update. */
@@ -159,7 +166,8 @@ public final class TestConnection implements Session, AutoCloseable {
      * What kind of frame the server wrote.
      *
      * <p>The opcode is the fifth byte: four bytes of correlation id come first. Compare it with
-     * {@link #PUSH}, {@link #AUTH}, {@link #SIGNAL_UPDATE} or {@link #OBJECT_UPDATE}.</p>
+     * {@link #PUSH}, {@link #AUTH}, {@link #CATALOG}, {@link #SIGNAL_UPDATE} or
+     * {@link #OBJECT_UPDATE}.</p>
      *
      * @param index which frame, counting from zero
      * @return the opcode byte

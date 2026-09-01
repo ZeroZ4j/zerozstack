@@ -155,11 +155,8 @@ Austrian German gets German when you have German and no Austrian German, and get
 when you have neither. A half-translated screen is worse than a screen in one language, so it never
 happens.
 
-!!! note "Steps 1 and 2 are read but nothing writes them yet"
-    The server reads the parameter and the cookie today. Nothing in the framework puts them there
-    yet — a language picker in the browser, and the live switching that goes with it, are the second
-    half of this work. What works now is step 3 onward: a person's browser preference, your
-    deployment's own setting, and English.
+There is one more step, and it exists only if you ask for it — see
+[Remembering it per person](#remembering-it-per-person).
 
 Read it in a service the same way you read who is calling:
 
@@ -257,13 +254,230 @@ Refusals.assertRefusedWith(FrameworkKeys.ACCESS_DENIED, thrown);
 
 Nothing forces this. English is unchanged, so a test asserting on the English sentence still passes.
 
+## Showing the words in the browser
+
+The browser cannot read a `.properties` file, so the server sends it one. When a connection opens,
+the words for that connection's language ride on the same frame that tells your application it may
+build its first screen. There is nothing to configure and nothing to fetch: by the time your
+`onResolved` callback runs, the words are already in the browser.
+
+That means **no screen is ever drawn in English and corrected a moment later.**
+
+### The one rule, and it is the one everybody gets wrong
+
+```java
+// WRONG. The words are read once, when the button is built, and never again.
+Button add = new Button(AppText_Text.taskAdd().text());
+
+// RIGHT. The words are read inside an effect, so the button follows the language.
+Button add = new Button();
+Effect.create(() -> add.setText(AppText_Text.taskAdd().text()));
+```
+
+It is the same shape as the LiveSync mistake — a value read outside an effect, so nothing
+subscribed — and it will be far more common, because a screen has many more labels on it than it
+has live objects.
+
+**It is also nearly invisible in testing.** Screens are rebuilt when you navigate, so if you switch
+language and then move around your application, everything looks right. The label that stayed
+behind is on the screen that was open at the moment of the switch, which is exactly the screen
+nobody thinks to check.
+
+### The build fails when you get it wrong
+
+`MessageReadContractTest` reads every file in the checkout that can run in a browser and fails the
+build when `.text()` is called outside an effect. It has failed builds since the day this feature
+landed, because there was no old code to grandfather in.
+
+Where a read genuinely happens once — a sentence sent to the server, a line written to a log — say
+so on the method:
+
+```java
+@ReadsMessagesOnce("assembled for one call and sent; never shown")
+private String describeForTheServer() {
+    return AppText_Text.taskAdd().text();
+}
+```
+
+**Read what it cannot catch before you trust it.** All of these are real:
+
+- **A read one call deep.** It reads one file's text and cannot follow a call, so a helper called
+  from inside an effect is reported and the same helper called from a constructor is not. The one
+  exception is a method handed straight to `Effect.create(this::redraw)`, which it follows one hop.
+- **Words put in a variable inside an effect and used outside it.** Correct at the moment it runs,
+  and indistinguishable from correct code afterwards.
+- **English left hard-coded.** `new Button("Add task")` is not translated at all and nothing
+  notices. No check can reliably tell a sentence a person reads from a CSS class or a log line.
+- **A bad translation.** A German `taskAdd` that says "subtract task" passes everything.
+
+### Carry the message, not the words
+
+A `Message` has no language in it, so it is safe to hold on to and turn into words later. That is
+what lets a failure that happened in one language be shown in another:
+
+```java
+// The failure is remembered as a message ...
+private final ValueSignal<Message> problem = new ValueSignal<>(null);
+...
+catch (Exception ex) {
+    problem.set(AppText_Text.sendFailed(ex.getMessage()));
+}
+
+// ... and turned into words where it is drawn, so it follows a switch like everything else.
+Effect.create(() -> {
+    Message shown = problem.get();
+    errorBox.setText(shown == null ? "" : shown.text());
+});
+```
+
+### Before the connection is up
+
+A screen built before there is a connection — a sign-in card, most often — has no words yet and
+would show key names. Register the English your build compiled in, once, at start-up:
+
+```java
+ClientMessages.useFallback(AppText_Catalog.BASE_NAME, AppText_Catalog::lookup);
+```
+
+Optional, and cheap: `AppText_Catalog` is generated for you and is the fallback language written out
+as a `switch`.
+
+## Letting somebody choose
+
+```java
+sidebar.add(new LanguageSelector());
+```
+
+That is the whole of it. It offers exactly the languages your deployment has words for — the list
+arrives with the words when the connection opens — so it can never offer one that would be refused,
+and it binds itself to the language, because there is nothing else a language selector could be
+bound to.
+
+It is a real `<select>`, so the browser supplies the keyboard: Tab reaches it, the arrow keys move
+through the choices, typing jumps by first letters, Enter takes one and Escape leaves it alone. It
+announces itself as "Language" until `setLabel(...)` gives it words of your own.
+
+**Each language is named in itself** — `Deutsch`, `Français`, `日本語` — never in the language
+currently on screen. Somebody who has landed on a page in a language they cannot read is exactly the
+person who needs this control. To change a name, or add one for a language this library has never
+heard of, put `language.<tag>` in your own `i18n/zeroz4j_*.properties`.
+
+### What happens when somebody uses it
+
+1. The picker shows the new language at once, and the browser writes a `zeroz-lang` cookie so the
+   choice survives a reload.
+2. The server narrows the choice to a language it really has words for, remembers it on the
+   connection so every later call is answered in it, and tells your `LocalePreferenceStore` if you
+   registered one.
+3. The words go down the wire, and **then** the value that redraws the screen. In that order, so
+   nothing redraws twice.
+4. Every effect that has read a message re-runs and calls `setText` on the label it already owns.
+
+**Nothing else is rebuilt.** A half-filled form keeps its values, the scroll position does not move,
+and the keyboard stays where it was. Only the words change.
+
+Two things worth knowing:
+
+- **Every tab of that browser changes together.** The language belongs to the browser, not to one
+  tab.
+- **While the connection is down, the words do not change.** The choice is written to the cookie and
+  queued, and lands when the connection comes back. The words come from the server, so there is
+  nothing to show until there is a server.
+
+## Remembering it per person
+
+Out of the box the choice is remembered in a cookie. That is right on the machine somebody chose it
+on, and wrong on their second one.
+
+The framework cannot do better on its own, because it has nowhere of its own to write user data.
+If your application already has somewhere, say so in one small class:
+
+```java
+public final class UserLanguages implements LocalePreferenceStore {
+    public Locale forUser(String userName) {
+        Account account = accounts.byName(userName);
+        return account == null ? null : account.language();
+    }
+    public void remember(String userName, Locale locale) {
+        accounts.byName(userName).setLanguage(locale);
+    }
+}
+```
+
+Name it in `META-INF/services/com.zeroz4j.server.LocalePreferenceStore`. Found by `ServiceLoader`,
+not by CDI, because a handshake runs before any bean exists — the same as `AuthenticationProvider`.
+
+It is asked once, at the handshake, only for a connection that signed in, and it sits **after** the
+language the browser asked for outright and **before** the cookie. So somebody who has just picked a
+language on this machine gets what they picked, and a fresh browser gets what they chose last time
+somewhere else.
+
+## Numbers, dates and money
+
+A translated screen that prints `1,234.56` to a German reader is not translated.
+
+```java
+AppText_Text.invoiceTotal(Formats.currency().format(amount))
+```
+
+`Formats.number()`, `integer()`, `percent()`, `currency()`, `date()` and `dateTime()` all read the
+reader's language — the language on screen in the browser, the caller's language on the server — so
+one call site is right on both tiers.
+
+!!! warning "This is the most expensive line in the framework. Read the number before you use it."
+    Nothing else in ZeroZ Stack touches `java.text`, and that is deliberate. **The first call from a
+    client module into any method on `Formats` adds 233 KB to the bundle and 43 KB to what every
+    visitor downloads, gzipped.** Every locale you then name in `java.util.Locale.available` costs
+    about 36 KB more, 6 KB gzipped.
+
+    For proportion: translating your interface into twenty languages costs the browser **nothing at
+    all**, because the words travel over the connection. Formatting one number the German way costs
+    more than every language of text you will ever ship, several times over.
+
+Calling it is not enough. TeaVM compiles in locale data only for the locales your build names, and
+the default is one. In your client module's `teavm-maven-plugin` configuration:
+
+```xml
+<properties>
+  <java.util.Locale.available>en_US,de_DE,fr_FR</java.util.Locale.available>
+  <java.util.Locale.default>en_US</java.util.Locale.default>
+</properties>
+```
+
+**`java.util.Locale.default` must contain an underscore.** TeaVM splits it on one, and a value
+without it fails at class initialization with nothing useful to read.
+
+Four things it does not do:
+
+- **A language with no locale data formats as English.** No error and no warning — the numbers are
+  simply grouped the English way. The two lists (languages you translated, locales whose data you
+  compiled in) live in different files and nothing compares them.
+- **The locale decides the currency,** which is almost never what you want: a German reader looking
+  at a dollar invoice must see dollars. Set the currency on the returned format explicitly.
+- **Time zones are off unless your build asks.** TeaVM's `java.util.TimeZone.autodetect` defaults to
+  false. A timestamp translated into German and shown in UTC is still the wrong time.
+- **`ZonedDateTime` and `OffsetDateTime` do not cross the wire at all.** Send an `Instant` and
+  format it against a zone the browser knows.
+
 ## What this does not do yet
 
-The server speaks the caller's language. The browser does not yet — see
-[limitations](../reference/limitations.md#language) for the full list. The short version: there is
-no language picker, no live switching, and the words in the browser are still the ones compiled
-into it.
+- **Plural rules of any kind.** `"{0} tasks left"` says "1 tasks left". Write two keys and an `if`;
+  that costs nothing, and the alternative costs 57 KB of download and is still wrong for Polish,
+  Russian, Arabic and Welsh.
+- **The framework's own words inside the browser** — the reconnect banner, `Close` on a drawer,
+  `Copied` after a copy button, the offline page — are English literals and are not in a catalog.
+  The words on a `LanguageSelector` are the exception; those are.
+- **Validation messages** are compiled into `<Model>_Rules` as written and are not translatable.
+- **There is no check for English left hard-coded** in a screen.
 
-Right-to-left layouts, plural rules, and translating content stored in your database are all
-deliberately out of scope and are not planned. The reasoning is in the
+Right-to-left layouts, locale-aware sorting, translation tooling, per-tenant catalogs, translated
+route paths, and translating content stored in your database are all deliberately out of scope and
+are not planned. The reasoning is in the
 [language support design](../design/language-support.md).
+
+## Seeing all of it working
+
+`zerozstack-examples/chat-livesync` is translated into German end to end: a catalog in its shared
+module, a `LanguageSelector` in the side panel, and a German copy of the framework's own words so
+even the picker announces itself as `Sprache`. Run it, type something into the topic box, and switch
+language while you look at it.

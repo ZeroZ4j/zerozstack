@@ -22,7 +22,11 @@ import com.zeroz4j.api.i18n.Messages;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Decides, once per connection, what language the person on the other end reads.
@@ -32,6 +36,8 @@ import java.util.Set;
  * <ol>
  *   <li>The {@code lang} handshake parameter, when the browser sends one. It sends it when it
  *       already knows the answer from a choice made earlier.</li>
+ *   <li>What a registered {@link LocalePreferenceStore} has stored for this person, when they
+ *       signed in. Not registered - the usual case - and this step does not exist.</li>
  *   <li>The {@code zeroz-lang} cookie. This is what makes a choice survive a restart and a new
  *       connection.</li>
  *   <li>The {@code Accept-Language} header — the person's own browser setting, which is what an
@@ -61,7 +67,111 @@ final class LocaleResolution {
     /** The cookie the client writes when somebody picks a language. The server only reads it. */
     static final String LANGUAGE_COOKIE = "zeroz-lang";
 
+    private static final Logger LOG = Logger.getLogger(LocaleResolution.class.getName());
+
+    /** The application's own memory of who reads what, or null when it registered none. */
+    private static volatile LocalePreferenceStore preferences;
+    private static volatile boolean preferencesResolved;
+
     private LocaleResolution() {
+    }
+
+    /**
+     * The application's per-person language memory, looked up once.
+     *
+     * <p>{@code ServiceLoader} rather than CDI, because a handshake runs before beans exist. More
+     * than one implementation is refused rather than picked between: which one wins would decide
+     * what language somebody reads, and picking at random is not an answer.</p>
+     *
+     * @return the store, or null when the application registered none
+     */
+    static LocalePreferenceStore preferenceStore() {
+        if (preferencesResolved) {
+            return preferences;
+        }
+        synchronized (LocaleResolution.class) {
+            if (preferencesResolved) {
+                return preferences;
+            }
+            LocalePreferenceStore found = null;
+            try {
+                List<LocalePreferenceStore> all = new ArrayList<>();
+                for (LocalePreferenceStore candidate
+                        : ServiceLoader.load(LocalePreferenceStore.class)) {
+                    all.add(candidate);
+                }
+                if (all.size() > 1) {
+                    LOG.warning("[zeroz4j] More than one LocalePreferenceStore is registered ("
+                            + all + "). None is used: which one wins would decide what language"
+                            + " somebody reads. Register exactly one in META-INF/services.");
+                } else if (all.size() == 1) {
+                    found = all.get(0);
+                    LOG.info("[zeroz4j] Language is remembered per person by "
+                            + found.getClass().getName());
+                }
+            } catch (RuntimeException | ServiceConfigurationError broken) {
+                LOG.log(Level.WARNING, "[zeroz4j] Could not load a LocalePreferenceStore;"
+                        + " the language is remembered per browser only.", broken);
+            }
+            preferences = found;
+            preferencesResolved = true;
+            return found;
+        }
+    }
+
+    /** Test support: forces the store to be looked up again. */
+    static void resetPreferenceStoreForTesting() {
+        synchronized (LocaleResolution.class) {
+            preferences = null;
+            preferencesResolved = false;
+        }
+    }
+
+    /**
+     * Tells the application that this person has chosen a language, when it asked to be told.
+     *
+     * @param userName the authenticated user name, or null for an anonymous connection
+     * @param tag      the language tag they chose
+     */
+    static void remember(String userName, String tag) {
+        if (userName == null || userName.isEmpty() || tag == null) {
+            return;
+        }
+        LocalePreferenceStore store = preferenceStore();
+        if (store == null) {
+            return;
+        }
+        try {
+            store.remember(userName, localeOf(tag));
+        } catch (RuntimeException ex) {
+            // A store that cannot write must not break the switch: the cookie has it either way.
+            LOG.log(Level.WARNING, "[zeroz4j] LocalePreferenceStore could not remember the language"
+                    + " for " + userName + "; the browser's own cookie still has it.", ex);
+        }
+    }
+
+    /**
+     * What the application has stored for this person.
+     *
+     * @param userName the authenticated user name, or null
+     * @return a language tag, or null when nothing is stored or nothing is registered
+     */
+    private static String storedFor(String userName) {
+        if (userName == null || userName.isEmpty()) {
+            return null;
+        }
+        LocalePreferenceStore store = preferenceStore();
+        if (store == null) {
+            return null;
+        }
+        try {
+            Locale stored = store.forUser(userName);
+            return stored == null ? null : stored.toLanguageTag();
+        } catch (RuntimeException ex) {
+            LOG.log(Level.WARNING, "[zeroz4j] LocalePreferenceStore could not answer for "
+                    + userName + "; falling through to the browser's own cookie.", ex);
+            return null;
+        }
     }
 
     /**
@@ -75,10 +185,28 @@ final class LocaleResolution {
      */
     static String atHandshake(ServerConfig settings, String parameter, String cookieHeader,
                               String acceptLanguage) {
+        return atHandshake(settings, parameter, cookieHeader, acceptLanguage, null);
+    }
+
+    /**
+     * The language of a connection, from what the handshake carried and who signed in.
+     *
+     * @param settings       the deployment's settings
+     * @param parameter      the {@code lang} handshake parameter, or null
+     * @param cookieHeader   the whole {@code Cookie} header, or null
+     * @param acceptLanguage the {@code Accept-Language} header, or null
+     * @param userName       the authenticated user name, or null for an anonymous connection
+     * @return a language tag this deployment can actually answer in; never null
+     */
+    static String atHandshake(ServerConfig settings, String parameter, String cookieHeader,
+                              String acceptLanguage, String userName) {
         String deploymentDefault = deploymentDefault(settings);
         Set<String> offered = MessageCatalogs.offeredLanguages();
 
         String chosen = narrow(parameter, offered, deploymentDefault);
+        if (chosen == null) {
+            chosen = narrow(storedFor(userName), offered, deploymentDefault);
+        }
         if (chosen == null) {
             chosen = narrow(fromCookie(cookieHeader), offered, deploymentDefault);
         }
@@ -101,6 +229,21 @@ final class LocaleResolution {
         String configured = settings == null ? null : settings.get(DEFAULT_LOCALE_PROPERTY);
         String tag = normalize(configured);
         return tag == null ? Messages.FALLBACK_LANGUAGE : tag;
+    }
+
+    /**
+     * Narrows a language somebody asked for to one this deployment actually has words for.
+     *
+     * <p>Unlike the handshake, this answers null rather than the deployment's own language: a
+     * connection asking for something impossible mid-session is refused and left where it was,
+     * because moving it somewhere it did not ask for is worse than not moving it.</p>
+     *
+     * @param settings  the deployment's settings
+     * @param requested the language tag asked for, or null
+     * @return the tag to use, or null when this deployment has no words for it
+     */
+    static String offeredOrNull(ServerConfig settings, String requested) {
+        return narrow(requested, MessageCatalogs.offeredLanguages(), deploymentDefault(settings));
     }
 
     /**

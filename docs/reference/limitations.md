@@ -289,38 +289,64 @@ ordered but without its `Comparator`, so later insertions are not re-sorted.
 
 ## Language
 
-The server answers in the caller's language. The browser does not, and nobody can pick a language
-yet. What exists and what does not:
+Both tiers answer in the reader's language, and somebody can pick one and watch the screen change.
+What exists and what does not:
 
 **Works.** The connection's language is decided at the handshake — from a `lang` parameter, a
-`zeroz-lang` cookie, the browser's `Accept-Language` header, `zeroz.i18n.defaultLocale`, then
-English — and is readable in a service as `RmiRequestContext.getLocale()`. Every refusal the
-framework produces, and any `ClientVisibleException` an application throws with a message from a
-catalog, is written in that language on the wire and in English in the log. An application declares
-a catalog with `@MessageCatalog` and gets one compile-checked method per key.
+registered `LocalePreferenceStore`, a `zeroz-lang` cookie, the browser's `Accept-Language` header,
+`zeroz.i18n.defaultLocale`, then English — and is readable in a service as
+`RmiRequestContext.getLocale()`. Every refusal the framework produces, and any
+`ClientVisibleException` an application throws with a message from a catalog, is written in that
+language on the wire and in English in the log. An application declares a catalog with
+`@MessageCatalog` and gets one compile-checked method per key. The words for the resolved language
+reach the browser on the AUTH frame, before the first screen is built. `LanguageSelector` offers
+exactly the languages the deployment has words for, and choosing one changes the words on screen
+without rebuilding anything — a half-filled form keeps its values.
 
-**Does not work yet.**
+**Does not work.**
 
-- **Nothing sends a catalog to the browser**, so every word in the browser is still the one compiled
-  into it. `AppText_Catalog` is generated but nothing reads it there yet.
-- **There is no language picker and no live switching.** Nothing writes the `zeroz-lang` cookie or
-  the `lang` parameter, so steps 1 and 2 of the resolution order are read and never filled in. A
-  person gets what their browser asks for, or the deployment's own language.
+- **Plural rules of any kind.** Substitution replaces `{0}` with a value and does nothing else, so
+  `"{0} tasks left"` says "1 tasks left" and the application has to choose between two keys itself.
+  Java's own `ChoiceFormat` would cover the two-form languages and costs 57 KB gzip in the browser —
+  more than every language of translated text this project will ever ship — and is still wrong for
+  Polish, Russian, Arabic and Welsh, which need three to six forms chosen by rules it cannot
+  express. There is no ICU in TeaVM.
+- **Right-to-left layout.** Arabic and Hebrew need mirrored layouts, not just translated words, and
+  the component library uses physical directions (`margin-left`, `text-align: right`) throughout and
+  has never been looked at in a mirror. Translating the words without doing the layout produces
+  something worse than English. **Not designed, not tested, not planned.**
+- **Numbers, dates and money are off by default.** `Formats` exists and is opt-in, because the first
+  call into it adds 233 KB to the bundle and 43 KB to every visitor's download, gzipped, with about
+  36 KB (6 KB gzipped) more per locale named in `java.util.Locale.available`. Nothing in the
+  framework calls it, and a build check keeps it that way. Until an application asks, a translated
+  screen still prints `1,234.56` to a German reader.
 - **The framework's own words inside the browser** — the reconnect banner, `Close` on a drawer,
   `Copied` after a copy button, the offline page — are English literals and are not in a catalog.
+  `LanguageSelector` is the exception; its own name is a catalog entry.
 - **The framework ships English only.** Another language for its own refusals is a `.properties`
-  file an application puts on the classpath.
-- **`LocalePreferenceStore` does not exist.** The language is remembered per browser, not per
-  person, so a second computer starts from that browser's setting again.
+  file an application puts on the classpath, which the browser then receives like any other catalog.
+- **The language is remembered per browser.** A second computer, or a private window, starts from
+  that browser's `Accept-Language` again — unless the application registers a
+  `LocalePreferenceStore` of its own.
 - **Validation messages are not translatable.** They are compiled into `<Model>_Rules` as written.
-- **There is no build check for text left hard-coded**, and none for reading a message once and
-  leaving the label behind when the language changes. Both are planned with the browser half.
+- **There is no check for English left hard-coded** in a screen. No check can reliably tell a
+  sentence a person reads from a CSS class, a DOM attribute or a log line.
+- **The stale-label check has holes it cannot close.** `MessageReadContractTest` fails the build
+  when `Message.text()` is called outside an effect, and it reads one file's text: it cannot follow
+  an ordinary method call (it does follow a method reference handed straight to `Effect.create`, one
+  hop), and it cannot see words read inside an effect, put in a variable, and used outside it. It
+  reads only browser-side modules, not server code and not tests.
+- **The catalog is sent in full on every connection.** No hash is exchanged first, so a browser that
+  already has the words receives them again — about 12 KB for a three-hundred-string catalog,
+  against a 4 MB message ceiling.
+- **A language switch made while the connection is down changes nothing on screen.** The choice is
+  written to the cookie and queued, and takes effect when the connection returns. The words come
+  from the server.
 
 **Not planned at all**, with the reasoning in the [language support design](../design/language-support.md):
 right-to-left layout, plural rules of any kind, locale-aware sorting and searching, translation
 tooling of any sort, per-tenant catalogs, translated route paths, and translating content stored in
-a database. Numbers, dates and money in the local format are opt-in and cost 43 KB of download the
-first time anything reaches for them.
+a database.
 
 ## Compile-time warnings that are not errors
 

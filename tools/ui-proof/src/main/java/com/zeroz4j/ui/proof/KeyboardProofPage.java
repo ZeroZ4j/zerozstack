@@ -38,6 +38,7 @@ import com.zeroz4j.ui.component.RadioButtonGroup;
 import com.zeroz4j.ui.component.Range;
 import com.zeroz4j.ui.component.Rating;
 import com.zeroz4j.ui.component.Resizer;
+import com.zeroz4j.ui.component.LanguageSelector;
 import com.zeroz4j.ui.component.Select;
 import com.zeroz4j.ui.component.SplitPane;
 import com.zeroz4j.ui.component.SvgCanvas;
@@ -338,6 +339,16 @@ public final class KeyboardProofPage {
         select.setId("kb-select");
         rowFor(host, "Select", select.getOuterElement(), "kb-select");
         recordsOn(select.getElement(), "kb-select", "change");
+
+        // -- LanguageSelector -----------------------------------------
+        // A real <select>, so the browser supplies the whole keyboard contract. It offers whatever
+        // the server said it can answer in, which on this page - no server at all - is nothing, so
+        // one option is put in by hand to give the arrow keys somewhere to go.
+        LanguageSelector language = new LanguageSelector();
+        com.zeroz4j.api.i18n.ClientMessages.apply("en", Arrays.asList("en", "de", "fr"), null);
+        language.setId("kb-language");
+        rowFor(host, "LanguageSelector", language.getOuterElement(), "kb-language");
+        recordsOn(language.getElement(), "kb-language", "change");
 
         // -- SplitPane ------------------------------------------------
         // Side by side, so again the left and right arrow keys are the ones that move it.

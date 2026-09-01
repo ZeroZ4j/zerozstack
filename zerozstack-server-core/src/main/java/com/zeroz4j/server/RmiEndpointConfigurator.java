@@ -203,7 +203,6 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         }
 
         resolveClientId(config, request, response);
-        resolveLocale(config, request, settings);
 
         Principal principal = request.getUserPrincipal();
         Set<String> userRoles = new LinkedHashSet<>();
@@ -265,6 +264,10 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         if (tenantId != null) {
             config.getUserProperties().put(TENANT_KEY, tenantId);
         }
+
+        // Last, because a registered LocalePreferenceStore is asked what THIS person reads, and who
+        // this person is has only just been decided.
+        resolveLocale(config, request, settings, principal);
     }
 
     /**
@@ -375,14 +378,19 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
      *
      * <p>Nothing is written back to the browser. A language is not a secret and nothing is
      * protected by it, so the client writes its own ordinary cookie when somebody picks one and the
-     * server only ever reads it — which works in every container and has no failure mode to log.</p>
+     * server only ever reads it - which works in every container and has no failure mode to log.</p>
+     *
+     * <p>Runs after authentication, not before it: an application that registered a
+     * {@link LocalePreferenceStore} is asked what this particular person reads, and until the
+     * provider has spoken there is nobody to ask about.</p>
      */
     private static void resolveLocale(ServerEndpointConfig config, HandshakeRequest request,
-                                      ServerConfig settings) {
+                                      ServerConfig settings, Principal principal) {
         String language = LocaleResolution.atHandshake(settings,
                 firstParam(request.getParameterMap(), LocaleResolution.LANGUAGE_PARAMETER),
                 firstHeader(request, "Cookie"),
-                firstHeader(request, "Accept-Language"));
+                firstHeader(request, "Accept-Language"),
+                principal != null ? principal.getName() : null);
         config.getUserProperties().put(LOCALE_KEY, language);
     }
 

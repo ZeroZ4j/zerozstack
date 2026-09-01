@@ -88,11 +88,19 @@ public class WasmRmiServerEngine implements EventPublisher {
     }
 
     /**
-     * AUTH frame layout version. Version 2 added the explicit {@code authenticated} flag; version 1
-     * carried only a name and roles, which could not distinguish a refused connection from a real
-     * sign-in with no roles.
+     * AUTH frame layout version.
+     *
+     * <p>Version 1 carried only a name and roles, which could not distinguish a refused connection
+     * from a real sign-in with no roles. Version 2 added the explicit {@code authenticated} flag.
+     * Version 3 appends the language this connection is answered in, the languages the deployment
+     * can answer in, and the translated words themselves.</p>
+     *
+     * <p>Both directions are safe. A client built before 0.9.0 reads the name and the roles and
+     * stops, ignoring everything after them, so it connects and shows the words its own build
+     * compiled in. A 0.9.0 client meeting an older server sees a version below 3 and does not look
+     * for a catalog at all, which leaves it in the same place.</p>
      */
-    static final byte AUTH_PROTOCOL_VERSION = 2;
+    static final byte AUTH_PROTOCOL_VERSION = 3;
 
     /** The name reported for a connection with no accepted identity. */
     static final String ANONYMOUS_USER = "anonymous";
@@ -674,10 +682,135 @@ public class WasmRmiServerEngine implements EventPublisher {
             for (String role : roles) {
                 BinarySerializer.writeString(buffer, role);
             }
+            // Version 3 and later. The words ride here because this frame is what tells the
+            // application it may build its first screen, so they are in hand at that exact moment
+            // and no screen is ever drawn in English and then corrected.
+            writeCatalogBlock(buffer, languageTagOf(session), configOf(session));
             WsWrites.send(session, buffer.toByteArray());
         } catch (Exception e) {
             LOG.warning("[zeroz4j] Failed to send AUTH frame: " + e.getMessage());
         }
+    }
+
+    /**
+     * Sends this connection the words for a language, on a frame of its own.
+     *
+     * <p>Used when somebody switches language on a connection that is already up. It goes out
+     * <b>before</b> the signal saying the language changed, which is what stops every label on the
+     * screen redrawing itself twice.</p>
+     *
+     * @param session the connection
+     * @param tag     the language its words should now be in
+     */
+    static void sendCatalogFrame(Session session, String tag) {
+        try {
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0); // no correlation ID
+            buffer.put(SyncFrameTypes.CATALOG);
+            writeCatalogBlock(buffer, tag, configOf(session));
+            WsWrites.send(session, buffer.toByteArray());
+        } catch (Exception e) {
+            LOG.warning("[zeroz4j] Failed to send the message catalog: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Writes the language, the languages on offer, and every catalog this deployment has.
+     *
+     * <p>Each catalog is the asked-for language laid over the file with no suffix, so a translation
+     * missing a key still shows the fallback sentence. A three-hundred-string catalog is about
+     * 12 KB, which is three orders of magnitude inside the 4 MB a connection accepts.</p>
+     */
+    private static void writeCatalogBlock(GrowableBuffer buffer, String tag,
+                                          ServerConfig settings) {
+        BinarySerializer.writeString(buffer, tag);
+
+        java.util.Set<String> offered = MessageCatalogs.offeredLanguages();
+        java.util.List<String> languages = new java.util.ArrayList<>();
+        // The deployment's own language first: it is the file with no suffix and is always
+        // answerable, and offeredLanguages() lists only the files that carry a suffix.
+        String deploymentDefault = LocaleResolution.deploymentDefault(settings);
+        if (!offered.contains(deploymentDefault)) {
+            languages.add(deploymentDefault);
+        }
+        languages.addAll(offered);
+        buffer.putInt(languages.size());
+        for (String language : languages) {
+            BinarySerializer.writeString(buffer, language);
+        }
+
+        java.util.Map<String, java.util.Map<String, String>> catalogs =
+                MessageCatalogs.allEntries(tag);
+        buffer.putInt(catalogs.size());
+        for (java.util.Map.Entry<String, java.util.Map<String, String>> catalog
+                : catalogs.entrySet()) {
+            BinarySerializer.writeString(buffer, catalog.getKey());
+            buffer.putInt(catalog.getValue().size());
+            for (java.util.Map.Entry<String, String> word : catalog.getValue().entrySet()) {
+                BinarySerializer.writeString(buffer, word.getKey());
+                BinarySerializer.writeString(buffer, word.getValue());
+            }
+        }
+    }
+
+    /**
+     * Puts a browser onto a new language: the words first, then the value that redraws the screen.
+     *
+     * <p>Every connection this same browser has open is moved together, because the language is
+     * {@link Scope#CLIENT} - it belongs to the browser, not to one tab. A browser with two tabs
+     * open switches both.</p>
+     *
+     * <p>The order inside each connection is the part that matters. The catalog frame goes first,
+     * so by the time the signal arrives and every label on the screen redraws itself, the words for
+     * the new language are already in the browser's hands. Reversed, the whole screen would redraw
+     * once in the outgoing language under the incoming language's name, and again a moment later.
+     * Ordering is guaranteed: since 0.8.0 one connection's frames are handled in the order they
+     * were written.</p>
+     *
+     * @param origin the connection whose person made the choice
+     * @param tag    the language, already narrowed to one this deployment has words for
+     * @param mapper object mapper for serialization
+     */
+    static void applyLanguage(Session origin, String tag, ObjectMapper mapper) {
+        ServerRuntime runtime = ServerRuntime.ofOrNull(origin);
+        String browser = (String) origin.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
+        java.util.List<Session> affected = new java.util.ArrayList<>();
+        if (runtime != null && browser != null) {
+            for (Session session : runtime.sessions()) {
+                if (browser.equals(session.getUserProperties()
+                        .get(RmiEndpointConfigurator.CLIENT_KEY))) {
+                    affected.add(session);
+                }
+            }
+        }
+        if (affected.isEmpty()) {
+            affected.add(origin);
+        }
+        for (Session session : affected) {
+            session.getUserProperties().put(RmiEndpointConfigurator.LOCALE_KEY, tag);
+            sendCatalogFrame(session, tag);
+            sendSignalUpdate(session, com.zeroz4j.signals.Zeroz4jSignals.LOCALE_NAME, tag, mapper);
+        }
+    }
+
+    /**
+     * @param session a connection
+     * @return the settings of the server it belongs to, or the system properties when there is none
+     */
+    static ServerConfig configOf(Session session) {
+        ServerRuntime found = session == null ? null : ServerRuntime.ofOrNull(session);
+        return found != null ? found.config() : ServerConfig.fromSystemProperties();
+    }
+
+    /**
+     * @param session a connection
+     * @return the language tag it is answered in; never null
+     */
+    static String languageTagOf(Session session) {
+        Object tag = session == null ? null
+                : session.getUserProperties().get(RmiEndpointConfigurator.LOCALE_KEY);
+        return tag instanceof String && !((String) tag).isEmpty()
+                ? (String) tag : com.zeroz4j.api.i18n.Messages.FALLBACK_LANGUAGE;
     }
 
     /**

@@ -119,8 +119,9 @@ Server responses include an explicit opcode byte at index 4.
 * **0x03 — AUTH (Authentication Result)**
   * Sent by the **server** on every connection open, including anonymous and rejected ones. The
     client never sends this frame; credentials are presented on the WebSocket handshake instead.
-  * Payload: `[1 byte]` (Protocol Version, currently `2`) + `[1 byte]` (Authenticated: `1` or `0`) +
-    `[String]` (Username) + `[4 bytes]` (Role Count) + `[N Strings]` (Roles)
+  * Payload: `[1 byte]` (Protocol Version, currently `3`) + `[1 byte]` (Authenticated: `1` or `0`) +
+    `[String]` (Username) + `[4 bytes]` (Role Count) + `[N Strings]` (Roles), then, **from version 3
+    on**, the catalog block described under 0x04.
   * **The authenticated flag is the server's decision and nothing else stands in for it.** A refused
     connection still carries a name (`"anonymous"`), and a genuinely signed-in user may hold no roles
     at all — so neither field can be used to infer the outcome. Before version 2 the flag did not
@@ -128,6 +129,32 @@ Server responses include an explicit opcode byte at index 4.
   * The frame is sent even when authentication fails, because silence cannot be told apart from a
     slow network. A client reading a frame with no version byte treats the connection as
     unauthenticated rather than guessing.
+  * **Version 3 appended the words.** The translated text for the language this connection
+    was resolved to rides here because this frame is already sent to everybody and is already what
+    tells an application it may build its first screen — so the words are in hand at that exact
+    moment and no screen is ever drawn in English and corrected afterwards. A three-hundred-string
+    catalog is about 12 KB, once per connection, against a 4 MB message ceiling.
+  * **Both directions of a version mismatch are safe, and both were checked.** A client that only knows
+    version 2 reads the name and the roles and stops; the bytes after them are never looked at, so
+    it connects normally and shows the words its own build compiled in. A client that knows version
+    3, meeting a server that sends a version below 3, and does not look for a catalog at all, which leaves it in the same
+    place. Neither side has to be upgraded first.
+* **0x04 — CATALOG (Translated words)**
+  * Sent by the **server** when somebody switches language on a connection that is already open.
+  * Payload: `[String]` (the language tag these words are in) + `[4 bytes]` (how many languages this
+    deployment can answer in) + `[N Strings]` (those language tags) + `[4 bytes]` (catalog count) +
+    for each catalog: `[String]` (its base name, e.g. `i18n/app`) + `[4 bytes]` (entry count) +
+    that many `[String][String]` key/value pairs. This is the same block the AUTH frame carries from
+    version 3 on.
+  * Each catalog is the requested language laid over the file with no language suffix, so a
+    translation missing one key still shows that one sentence in the fallback language rather than
+    a blank area or a key name.
+  * **It is written before the `0x17` SIGNAL_UPDATE that carries the new language**, and that
+    ordering is the whole reason it is a frame of its own. The signal is what makes every label on
+    the screen redraw; arriving first, it would redraw the entire screen against the catalog on its
+    way out and again a moment later. One connection's frames are handled in the order they were
+    written (see above), so writing them in this order is the entire fix.
+  * A client that only knows version 2 never asks for a language, so it is never sent one of these.
 * **0x18 — PUSH (One-shot server message)**
   * Payload: `[String]` (Topic Name) + `[Type Tag + Value]` (Payload)
   * Scoped publishes are filtered **server-side**: a frame is written only to sessions matching the

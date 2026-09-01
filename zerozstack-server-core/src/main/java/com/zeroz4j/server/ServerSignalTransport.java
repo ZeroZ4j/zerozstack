@@ -135,6 +135,14 @@ public final class ServerSignalTransport implements SignalTransport {
         if (transport == null) {
             return;
         }
+        if (com.zeroz4j.signals.Zeroz4jSignals.LOCALE_NAME.equals(signalName)) {
+            // The language is not kept as a signal value anywhere. The connection already holds it,
+            // and that same value is what every call on this connection is answered in - so it is
+            // read from there rather than stored a second time and kept in step by hand.
+            WasmRmiServerEngine.sendSignalUpdate(session, signalName,
+                    WasmRmiServerEngine.languageTagOf(session), transport.mapper);
+            return;
+        }
         SharedValueSignal<?> signal = Signals.lookup(signalName);
         if (signal != null) {
             WasmRmiServerEngine.sendSignalUpdate(session, signalName, signal.get(), transport.mapper);
@@ -206,6 +214,10 @@ public final class ServerSignalTransport implements SignalTransport {
         if (transport == null) {
             return;
         }
+        if (com.zeroz4j.signals.Zeroz4jSignals.LOCALE_NAME.equals(signalName)) {
+            handleLanguageChange(newValue, session, transport.mapper);
+            return;
+        }
         SharedValueSignal<?> signal = Signals.lookup(signalName);
         boolean clientWritable;
         Set<String> writeRoles;
@@ -256,6 +268,41 @@ public final class ServerSignalTransport implements SignalTransport {
             // the name the client knows, which for a scoped signal is the family's, not the instance's.
             WasmRmiServerEngine.sendSignalUpdate(session, signalName, signal.get(), transport.mapper);
         }
+    }
+
+    /**
+     * Handles somebody choosing a language.
+     *
+     * <p>A language nobody translated is refused the way any invalid write is: the writer is snapped
+     * back to what it really has. That cannot happen through a {@code LanguageSelector}, which only
+     * ever offers what arrived on the connection - but a client can send anything, and a
+     * half-translated screen is worse than an unchanged one.</p>
+     *
+     * <p>Accepted, three things happen in this order: the connection remembers the language, so
+     * every later call is answered in it; an application that asked to remember the choice per
+     * person is told; and the words go down the wire ahead of the value that redraws the screen.</p>
+     *
+     * @param requested what the client asked for
+     * @param session   the connection that asked
+     * @param mapper    object mapper for serialization
+     */
+    private static void handleLanguageChange(Object requested, Session session,
+                                             ObjectMapper mapper) {
+        String asked = requested instanceof String ? (String) requested : null;
+        String accepted = LocaleResolution.offeredOrNull(
+                WasmRmiServerEngine.configOf(session), asked);
+        if (accepted == null) {
+            String current = WasmRmiServerEngine.languageTagOf(session);
+            LOG.fine("[zeroz4j] Session " + session.getId() + " asked to read '" + asked
+                    + "', which this deployment has no words for. It stays in '" + current + "'.");
+            WasmRmiServerEngine.sendSignalUpdate(session,
+                    com.zeroz4j.signals.Zeroz4jSignals.LOCALE_NAME, current, mapper);
+            return;
+        }
+        java.security.Principal principal = (java.security.Principal)
+                session.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
+        LocaleResolution.remember(principal != null ? principal.getName() : null, accepted);
+        WasmRmiServerEngine.applyLanguage(session, accepted, mapper);
     }
 
     /**

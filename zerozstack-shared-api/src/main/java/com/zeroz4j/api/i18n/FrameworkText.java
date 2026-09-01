@@ -65,7 +65,8 @@ public final class FrameworkText {
             FrameworkKeys.LIVE_VALIDATION_FAILED,
             FrameworkKeys.LIVE_REQUIRES_ROLE,
             FrameworkKeys.LIVE_NESTED_NOT_WRITABLE,
-            FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE
+            FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE,
+            FrameworkKeys.UI_LANGUAGE
         };
     }
 
@@ -109,6 +110,8 @@ public final class FrameworkText {
             case FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE:
                 return "The change also alters a {0}, which needs one of the roles {1}."
                         + " Nothing was changed.";
+            case FrameworkKeys.UI_LANGUAGE:
+                return "Language";
             default:
                 return null;
         }
@@ -224,5 +227,20 @@ public final class FrameworkText {
      */
     public static Message liveNestedRequiresRole(Object modelName, Object roles) {
         return new Message(CATALOG, FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE, modelName, roles);
+    }
+
+    // ---------------------------------------------------------------- words on a control
+
+    /**
+     * What a language selector is called when the application has not named it itself.
+     *
+     * <p>A deployment that puts {@code i18n/zeroz4j_de.properties} on its server classpath gets
+     * this in German like everything else, because the framework catalog travels to the browser on
+     * the same frame the application catalog does.</p>
+     *
+     * @return the name of a language selector
+     */
+    public static Message uiLanguage() {
+        return new Message(CATALOG, FrameworkKeys.UI_LANGUAGE);
     }
 }

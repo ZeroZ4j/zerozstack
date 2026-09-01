@@ -10,6 +10,71 @@ upgrading.
 
 ## [Unreleased]
 
+### Added
+
+- **Somebody can now pick a language, and the screen changes while they watch it.** Drop
+  `new LanguageSelector()` into a header or a side panel and that is the whole of it: it offers
+  exactly the languages the deployment has words for, names each one in itself (`Deutsch`, not
+  "German"), binds itself to the language, and is a real `<select>`, so Tab reaches it and the
+  arrow keys work without a line of code. Choosing one rebuilds nothing — a half-filled form keeps
+  every value, the scroll position does not move, and the keyboard stays where it was. Only the
+  words change, because every label that reads a message inside an effect re-runs and calls
+  `setText` on the label it already owns. The choice is written to a `zeroz-lang` cookie by the
+  browser, so it survives a reload, and every tab of that browser changes together.
+
+- **The words for a connection's language now reach the browser, on the frame that already says
+  "you can start".** There is nothing to fetch and nothing to configure: by the time an application
+  mounts its first screen the words are in hand, so no screen is ever drawn in English and corrected
+  a moment later. A three-hundred-string catalog is about 12 KB per connection, against a 4 MB
+  message ceiling. **Extra languages still cost the browser nothing** — measured: a build offering
+  four languages produced a byte-identical bundle to one offering two.
+
+- **`LocalePreferenceStore`, so the language can follow a person to their second computer.** Without
+  it the choice is remembered per browser, in a cookie, which is right for nearly everybody. An
+  application that already has somewhere to keep a person's settings implements two methods and
+  names the class in `META-INF/services`; it is consulted at the handshake, after the language the
+  browser asked for outright and before the cookie.
+
+- **`Formats`, for numbers, money and dates written the reader's way — opt-in, with the price
+  printed on the door.** `Formats.currency().format(amount)` reads the language on screen in the
+  browser and the caller's language on the server, so one call site is right on both tiers. **The
+  first call from a client module adds 233 KB to the bundle and 43 KB to every visitor's download,
+  gzipped**, plus about 6 KB gzipped for each locale named in `java.util.Locale.available`. That is
+  more than every language of translated text this project will ever ship, several times over, which
+  is why nothing in the framework calls it and a build check keeps it that way.
+
+- **A build-failing check for the mistake everybody makes with translated text.**
+  `new Button(AppText_Text.taskAdd().text())` reads the words once and never changes again, and it
+  is nearly invisible in testing, because screens are rebuilt when you navigate and the label that
+  stayed behind is on the screen that was open at the moment of the switch.
+  `MessageReadContractTest` reads every file that can run in a browser and fails when `.text()` is
+  called outside an `Effect` or a `Computed`. `@ReadsMessagesOnce` on the method is the way out
+  where a read really is once-only. **Its own documentation says plainly what it cannot see:** a
+  read one ordinary method call deep (it does follow a method reference handed straight to
+  `Effect.create`, one hop), words put in a variable inside an effect and used outside it, and
+  English left hard-coded in a screen, which no check can reliably tell from a CSS class or a log
+  line.
+
+- **`chat-livesync` is translated into German end to end** — a catalog in its shared module, a
+  language picker in the side panel, and a German copy of the framework's own words, so even the
+  picker announces itself as `Sprache`. Run it and switch language with the topic box half typed in.
+
+### Changed
+
+- **The AUTH frame's protocol version byte moved from 2 to 3**, because that frame now carries the
+  translated words. **What to do: nothing.** Both directions of a mismatch were checked and both are
+  safe. A client built before this release reads the name and the roles and stops, never looking at
+  the bytes after them, so it connects normally and shows the words its own build compiled in. A new
+  client meeting an older server sees a version below 3 and does not look for a catalog at all,
+  which leaves it in the same place. Neither side has to be upgraded first, and nothing in an
+  application changes. A new server-to-client frame, `0x04`, carries the words when somebody
+  switches language on a connection that is already open; it is written before the value that
+  redraws the screen, so nothing redraws twice.
+
+- **The connection's language is now decided after the sign-in rather than before it**, so a
+  registered `LocalePreferenceStore` can be asked what this particular person reads. Nothing changes
+  for a deployment that registers none.
+
 ### Changed
 
 - **A generated project no longer compiles its user interface for the browser every time you check

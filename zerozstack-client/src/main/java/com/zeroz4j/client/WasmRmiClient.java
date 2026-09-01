@@ -113,6 +113,10 @@ public class WasmRmiClient {
             (iface, method, args) -> executeCall(iface, method, args));
         networkChannel = channel;
         networkChannel.registerBinaryMessageHandler(WasmRmiClient::routeIncomingMessage);
+        // Teach Message.text() to read the words the server sends and the language on screen.
+        // Before any of them arrive it answers out of what this build compiled in, so a screen
+        // drawn before the connection is up is words rather than keys.
+        com.zeroz4j.api.i18n.ClientMessages.install();
         ClientSignalTransport.install();
         LiveMutations.install();
         ClientLazyAdapter.install();
@@ -428,6 +432,11 @@ public class WasmRmiClient {
                 } else {
                     apply.run();
                 }
+            } else if (frameType == SyncFrameTypes.CATALOG) {
+                // The words for a language somebody has just switched to. Applied at once, and on
+                // purpose ahead of the signal update that follows it: the signal is what makes
+                // every label on the screen redraw, and it must find the new words already here.
+                readCatalogBlock(buffer);
             } else if (frameType == SyncFrameTypes.AUTH) {
                 // AUTH frame
                 byte protocolVersion = buffer.get(); // Read protocol version
@@ -441,6 +450,15 @@ public class WasmRmiClient {
                 Set<String> roles = new LinkedHashSet<>();
                 for (int i = 0; i < roleCount; i++) {
                     roles.add(BinarySerializer.readString(buffer));
+                }
+                // Version 3 appends the language and the words. Read BEFORE the security context is
+                // populated, because populating it is what tells the application it may build its
+                // first screen -- so the words are in hand at that moment and nothing is ever drawn
+                // in English and corrected afterwards. A server older than version 3 sends none,
+                // and the browser shows whatever its own build compiled in.
+                if (protocolVersion >= 3) {
+                    readCatalogBlock(buffer);
+                    ClientLocale.install();
                 }
                 RmiSecurityContext.populate(username, roles, authenticated);
                 System.out.println("[zeroz4j] " + (authenticated
@@ -474,6 +492,37 @@ public class WasmRmiClient {
                     "Failed to deserialize server response: " + e.getMessage(), e));
             }
         }
+    }
+
+    /**
+     * Reads a language, the languages on offer, and every catalog, and puts them on screen.
+     *
+     * <p>The same block appears on the AUTH frame at protocol version 3 and on its own
+     * {@code CATALOG} frame when somebody switches language, so it is read in one place.</p>
+     */
+    private static void readCatalogBlock(ByteBuffer buffer) {
+        String language = BinarySerializer.readString(buffer);
+
+        int languageCount = buffer.getInt();
+        List<String> offered = new ArrayList<>(languageCount);
+        for (int at = 0; at < languageCount; at++) {
+            offered.add(BinarySerializer.readString(buffer));
+        }
+
+        int catalogCount = buffer.getInt();
+        Map<String, Map<String, String>> catalogs = new java.util.LinkedHashMap<>();
+        for (int at = 0; at < catalogCount; at++) {
+            String name = BinarySerializer.readString(buffer);
+            int entryCount = buffer.getInt();
+            Map<String, String> words = new java.util.LinkedHashMap<>();
+            for (int entry = 0; entry < entryCount; entry++) {
+                String key = BinarySerializer.readString(buffer);
+                words.put(key, BinarySerializer.readString(buffer));
+            }
+            catalogs.put(name, words);
+        }
+
+        com.zeroz4j.api.i18n.ClientMessages.apply(language, offered, catalogs);
     }
 
     @SuppressWarnings("unchecked")

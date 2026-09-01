@@ -45,11 +45,38 @@ public final class SyncFrameTypes {
      * Authentication-result frame byte tag (0x03), sent by the server on every connect — including
      * anonymous and refused ones, since silence cannot be told apart from a slow network.
      *
-     * <p>Payload: protocol version byte (currently 2), authenticated flag byte, username string,
+     * <p>Payload: protocol version byte (currently 3), authenticated flag byte, username string,
      * role count int, role strings. The flag is the server's decision and nothing else stands in for
      * it: a refused connection still carries a name, and an authenticated user may hold no roles.</p>
+     *
+     * <p>Version 3 appends the language this connection is answered in, the languages the
+     * deployment can answer in, and the translated text itself: language tag string, offered-count
+     * int, that many tag strings, catalog count int, and for each catalog its base name, an entry
+     * count, and that many key/value string pairs. It rides here because this frame is already sent
+     * to everybody and the browser mounts its first screen when it arrives - so there is never a
+     * moment where English is drawn and then corrected.</p>
+     *
+     * <p>Older readers stop after the roles and ignore the rest, which is why the addition needed
+     * no new frame: a 0.8.0 client on a 0.9.0 server simply gets no catalog and shows the words its
+     * own build compiled in.</p>
      */
     public static final byte AUTH         = 0x03;
+
+    /**
+     * Message-catalog frame byte tag (0x04), sent by the server when the language changes.
+     *
+     * <p>Payload: language tag string, then the same catalog block the {@link #AUTH} frame carries
+     * from protocol version 3 on — catalog count, and for each catalog its base name, an entry
+     * count, and that many key/value string pairs.</p>
+     *
+     * <p>The words for the new language reach the browser <b>before</b> the signal saying the
+     * language changed, so the first thing that redraws already has them. That ordering is the
+     * whole reason this frame exists rather than the client fetching a catalog for itself.</p>
+     *
+     * <p>A client from before 0.9.0 never asks for a language, so it is never sent one of these.
+     * One that received it anyway would print an unknown-frame line and carry on.</p>
+     */
+    public static final byte CATALOG      = 0x04;
 
     /** Reserved interface name for framework-internal RMI-shaped frames. The client requests a
      *  shared signal's retained value by "calling" {@code zeroz4j.signals#subscribe(name)};
