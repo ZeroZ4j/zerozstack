@@ -55,12 +55,9 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Server-side Jakarta EE WebSocket endpoint for zeroz4j.
@@ -71,7 +68,7 @@ import java.util.concurrent.RejectedExecutionException;
  * <ul>
  *   <li><b>CDI Discovery &amp; Scanning:</b> At startup ({@link #scanServiceRegistry()}), scans the CDI bean manager for beans implementing {@link RmiService}
  *       interfaces, builds service/method reflection registries, and populates security whitelists ({@code @Secured}, {@code @RolesAllowed}).</li>
- *   <li><b>Virtual Thread Concurrency:</b> Per-session {@link ExecutorService} (Project Loom virtual threads) handles inbound frames without blocking I/O threads.</li>
+ *   <li><b>Frame Ordering:</b> Per-session {@link SessionFrameQueue} handles one connection's frames one at a time, in the order the transport delivered them, on threads from {@link SessionThreads}. Different connections stay fully concurrent.</li>
  *   <li><b>Frame Dispatch:</b> Operates on incoming binary frames in {@link #processIncomingBinaryPayload(ByteBuffer, Session)}. Reads correlation ID, interface name, method name, unmarshals arguments using {@link BinarySerializer}, enforces security, populates {@link RmiRequestContext}, invokes method via reflection, and writes return value (0x01 SUCCESS) or exception (0x0F ERROR).</li>
  * </ul>
  */
@@ -207,31 +204,39 @@ public class WasmRmiServerEngine implements EventPublisher {
     /** "interfaceFQCN#methodName" -> whether method has @Secured */
     private final Map<String, Boolean> securedMethods = new ConcurrentHashMap<>();
 
-    /** Structured Concurrency: Map each WebSocket session to its own Virtual Thread Executor */
-    private final Map<String, ExecutorService> sessionExecutors = new ConcurrentHashMap<>();
-
-
-    /** Session id -> permits for frames of that session being decoded and executed right now. */
-    private final Map<String, java.util.concurrent.Semaphore> sessionPermits = new ConcurrentHashMap<>();
+    /**
+     * Each WebSocket session's frames, handled one at a time in the order they arrived.
+     *
+     * <p>See {@link SessionFrameQueue}: one queue and one live thread per connection, and no shared
+     * state between connections, so a slow call on one never delays another.</p>
+     */
+    private final Map<String, SessionFrameQueue> sessionQueues = new ConcurrentHashMap<>();
 
     /**
-     * How many frames from one connection may be decoding and executing at the same time.
+     * How many frames from one connection may be waiting or being handled at once.
      *
-     * <p>The container delivers one message at a time per connection, but handing each one straight
-     * to a thread-per-task executor undoes that: the read loop is free to deliver the next message
-     * immediately, so a single connection could have as many frames in flight as it could write
-     * bytes. Decoding is where a small message becomes a large object graph, so unbounded
-     * concurrency multiplies the worst case a message-size limit is meant to cap.</p>
+     * <p>The container delivers one message at a time per connection and the framework now keeps
+     * that order, so this is no longer a concurrency limit: exactly one frame per connection is
+     * handled at a time. What it still bounds is the <em>backlog</em>. A connection that writes
+     * faster than the server handles would queue without limit, and decoding is where a small
+     * message becomes a large object graph, so an unbounded queue multiplies the worst case a
+     * message-size limit is meant to cap.</p>
      *
-     * <p>Thirty-two, and a caller that finds no permit waits rather than being refused. Nothing is
-     * dropped and no call fails, so the number does not have to exceed any burst an application can
-     * produce - a screen firing a dozen calls on load, or a reconnect flushing queued edits, is
-     * simply served a few at a time. It only has to be high enough that ordinary traffic never
-     * queues noticeably, and low enough to be a real ceiling. Waiting happens on that one
-     * connection's read loop, which is the backpressure wanted; other connections are untouched.</p>
+     * <p>Thirty-two, and a connection that fills the queue waits rather than being refused. Nothing
+     * is dropped and no call fails, so the number does not have to exceed any burst an application
+     * can produce - a screen firing a dozen calls on load, or a reconnect flushing queued edits, is
+     * simply served one after another. Waiting happens on that one connection's read loop, which is
+     * the backpressure wanted; other connections are untouched.</p>
+     *
+     * <p>{@code zeroz.ws.maxConcurrentFramesPerSession} is still read, so a deployment that set it
+     * before 0.8.0 keeps working; the name it had described a concurrency that no longer exists.</p>
      */
+    static final String MAX_QUEUED_FRAMES_PROPERTY = "zeroz.ws.maxQueuedFramesPerSession";
+
+    /** The name this setting had before 0.8.0, still read. */
     static final String MAX_CONCURRENT_FRAMES_PROPERTY = "zeroz.ws.maxConcurrentFramesPerSession";
-    static final int DEFAULT_MAX_CONCURRENT_FRAMES = 32;
+
+    static final int DEFAULT_MAX_QUEUED_FRAMES = 32;
 
     /**
      * Shortest gap between two answered keepalive pings on one connection.
@@ -402,14 +407,15 @@ public class WasmRmiServerEngine implements EventPublisher {
     /**
      * Shuts down all virtual thread executors gracefully upon bean destruction.
      *
-     * <p><b>Under the hood:</b> Executed via {@code @PreDestroy}. Iterates through {@code sessionExecutors} and calls {@code shutdownNow()}.</p>
+     * <p><b>Under the hood:</b> Executed via {@code @PreDestroy}. Closes every connection's frame
+     * queue, which throws away what has not started and interrupts what has.</p>
      */
     @PreDestroy
     public void shutdown() {
-        for (ExecutorService exec : sessionExecutors.values()) {
-            exec.shutdownNow();
+        for (SessionFrameQueue frames : sessionQueues.values()) {
+            frames.close();
         }
-        sessionExecutors.clear();
+        sessionQueues.clear();
         // The runtime goes down with the engine, so anything that keeps driving this server
         // afterwards is told so rather than quietly doing nothing.
         ServerRuntime runtime = injectedRuntime != null ? injectedRuntime : resolvedRuntime;
@@ -424,7 +430,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param session the newly connected WebSocket session
      * @param config  the endpoint configuration containing handshake user properties
      *
-     * <p><b>Under the hood:</b> Takes ownership of the connection in {@link ServerRuntime}, creates a virtual thread executor for the session in {@code sessionExecutors},
+     * <p><b>Under the hood:</b> Takes ownership of the connection in {@link ServerRuntime}, creates the session's ordered frame queue in {@code sessionQueues},
      * transmits an AUTH frame (0x03) with principal and roles to the client, and registers the session with {@code syncEngine}.</p>
      */
     @OnOpen
@@ -451,14 +457,9 @@ public class WasmRmiServerEngine implements EventPublisher {
         // to pass while proving nothing.
         runtime.attach(session);
         applyWebSocketLimits(runtime, session);
-        // Threads come from the resolved factory rather than being created here, so a deployment
-        // inside a Jakarta EE server can supply a ManagedThreadFactory whose threads carry the
-        // container's naming, transaction and identity context. With no provider registered this is
-        // a virtual-thread factory, identical to newVirtualThreadPerTaskExecutor().
-        sessionExecutors.put(session.getId(),
-                Executors.newThreadPerTaskExecutor(SessionThreads.factory()));
-        sessionPermits.put(session.getId(),
-                new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
+        // This connection's frames, handled one at a time in the order they arrived, and bounded so
+        // a connection that outruns the server queues no more than it is allowed to.
+        sessionQueues.put(session.getId(), new SessionFrameQueue(maxQueuedFrames()));
 
         // Propagate principal and roles from handshake
         Principal principal = (Principal) config.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
@@ -508,17 +509,17 @@ public class WasmRmiServerEngine implements EventPublisher {
      *
      * @param session the closing WebSocket session
      *
-     * <p><b>Under the hood:</b> Gives the connection up in {@link ServerRuntime}, shuts down virtual thread executor,
+     * <p><b>Under the hood:</b> Gives the connection up in {@link ServerRuntime}, closes the session's frame queue,
      * releases all live mutex locks owned by the session via {@link LiveMutexManager#releaseAll}, and unregisters session from {@code syncEngine}.</p>
      */
     @OnClose
     public void onClose(Session session) {
         ServerRuntime runtime = runtimeOf(session);
 
-        // Structured Concurrency: Terminate all tasks for this session
-        ExecutorService sessionExecutor = sessionExecutors.remove(session.getId());
-        if (sessionExecutor != null) {
-            sessionExecutor.shutdownNow();
+        // Drop everything this connection had queued, and interrupt the frame it was handling.
+        SessionFrameQueue frames = sessionQueues.remove(session.getId());
+        if (frames != null) {
+            frames.close();
         }
 
         // Release any distributed locks held by this session
@@ -531,9 +532,6 @@ public class WasmRmiServerEngine implements EventPublisher {
 
         // Shared signals: drop parked subscriptions
         ServerSignalTransport.sessionClosed(session);
-
-        // In-flight permits for a session that no longer exists.
-        sessionPermits.remove(session.getId());
 
         // The record of what this browser was sent survives on purpose: the next connection is the
         // same browser and must still be able to re-sync. Only the connection mapping goes.
@@ -1425,7 +1423,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param payload binary payload buffer received from client
      * @param session active WebSocket session
      *
-     * <p><b>Under the hood:</b> Submits processing task to session's virtual thread executor. Parses correlation ID,
+     * <p><b>Under the hood:</b> Puts the frame on the session's ordered queue, which hands it to a thread when the frame before it has been handled. Parses correlation ID,
      * interface name, method name, and arguments. Validates against service and method registries. Checks security principal
      * and roles. Sets thread-local {@link RmiRequestContext}. Invokes target method via reflection. Writes success frame (0x01)
      * or error frame (0x0F) back to client.</p>
@@ -1451,57 +1449,35 @@ public class WasmRmiServerEngine implements EventPublisher {
             return;
         }
 
-        ExecutorService sessionExecutor = sessionExecutors.get(session.getId());
-        if (sessionExecutor == null) {
+        SessionFrameQueue frames = sessionQueues.get(session.getId());
+        if (frames == null) {
             return; // Session is already closing or closed
         }
 
-        // One connection may have only so many frames decoding at once. Acquired here, on the
-        // container's read thread, so a connection that outruns the limit is slowed down rather than
-        // refused. Nothing in the framework submits to a session's executor from inside a task on
-        // that same executor - this method is the only submitter, and only @OnMessage calls it - so
-        // waiting here cannot deadlock the connection against itself.
-        java.util.concurrent.Semaphore permits = sessionPermits.computeIfAbsent(session.getId(),
-                k -> new java.util.concurrent.Semaphore(maxConcurrentFrames(), true));
-        try {
-            permits.acquire();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            LOG.warning("[zeroz4j] Dropped incoming message: the read thread was interrupted.");
-            return;
-        }
+        // The frame goes on the end of this connection's queue and is handled after the one before
+        // it - the order the browser wrote them in, which is the order the transport already
+        // delivered them in. Queueing happens here, on the container's read thread, and waits when
+        // the queue is full, so a connection that outruns the server is slowed down rather than
+        // refused. Nothing in the framework queues a frame from inside a frame - this method is the
+        // only place that queues, and only @OnMessage calls it - so waiting here cannot deadlock the
+        // connection against itself.
+        frames.submit(() -> {
 
-        boolean submitted = false;
-        try {
-            sessionExecutor.submit(() -> {
-
-                // Activate a CDI request context for this invocation: virtual threads have
-                // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
-                // producer) must resolve inside service calls. A servlet container did this
-                // implicitly; here it is the engine's job.
-                try {
-                    jakarta.enterprise.context.control.RequestContextController requestContext =
-                        lookup(jakarta.enterprise.context.control.RequestContextController.class).get();
-                    boolean contextActivated = requestContext.activate();
-                    try {
-                        dispatchFrame(data, session);
-                    } finally {
-                        if (contextActivated) {
-                            requestContext.deactivate();
-                        }
-                    }
-                } finally {
-                    permits.release();
+            // Activate a CDI request context for this invocation: virtual threads have
+            // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
+            // producer) must resolve inside service calls. A servlet container did this
+            // implicitly; here it is the engine's job.
+            jakarta.enterprise.context.control.RequestContextController requestContext =
+                lookup(jakarta.enterprise.context.control.RequestContextController.class).get();
+            boolean contextActivated = requestContext.activate();
+            try {
+                dispatchFrame(data, session);
+            } finally {
+                if (contextActivated) {
+                    requestContext.deactivate();
                 }
-            });
-            submitted = true;
-        } catch (RejectedExecutionException e) {
-            LOG.warning("[zeroz4j] Dropped incoming message because server is shutting down.");
-        } finally {
-            if (!submitted) {
-                permits.release();
             }
-        }
+        });
     }
 
     /**
@@ -1523,9 +1499,17 @@ public class WasmRmiServerEngine implements EventPublisher {
         }
     }
 
-    /** @return the configured in-flight limit for one connection */
-    private int maxConcurrentFrames() {
-        return config().positiveInt(MAX_CONCURRENT_FRAMES_PROPERTY, DEFAULT_MAX_CONCURRENT_FRAMES);
+    /**
+     * @return how many frames one connection may have waiting or being handled at once. The name
+     *         this setting had before 0.8.0 is read when the current one is not set, so a
+     *         deployment that configured it then does not silently fall back to the default.
+     */
+    private int maxQueuedFrames() {
+        Integer configured = config().positiveInt(MAX_QUEUED_FRAMES_PROPERTY);
+        if (configured != null) {
+            return configured;
+        }
+        return config().positiveInt(MAX_CONCURRENT_FRAMES_PROPERTY, DEFAULT_MAX_QUEUED_FRAMES);
     }
 
     @SuppressWarnings("unchecked")

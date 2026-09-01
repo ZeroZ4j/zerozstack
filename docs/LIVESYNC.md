@@ -145,6 +145,10 @@ Set `zeroz.livemutex.waitSeconds` to allow longer or shorter.
 Callers are served in the order they arrived, so a queue of editors does not starve the one who has been waiting longest.
 The server keeps a lock only while somebody holds it or is waiting for it, so finished edits leave nothing behind.
 
+Waiting for a lock does not hold up the rest of what that person is doing.
+The server normally handles one connection's messages one at a time in the order they were sent, but a lock request that is waiting steps aside and lets the messages behind it through.
+It has read something and changed nothing at that point, so nothing it did can arrive out of turn - and without this, one person waiting half a minute for a lock would freeze every other thing they touched on the screen.
+
 ## Waiting, sending, and what it costs
 
 An edit made on the client waits a moment before it travels, so that a burst of typing becomes one
@@ -170,16 +174,20 @@ A person types into a field and immediately presses a button that calls a servic
 still waiting; the button's call would reach the server first, the server would decide on the value
 the person has already replaced, and the screen would look as though the typing was ignored.
 
-That cannot happen: **every outgoing call sends the waiting edits first.** RMI service calls,
-`LiveMutex` locks and shared-signal writes all go through it. You write nothing.
+That cannot happen, at either end. **Every outgoing call sends the waiting edits first** - RMI
+service calls, `LiveMutex` locks and shared-signal writes all go through it - and **the server
+handles one connection's messages one at a time, in the order they were sent** (0.8.0+). So the edit
+is applied before the call that followed it runs, and the call sees what the person actually typed.
+You write nothing, and you do not need a `LiveMutex` to get this.
 
-One caveat, and it is the server's, not the client's: the server may handle several messages from
-one connection at the same time (up to `zeroz.ws.maxConcurrentFramesPerSession`, 32 by default), so
-sending in the right order is not the same as being *handled* in that order. In practice a live
-edit is applied to the server's own object as the very first thing its message does, and a service
-call takes longer to reach the point where it reads that object - but if a service method's
-correctness genuinely depends on an edit that was made a fraction of a second earlier, take a
-`LiveMutex` around the pair rather than relying on the timing.
+Before 0.8.0 the second half was not true: the server could handle up to 32 messages from one
+connection at once, so a service call could be decided on the value the person had already replaced.
+Measured in a browser, typing and pressing a button with no pause between them: the old server got
+the previous value 15 times out of 15. A `LiveMutex` was the only fix. That advice is now obsolete -
+take a lock when two *people* must not edit the same thing at the same time, not to order one
+person's own messages.
+
+Ordering is per connection. A slow call for one person never delays anybody else.
 
 ### Leaving the page loses what was still waiting
 
@@ -228,6 +236,12 @@ mistake eats words. The `chat-livesync` example shows the pattern above.
   Measured on the `chat-livesync` example, in a real browser, counting on the server: **38
   characters typed at ordinary speed sent 38 messages before this change and 4 after it.**
   See [Waiting, sending, and what it costs](#waiting-sending-and-what-it-costs).
+* **One connection's messages are handled in the order they were sent (0.8.0+).** Anything a browser
+  sends after a live edit - a service call, a lock, a signal write - is handled after that edit, so a
+  service method sees what the person actually typed. Before 0.8.0 the server could handle up to 32
+  messages from one connection at once and the call could win the race; measured in a browser, it won
+  it 15 times out of 15. Ordering is per connection, so one person's slow call never delays anybody
+  else.
 * **Setters are the tracking boundary.** Mutations must go through setters. In-place collection edits (`obj.getTags().add(...)`) are invisible — reassign via the setter or call `LiveMutationTracker.touch(obj)` afterward. Tracked collections are planned.
 * **Whole-object, last-write-wins.** Mutations replace the object's state; two unlocked concurrent editors race and the later write wins. Serialize editors with `LiveMutex` (see the collab-editor example pattern) where that matters. Field-level merging and version-conflict rejection (`MUTATE`/`ACK`/`REJECT` versions) are reserved in the protocol but not yet implemented.
 * **Re-rendering is automatic.** A `@LiveSync` object is a reactive dependency: read one of its getters inside an `Effect` or `Computed` and an inbound sync re-runs it. Notification is per object, not per field.

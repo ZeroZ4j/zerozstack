@@ -158,9 +158,9 @@ sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text))
 
 - **Numbers instead of "whatever the container allows"**
 
-    The biggest message the server accepts is 4 MB. One connection may have 32 messages being
-    handled at once, and 256 messages or 8 MB waiting to go out. All six are settings, and the one
-    in force is written to the log at startup.
+    The biggest message the server accepts is 4 MB. One connection's messages are handled one at a
+    time in the order they were sent, with 32 allowed to wait, and 256 messages or 8 MB may be
+    waiting to go out. All six are settings, and the one in force is written to the log at startup.
 
     [Every setting, in one table →](guides/packaging.md)
 

@@ -65,13 +65,40 @@ Interestingly, standard RMI requests do not include a dedicated opcode byte. Ins
 * `[4 bytes]` Argument Count
 * `[N Elements]` Arguments (Type Tag + Value)
 
-**In flight at once.** One connection may have 32 frames being decoded and executed at the same time
-(`zeroz.ws.maxConcurrentFramesPerSession`). A frame that arrives while the connection is at its limit
-waits — nothing is dropped and no call fails, so a burst is served a few at a time rather than
-refused. Waiting slows down that one connection's read loop, which is the point; other connections
-are unaffected. The limit exists because decoding is where a small message becomes a large object
-graph, so a message-size limit is only a real ceiling if the number of messages being decoded at once
-is bounded too.
+### One connection's messages are handled in the order they were sent (0.8.0+)
+
+**The server handles one connection's messages one at a time, in the order the client wrote them.**
+A message is not started until the message before it on the same connection has been handled. This is
+something an application may rely on: anything a browser sends after a live edit — a service call, a
+lock request, a shared-signal write — is handled after that edit, so the call decides on the value the
+person actually left in the box.
+
+The transport already promised this. A WebSocket delivers one connection's messages in order and the
+container hands them over one at a time; before 0.8.0 the server threw that away by giving every
+message straight to its own thread, so up to 32 from one browser ran at once and finished in whatever
+order they finished. Measured in a browser on the fixed and the unfixed server, typing into a live
+field and pressing a button with no pause: the unfixed server decided the button's call on the
+previous value in 15 runs out of 15; the fixed server used the value that had just been typed in all
+15.
+
+**Ordering is per connection and nothing else.** Every connection has a queue of its own, so a slow
+call for one person never delays anybody else. Measured with one connection blocked on a call that
+never returns, a second connection was answered 19 ms later.
+
+**How much may be waiting.** One connection may have 32 messages waiting or being handled
+(`zeroz.ws.maxQueuedFramesPerSession`; the name before 0.8.0 was
+`zeroz.ws.maxConcurrentFramesPerSession`, still read). A message arriving at a full queue makes that
+one connection wait until there is room — nothing is dropped and no call fails, so a burst is served
+one after another rather than refused. The limit exists because decoding is where a small message
+becomes a large object graph, so a message-size limit is only a real ceiling if the number of
+messages queued behind it is bounded too.
+
+**Two things are deliberately outside the queue.** The keepalive is answered on the connection's read
+thread before anything is queued, so a busy connection still answers pings and is not cut by a proxy.
+And a lock request that has to wait for somebody else (`LiveMutex`, up to 30 seconds) lets the
+messages behind it past: it has read something and changed nothing at that point, so nothing it did
+can land out of order, and holding the line would stall everything else that person does for half a
+minute.
 
 ### Server Responses (Server -> Client)
 

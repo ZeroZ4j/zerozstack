@@ -465,8 +465,17 @@ WebSocket layer is Tyrus, whose message-assembly limit is `Integer.MAX_VALUE` â€
 socket is not the route for file uploads. `zeroz.ws.idleTimeoutMinutes` stops an abandoned tab
 holding a session forever; it stays unset by default, leaving the container's own value.
 
-**Per-connection ceilings (0.7.0+):** 32 messages from one connection may be handled at once
-(`zeroz.ws.maxConcurrentFramesPerSession`); 256 messages or 8 MB may be waiting to go out
+**One connection's messages are handled in order (0.8.0+).** The server handles a connection's
+messages one at a time, in the order the client wrote them, so anything a browser sends after a live
+edit - a service call, a lock, a signal write - is handled after that edit. Do not generate a
+`LiveMutex` to order one person's own messages; a lock is for two people editing the same thing.
+Ordering is per connection: a slow call for one person never delays anybody else. The keepalive is
+answered outside the queue, and a lock request that is waiting for somebody else lets the messages
+behind it past, because it has changed nothing yet.
+
+**Per-connection ceilings (0.7.0+):** 32 messages from one connection may be waiting to be handled
+(`zeroz.ws.maxQueuedFramesPerSession`, called `zeroz.ws.maxConcurrentFramesPerSession` before 0.8.0
+and still read under that name); 256 messages or 8 MB may be waiting to go out
 (`zeroz.ws.maxPendingFramesPerSession`, `zeroz.ws.maxPendingBytesPerSession`), past which that one
 connection is closed with WebSocket code `1013`. An empty outgoing queue always accepts the next
 message however large, so a single big response is never refused.

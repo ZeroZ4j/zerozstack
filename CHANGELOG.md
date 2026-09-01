@@ -807,6 +807,15 @@ belongs to that server rather than to the whole Java process, so two servers can
 
 ### Changed
 
+- **A server setting has a new name: `zeroz.ws.maxQueuedFramesPerSession`.** It used to be called
+  `zeroz.ws.maxConcurrentFramesPerSession` and it capped how many messages from one connection ran at
+  the same time. Now that one connection's messages are handled one at a time — see Fixed — there is
+  no such concurrency, and what the number bounds is how many may be *waiting*. The default is
+  unchanged at 32, and a connection that fills the queue is slowed down rather than refused.
+
+    **A deployment that set the old name keeps working: the old name is still read** when the new one
+    is not set. Nothing has to change. Rename it when convenient.
+
 - **Typing into a live object no longer sends a message for every character.** A change made on the
   client used to go to the server the instant the setter returned, so somebody typing into a field
   wired straight to a live object sent one whole-object message per key press. Measured in a real
@@ -912,6 +921,33 @@ belongs to that server rather than to the whole Java process, so two servers can
     light one and a tinted panel without anybody choosing per surface.
 
 ### Fixed
+
+- **The server could handle one person's messages in the wrong order, and usually did.** Somebody
+  types into a field that is kept in step with the server, then presses a button that calls a
+  service. The typing is written to the connection first and the connection delivers it first — but
+  the server then handed every message straight to a thread of its own, up to 32 from one browser at
+  a time, and whichever finished first won. Measured in a browser: the button's call was decided on
+  the value the person had already replaced in **15 runs out of 15**.
+
+    **The server now handles one connection's messages one at a time, in the order they were sent.**
+    Nothing sent after an edit can be handled before it. The same measurement on the fixed server
+    used the value that had just been typed in all 15 runs. Nothing to change in your application.
+
+    **If you added a `LiveMutex` around a save so it would see a recent edit, you can delete it.**
+    That was the only fix before this release and the documentation told you to do it. A lock is for
+    two *people* editing the same thing at the same time; it was never the right tool for putting one
+    person's own messages in order.
+
+    Two things stay outside the queue on purpose. The keepalive — the five-byte message that stops a
+    proxy cutting an idle connection — is still answered immediately, so a busy connection is never
+    cut for being busy. And a lock request that is waiting for somebody else to finish (up to 30
+    seconds) lets the messages behind it through, because it has read something and changed nothing:
+    without that, one person waiting for a lock would freeze everything else on their screen for half
+    a minute.
+
+    Ordering is per connection and nothing else. A slow call for one person does not delay anybody
+    else: measured with one connection blocked on a call that never returned, a second connection was
+    answered 19 ms later.
 
 - **Two-way live editing did not work at all, and said nothing.** A person edited a field bound to
   a `@ClientWritable` object. Their own screen updated, because the change is shown before it is

@@ -103,11 +103,13 @@ What automatic recovery deliberately does **not** cover:
   browser will not reliably put bytes on a WebSocket while it is taking the page apart, and a rescue
   that works half the time is worse than none. Lower the ceiling for a screen where a second
   matters.
-- **The client sends in order; the server does not promise to handle in order.** Anything a client
-  sends after an edit - a service call, a lock, a signal write - goes on the wire behind that edit.
-  The server may still handle several messages from one connection at once
-  (`zeroz.ws.maxConcurrentFramesPerSession`, 32 by default), so a service method whose correctness
-  depends on an edit made a moment earlier needs a `LiveMutex` around the pair, not just the order.
+- **One connection's messages are handled in the order they were sent (0.8.0+).** Anything a client
+  sends after an edit - a service call, a lock, a signal write - goes on the wire behind that edit,
+  and the server handles it after that edit. A service method whose correctness depends on an edit
+  made a moment earlier is safe without a `LiveMutex`. Two exceptions, both deliberate: the keepalive
+  ping is answered straight away rather than queued, and a lock request that is waiting for somebody
+  else lets the messages behind it past, because it has changed nothing yet. Before 0.8.0 the server
+  handled up to 32 messages from one connection at once and this was a real hazard.
 - **The server's own broadcast will fight a text field, if you let it.** An accepted edit is sent
   back to everybody including its author, carrying the value the server had a moment ago. An
   `Effect` that copies that into the field somebody is typing in deletes what they typed since.

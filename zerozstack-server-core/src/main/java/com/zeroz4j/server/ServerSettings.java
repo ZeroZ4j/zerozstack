@@ -49,7 +49,25 @@ public final class ServerSettings {
     /** How long a silent connection is held, in minutes. Unset leaves the container's own value. */
     public static final String IDLE_TIMEOUT_MINUTES = "zeroz.ws.idleTimeoutMinutes";
 
-    /** How many messages from one connection may be handled at once. Default 32. */
+    /**
+     * How many messages from one connection may be waiting to be handled. Default 32.
+     *
+     * <p>One connection's messages are handled one at a time in the order they arrived, so this is
+     * a backlog limit, not a concurrency limit. A connection that fills it is slowed down; nothing
+     * is dropped.</p>
+     */
+    public static final String MAX_QUEUED_FRAMES_PER_SESSION = "zeroz.ws.maxQueuedFramesPerSession";
+
+    /**
+     * The name {@link #MAX_QUEUED_FRAMES_PER_SESSION} had before 0.8.0.
+     *
+     * <p>Still read when the current name is not set, so a deployment that configured it keeps its
+     * value. The old name described a concurrency that no longer exists: from 0.8.0 exactly one
+     * message per connection is handled at a time.</p>
+     *
+     * @deprecated use {@link #MAX_QUEUED_FRAMES_PER_SESSION}
+     */
+    @Deprecated
     public static final String MAX_CONCURRENT_FRAMES_PER_SESSION =
             "zeroz.ws.maxConcurrentFramesPerSession";
 

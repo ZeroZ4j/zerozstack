@@ -110,6 +110,13 @@ public class LiveMutexRpcImpl implements LiveMutexRpc {
                     + "expired (see zeroz.disclosure.idleHours) — fetch the item again from your "
                     + "service and lock the copy you get back.");
         }
+        // This frame is about to block for up to 30 seconds waiting for somebody else to finish.
+        // Frames from one connection are handled in the order they arrived, so holding on here would
+        // stall everything else that browser sends for half a minute - a second field being typed
+        // in, an unrelated button. It has changed nothing at this point: everything above is a read.
+        // So it lets the frames behind it past and does not take its place back. The bound on how
+        // much one connection may have outstanding still counts it.
+        SessionFrameQueue.handOverBeforeWaiting();
         manager.lock(objectId, "session:" + sessionId);
     }
 
