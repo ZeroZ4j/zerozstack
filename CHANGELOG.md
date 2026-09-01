@@ -8,6 +8,38 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [Unreleased]
+
+### Fixed
+
+- **A client id set to expire immediately did not.** `zeroz.clientId.ttlDays` says how long an
+  id the server hands a browser stays good for. An id that had reached exactly that age was still
+  accepted, and it was refused only once it was older. The difference is a single millisecond, so
+  it is invisible at the default of a year and total at zero: a deployment that set zero, meaning
+  "an id is never valid", got the opposite, because an id is normally checked in the same
+  millisecond it was issued. An id is now refused the moment it reaches its allowance. Nothing
+  changes for any setting above zero.
+
+- **A message still being handled while the server shut down killed its own thread**, printing a
+  stack trace with no connection, no user and no call attached to it — `ContextNotActiveException`,
+  raised by putting away a request scope the container had already torn down. Stopping a server
+  while browsers are connected is the ordinary way to reach this, and it happened on every
+  undeploy that caught a call in flight. The shutdown case is now noted in the log at the finest
+  level and nothing else changes; anything else that goes wrong around a message — as opposed to
+  inside the call itself, which has always been answered on its own — is now logged against the
+  connection it belongs to instead of escaping onto a thread named after a number.
+
+### Internal
+
+- **Two tests answered differently depending on where they landed in the run**, which is why
+  continuous integration had been red since the release before last while the same command passed
+  on a developer's machine. One waited for "a frame" to come back from the server and was satisfied
+  by the frame every connection is sent when it opens, so it read its result before the server had
+  produced one. The other only held while the very first cryptographic operation in a Java process
+  was still slow, so it passed at the top of a run and failed further down. Neither touched
+  anything an application can see. The rule that keeps both out is in
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## [0.8.0] — 2026-09-01
 
 Every control in the library can now be worked from a keyboard and says what it is; a build check
@@ -2300,6 +2332,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...HEAD
 [0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2

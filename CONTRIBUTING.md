@@ -37,6 +37,42 @@ The whole rule, and how to satisfy it, is on one page:
 [Keyboard and naming](docs/guides/ui-keyboard-and-naming.md). The short version is that almost
 every failure is a click listener on a `Div`, and almost every fix is a `Button`.
 
+## A test gives the same answer wherever it lands in the run
+
+The build runs test classes in whatever order it likes, and that order is not the same on every
+machine. A test that passes only in one position is not a passing test; it is a test that will fail
+on somebody else's computer, and the suite it belongs to stops meaning anything until it does.
+
+Two ways to write one have already cost this project a red build for weeks at a time, and both look
+completely reasonable on the page.
+
+**Never wait for "a frame". Wait for a number of frames.** Every connection is sent an AUTH frame
+the moment it opens, and frames are put on the wire by a writer thread rather than by the thread
+that asked for them. A test that opens a connection, arms a latch and waits for the latch to count
+down is therefore waiting for whichever frame arrives first — and on a busy machine that is the
+AUTH frame, which was already on its way before the call under test was made. The assertion then
+runs before the answer exists, and reports whatever the code had not done yet. Use
+`FakeBasic.awaitFrames(count, timeoutMillis)`, which cannot be satisfied by the wrong frame, and
+count the AUTH frame in the number you ask for.
+
+**Never let an assertion depend on how long something took.** A whole Java process is slow the
+first time it does anything and fast afterwards, so the same two lines of code can take fifty
+milliseconds early in a run and none at all later. An assertion that only holds while a step is
+slow passes at the top of the suite and fails further down. Fix the code so the answer does not
+depend on the clock — a boundary that is checked with "later than" usually wanted "at or later
+than" — rather than sleeping until the test agrees with you.
+
+If you have to check that a change did not reintroduce either, run the module three times over:
+
+```bash
+mvn -pl <module> test -Dsurefire.runOrder=reversealphabetical
+mvn -pl <module> test -Dsurefire.runOrder=random -Dsurefire.runOrder.random.seed=202
+mvn -pl <module> test -DargLine="-XX:ActiveProcessorCount=2"
+```
+
+The last one is the one that finds races: continuous integration runs on two processors, and this
+machine almost certainly has more.
+
 ## Save every file as UTF-8
 
 Every file in this repository is UTF-8. That includes source files, resource files and anything

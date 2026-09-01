@@ -50,7 +50,8 @@ import java.util.logging.Logger;
  *           nodes in a cluster accept each other's ids.</td></tr>
  *   <tr><td>{@code zeroz.clientId.ttlDays}</td>
  *       <td>How long an issued id stays valid; default 365. An expired token verifies as absent, so
- *           the browser is issued a new id on its next page load.</td></tr>
+ *           the browser is issued a new id on its next page load. An id that has reached its
+ *           allowance exactly is already expired, so {@code 0} means no id is ever valid.</td></tr>
  * </table>
  *
  * <p><b>This identifies a browser, not a person.</b> Two people sharing a machine share the id, and
@@ -129,7 +130,11 @@ public final class ClientIdentity {
         } catch (NumberFormatException ex) {
             return null;
         }
-        if (System.currentTimeMillis() - issuedAt > ttlMillis()) {
+        // Refused once the id is as old as its allowance, not a millisecond later. The difference
+        // only shows at the edge, and only one setting reaches it: zeroz.clientId.ttlDays=0 means
+        // "an id is never valid", and used to accept every id issued in the same millisecond it was
+        // checked in - which on a warm JVM is all of them.
+        if (System.currentTimeMillis() - issuedAt >= ttlMillis()) {
             return null;
         }
         return id;

@@ -240,10 +240,12 @@ public class DispatchHardeningTest {
     @Test
     @DisplayName("the caller's identity is visible to code running while the frame is decoded")
     public void thePrincipalIsSetBeforeArgumentsAreDecoded() throws Exception {
-        session.basic.latch = new CountDownLatch(1);
         engine.processIncomingBinaryPayload(
                 ByteBuffer.wrap(call(700, "takeProbe", new Probe("hi"))), session);
-        assertTrue(session.basic.latch.await(2, TimeUnit.SECONDS));
+        // Two frames: the AUTH frame the connection opened with, then the answer to this call.
+        // Waiting for the count is what makes the wait mean the answer; see awaitFrames.
+        assertEquals(2, session.basic.awaitFrames(2, 5_000).size(),
+                WasmRmiServerEngineTest.diag(session));
 
         assertEquals("alice", Probe.principalSeenDuringDecode,
                 "identity used to be bound after decoding, so a custom adapter or validator saw "
@@ -260,10 +262,11 @@ public class DispatchHardeningTest {
         engineLog.addHandler(logCapture);
         engineLog.setLevel(Level.ALL);
 
-        session.basic.latch = new CountDownLatch(1);
         // No such method: reaches the same catch-all as any unplanned failure.
         engine.processIncomingBinaryPayload(ByteBuffer.wrap(call(701, "noSuchThing")), session);
-        assertTrue(session.basic.latch.await(2, TimeUnit.SECONDS));
+        // AUTH frame, then the refusal.
+        assertEquals(2, session.basic.awaitFrames(2, 5_000).size(),
+                WasmRmiServerEngineTest.diag(session));
 
         ByteBuffer response = session.basic.sentBuffers().get(1);
         response.getInt();
@@ -346,11 +349,13 @@ public class DispatchHardeningTest {
                             + "they arrived, so that anything a browser sends after an edit is "
                             + "decided on that edit");
 
-            // A second connection is not affected by the first one's backlog.
-            neighbour.basic.latch = new CountDownLatch(1);
+            // A second connection is not affected by the first one's backlog. Its AUTH frame is
+            // already on the way, so this waits for two: counting any frame would be satisfied by
+            // the AUTH frame and prove nothing about the call.
             engine.processIncomingBinaryPayload(ByteBuffer.wrap(call(900, "quick")), neighbour);
-            assertTrue(neighbour.basic.latch.await(3, TimeUnit.SECONDS),
-                    "backpressure is per connection: one greedy client must not stall another");
+            assertEquals(2, neighbour.basic.awaitFrames(2, 5_000).size(),
+                    "backpressure is per connection: one greedy client must not stall another - "
+                            + WasmRmiServerEngineTest.diag(neighbour));
 
             HardeningServiceImpl.gate.countDown();
             assertTrue(pushed.await(15, TimeUnit.SECONDS), "the whole burst is served, not refused");
