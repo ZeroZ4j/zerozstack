@@ -102,8 +102,20 @@ class ClientIdentityTest {
         System.setProperty("zeroz.clientId.ttlDays", "0");
         ClientIdentity.resetForTesting();
 
-        // With a zero-day lifetime the token is already older than its allowance the moment it exists.
+        // With a zero-day lifetime the token is already at its allowance the moment it exists, so
+        // it is refused however fast the check follows the issue. This used to read "older than",
+        // which was true only while the first HMAC in the JVM was still slow enough to push the
+        // clock past a millisecond: the test passed when it ran early in a run and failed when it
+        // ran late.
         assertNull(ClientIdentity.verify(ClientIdentity.issue()));
+
+        // Repeated on a JVM that is now warm, where issuing and checking land in the same
+        // millisecond. This is the run that used to accept the token.
+        for (int attempt = 0; attempt < 50; attempt++) {
+            assertNull(ClientIdentity.verify(ClientIdentity.issue()),
+                    "refusal must not depend on how long the machine took between issuing the id "
+                            + "and checking it");
+        }
     }
 
     @Test

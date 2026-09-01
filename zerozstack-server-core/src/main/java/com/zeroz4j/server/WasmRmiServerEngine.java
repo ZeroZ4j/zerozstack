@@ -1467,15 +1467,35 @@ public class WasmRmiServerEngine implements EventPublisher {
             // none, and @RequestScoped beans (e.g. the per-tenant EmbeddedStorageManager
             // producer) must resolve inside service calls. A servlet container did this
             // implicitly; here it is the engine's job.
-            jakarta.enterprise.context.control.RequestContextController requestContext =
-                lookup(jakarta.enterprise.context.control.RequestContextController.class).get();
-            boolean contextActivated = requestContext.activate();
             try {
-                dispatchFrame(data, session);
-            } finally {
-                if (contextActivated) {
-                    requestContext.deactivate();
+                jakarta.enterprise.context.control.RequestContextController requestContext =
+                    lookup(jakarta.enterprise.context.control.RequestContextController.class).get();
+                boolean contextActivated = requestContext.activate();
+                try {
+                    dispatchFrame(data, session);
+                } finally {
+                    if (contextActivated) {
+                        // A frame still being handled when the container goes down finds the
+                        // request scope already torn down, and deactivating it throws. That is the
+                        // end of this connection either way. Undeploy is the ordinary way to reach
+                        // it: the container stops while connections are still open.
+                        try {
+                            requestContext.deactivate();
+                        } catch (RuntimeException containerGone) {
+                            LOG.fine("[zeroz4j] The request scope for a frame on connection "
+                                    + session.getId() + " was already gone when the frame "
+                                    + "finished; the container is shutting down. "
+                                    + containerGone.getMessage());
+                        }
+                    }
                 }
+            } catch (Throwable escaped) {
+                // Nothing leaves a frame's thread. What escapes here is not a failed call - those
+                // are answered on 0x0F further in - but a failure of the machinery around one, and
+                // an uncaught exception on a thread named "zeroz-rmi-24" is a bare stack trace on
+                // stderr belonging to no connection and no request.
+                LOG.log(Level.SEVERE, "[zeroz4j] A frame on connection " + session.getId()
+                        + " could not be handled: " + escaped, escaped);
             }
         });
     }

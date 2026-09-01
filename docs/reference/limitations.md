@@ -484,6 +484,16 @@ cannot. That is a floor, not a guarantee of a usable screen.
   Build those with `AppBase.location(...)` / `AppBase.url(...)`.
 - **The `<base href>` is skipped when the shell already declares one**, and when it has no `<head>`.
   Both are deliberate, and both mean an application that does either owns the problem itself.
+- **Closing a connection does not wait for the message it interrupted.** Everything the connection
+  had queued is thrown away and the message being handled is interrupted, but the close returns
+  straight away rather than waiting for that thread to stop. So a service method can still be
+  running for a moment after the connection it belongs to is gone, and a shutdown that closes
+  connections can reach the end of the container's own teardown while one is still finishing. The
+  framework no longer lets that thread die noisily, and a call that fails is still answered on its
+  own; what an application must not assume is that nothing of a connection's is running once it has
+  been told the connection closed. Waiting instead is not an option: a message may legitimately be
+  waiting up to thirty seconds for a lock, and the close runs on the thread the container reads
+  every connection with.
 
 ## Multi-tenancy
 

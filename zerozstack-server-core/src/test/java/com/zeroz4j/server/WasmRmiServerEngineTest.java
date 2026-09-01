@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -172,7 +171,6 @@ public class WasmRmiServerEngineTest {
         Session owner;
         /** Written by the session's writer thread, read by test assertions. */
         private final List<ByteBuffer> recorded = new CopyOnWriteArrayList<>();
-        public CountDownLatch latch;
 
         /**
          * Everything sent so far, once the connection's writer has caught up.
@@ -222,7 +220,6 @@ public class WasmRmiServerEngineTest {
             copy.put(data);
             copy.flip();
             recorded.add(copy);
-            if (latch != null) latch.countDown();
         }
         @Override public void sendText(String partialMessage, boolean isLast) {}
         @Override public void sendBinary(ByteBuffer partialByte, boolean isLast) {}

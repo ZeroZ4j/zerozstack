@@ -295,13 +295,26 @@ public class HandleEconomyTest {
     @DisplayName("the registry does not keep a live object alive by itself")
     public void aRegisteredObjectIsCollectedOnceTheApplicationLetsGo() {
         ObjectMapper mapper = new ObjectMapper();
+
+        // Held on purpose, and for exactly as long as the first assertion needs. The registry keeps
+        // nothing alive by itself, which is the whole point of the test - so a version of this that
+        // registered five thousand objects and referred to none of them was counting on no
+        // collection happening in the two lines between, and that depends on what the run did
+        // before it. It passed at the top of a run and failed further down, most of them gone.
+        List<Board> held = new ArrayList<>(5000);
         for (int i = 0; i < 5000; i++) {
-            mapper.register(new Board("board " + i));
+            Board board = new Board("board " + i);
+            held.add(board);
+            mapper.register(board);
         }
         assertEquals(5000, mapper.size(), "all of them are named while they are held");
 
         Board kept = new Board("kept");
         String keptId = mapper.register(kept);
+
+        // Let go of everything but the one. From here the registry is the only thing that knows
+        // about them, and it must not be enough to keep them.
+        held.clear();
 
         int remaining = 5001;
         for (int attempt = 0; attempt < 20 && remaining > 1; attempt++) {
