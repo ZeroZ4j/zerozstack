@@ -79,7 +79,7 @@ next to an installation.
 
 ## Drop-recovery test
 
-The second script proves the 0.5.0 connection-recovery story end to end: it starts the server
+The second script proves the connection recovery added in 0.5.0 end to end: it starts the server
 itself, kills it mid-session, asserts the built-in banner appears, restarts it, and asserts the
 banner clears and shared-signal updates flow again — across a **full server restart**, the harshest
 case. Stop any already-running smoke server first; this script owns the server lifecycle:
@@ -97,6 +97,11 @@ proves CDI discovery survives packaging. Build with `mvn verify -Ppackage`, star
 
 ## Also worth eyeballing
 
+- `smokeapp/AGENTS.md` should exist, and its second line under "The version this project is built
+  on" should name a real version — `0.8.0-SNAPSHOT`, not the literal `${zeroz4jVersion}`. It should
+  also still have its six `##` headings. Velocity, which filters the file, reads `##` as the start
+  of a comment and drops the rest of the line without a word, so the headings are escaped in the
+  archetype's copy and an accidental un-escaping shows up here as missing headings and nothing else.
 - `smokeapp-shared/target/classes` should contain `Message_Serializer.class`,
   `EchoService_Stub.class` and one `com/zeroz4j/generated/BinaryPackableRegistrar_*.class`. Empty
   means the processor did not run.

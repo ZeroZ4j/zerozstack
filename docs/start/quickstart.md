@@ -156,6 +156,13 @@ mvn archetype:generate \
 The framework version is pinned automatically to the version of the archetype you generated from.
 Override it with `-Dzeroz4jVersion=...` if you need a different one.
 
+The generated project also carries its own **`AGENTS.md`**, naming that same version and holding the
+rules an AI coding assistant needs before it can write anything here. If you work with one, point it
+at that file first. The full rule list for exactly your version travels inside the jar you already
+depend on, at `META-INF/zeroz4j/AGENTS.md` in `zerozstack-shared-api`; the generated page says how to
+read it. Prefer both to anything found online, because the published documentation and the Context7
+index follow this repository's main line and describe features a released version may not have.
+
 Then build and run it exactly like an example:
 
 ```bash

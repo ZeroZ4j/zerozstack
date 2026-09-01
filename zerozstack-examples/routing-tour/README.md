@@ -8,7 +8,7 @@ paths that do not match or are not permitted.
 
 ```bash
 mvn -pl zerozstack-examples/routing-tour/routing-tour-server -am install
-java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.6.2.jar --dev-login
+java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.8.0-SNAPSHOT.jar --dev-login
 ```
 
 Then open <http://localhost:8091/?user=admin&password=admin>.

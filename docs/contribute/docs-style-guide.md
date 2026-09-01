@@ -92,6 +92,17 @@ compressed projection of that page, and they are how guidance reaches agents wor
 repositories. Three things drift and have drifted: the version number, a rule that describes an old
 API, and a new page that never gets a link. Check all three whenever you change `AGENTS.md`.
 
+Only the first of the three is caught for you. `VersionStatementTest` fails the build on a version
+number that no longer matches `<revision>` in the root `pom.xml`, naming the file and the line —
+across every Markdown file in the checkout, not only those. It leaves a sentence about the past
+alone, as long as the sentence says it is about the past: `(0.6.0+)`, `since 0.5.0`, `before 0.8.0`,
+`added in 0.6.0`. Write one of those forms when you mean history, because a version with no such
+marker is read as a claim about the version you are on, and has to be that one.
+
+The `rules` array in `context7.json` is now also copied into `zerozstack-shared-api.jar` during the
+build, so applications can read the rules for the exact version they depend on. Editing that array
+changes what ships; nothing else has to be touched.
+
 ## Markdown
 
 Documentation is plain Markdown, rendered by MkDocs Material. Keep the source readable on

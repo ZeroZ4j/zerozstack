@@ -779,6 +779,32 @@ belongs to that server rather than to the whole Java process, so two servers can
     Every setting the framework reads is now named by a constant in `com.zeroz4j.server.ServerSettings`,
     in one place, with what it means and what it defaults to.
 
+- **A generated project now tells an AI coding assistant what it is.** Every project the archetype
+  produces gets its own `AGENTS.md`, stamped with the framework version that project resolves. It
+  is one page: where the documentation lives, the three-module shape, how to build and run, and the
+  ten rules that contradict ordinary Java habits and are therefore the ones an assistant gets wrong
+  — annotations on the interface and not the bean, no thread around a click handler, no
+  `setInnerHTML("")`, no shading, and the rest. It is deliberately not a copy of the framework's own
+  `AGENTS.md`, most of which is about building the framework. Until now a new application started
+  with an assistant that knew nothing, and the material lived in a repository the application
+  developer had no reason to have cloned.
+
+- **The rules now travel inside the jar, stamped with the version.** `zerozstack-shared-api` carries
+  `META-INF/zeroz4j/AGENTS.md`, written during the build from the rule list in `context7.json`, with
+  the version of that build in its heading. Every application resolves that artifact, so an
+  assistant can read the rules for **the version the project actually depends on**, offline, with no
+  documentation service involved. This matters because the Context7 index follows the framework's
+  main line and has no versions: the moment 0.8.0 lands there, it starts describing 0.8.0 features
+  to somebody working in an 0.7.0 project. Read it with:
+
+    ```bash
+    unzip -p ~/.m2/repository/com/zeroz4j/zerozstack-shared-api/0.8.0/zerozstack-shared-api-0.8.0.jar META-INF/zeroz4j/AGENTS.md
+    ```
+
+    It is generated rather than written, so it cannot drift from `context7.json`, and it costs the
+    browser nothing: TeaVM does not put classpath resources in the client bundle, measured
+    byte-for-byte before and after.
+
 ### Changed
 
 - **Typing into a live object no longer sends a message for every character.** A change made on the
@@ -1272,6 +1298,29 @@ belongs to that server rather than to the whole Java process, so two servers can
 - **`docs/UI_COMPONENTS.md` no longer prints a component count.** It said 106 against roughly 115
   concrete classes, and it had been wrong before in the same direction: written once, then left
   behind as the library grew. The list is the answer.
+
+- **A stale version number now fails the build.** `VersionStatementTest` reads every Markdown file
+  in the checkout plus `llms.txt` and `context7.json`, and compares what they claim the framework
+  is against `<revision>` in the root `pom.xml`. `llms.txt` was found saying 0.4.0 and calling the
+  router unimplemented — two releases stale, with nothing to catch it.
+
+    The hard part is that a sentence about the past keeps its own number. A previous bump walked the
+    documentation incrementing every version it saw, leaving pages that claimed work done in 0.5.0
+    had been done in the version being prepared. So each mention is classified from the words next
+    to it: `(0.7.0+)`, `since 0.6.1`, `before 0.8.0`, `added in 0.6.0` and the like are history and
+    are left alone; anything with no marker saying *when* is read as a claim about the version you
+    are on, and has to match. A bare `in` is not a marker, deliberately — "every known gap in 0.8.0"
+    goes stale and "the fix landed in 0.6.0" does not, and the difference is the verb. Anything it
+    cannot place is reported rather than passed.
+
+    It found five wrong numbers on its first run: four example READMEs telling you to launch a jar
+    two releases old, and a guide crediting the `package` profile to 0.5.1, a release that was never
+    made.
+
+- **The release checklist now covers the documents an AI coding assistant reads.** `AGENTS.md`,
+  `llms.txt`, `context7.json` and `docs/AGENT_PROMPTS.md` state the version in prose and nothing in
+  `${revision}` reaches them; the checklist had mentioned none of the four. It is now step 7 in
+  [RELEASING.md](RELEASING.md), with the check above doing the finding.
 
 
 ## [0.7.0] — 2026-08-20

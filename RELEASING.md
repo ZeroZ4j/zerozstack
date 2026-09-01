@@ -27,12 +27,30 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    the one you just published. Put it back, naming the next version, when the next line opens.
 6. Check the version in the archetype's generated `pom.xml` template still matches, since it is not
    covered by `${revision}`.
-7. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
+7. **Read the four documents an AI coding assistant reads, and correct the version in each.**
+   `AGENTS.md`, `llms.txt`, `context7.json` and [`docs/AGENT_PROMPTS.md`](docs/AGENT_PROMPTS.md)
+   state the version in prose, and nothing in `${revision}` reaches them. This step exists because
+   `llms.txt` was once found two releases stale — naming a version long superseded and still calling
+   the router unimplemented — and nobody had noticed.
+
+   `VersionStatementTest` in `zerozstack-ui-components` does the finding for you: run it after
+   step 4 and it names every file and line still saying the old number, across the whole checkout
+   and not just those four. **Correct only the lines it names.** A sentence about what an earlier
+   release did keeps its own number — a previous bump walked the documentation incrementing every
+   version it saw, and left pages claiming that work released in 0.5.0 had arrived in the version
+   being prepared. The check is built around that distinction and will not report a sentence that
+   says when.
+
+   `context7.json` and `llms.txt` are also where a rule can go quietly out of date, which no check
+   can catch. Read the rules you changed this cycle. The rule list in `context7.json` is now
+   copied into `zerozstack-shared-api.jar` at build time, so it reaches applications as well as
+   the documentation index.
+8. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
    reads the text of everything this build publishes: the strings baked into compiled classes, the
    resource files, the generated sources, and the project template inside the archetype. It fails
    the build if it finds text that was saved as UTF-8 and then read back through a single-byte code
    page, which is what put nonsense in place of a dash, a play triangle and a block cursor in the
-   0.7.0 component library.
+   component library released in 0.7.0.
 
    It also refuses to pass on a partial job. It works out which modules the release publishes by
    reading the POM files — never from a list written down here, which would drift — and fails,

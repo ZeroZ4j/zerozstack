@@ -59,7 +59,7 @@ Two Keycloak details worth knowing, both of which cost time if you meet them col
 
 ```bash
 mvn -pl zerozstack-examples/oidc-login/oidc-login-server -am install
-java -jar zerozstack-examples/oidc-login/oidc-login-server/target/oidc-login-server-0.6.0.jar
+java -jar zerozstack-examples/oidc-login/oidc-login-server/target/oidc-login-server-0.8.0-SNAPSHOT.jar
 ```
 
 Open <http://localhost:8081/> and sign in as `ada` / `ada`. You are redirected to Keycloak and back.
