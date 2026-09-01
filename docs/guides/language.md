@@ -210,7 +210,31 @@ It names the file, the key and what is wrong with it:
 
 `CatalogParity` is in `zerozstack-server-test`, which you already take at test scope.
 
-## Translating the framework's own refusals
+## The framework's own words
+
+This project ships its own forty-odd sentences - access denied, not signed in, the name on a
+language picker - in **English and German**, and nothing else.
+
+German because it is the language this project's author writes, so the translation can be reviewed
+rather than guessed at. That is the whole criterion, and it is why there is not a third: a
+translation nobody here can check is worse than one language, because a wrong sentence in a language
+you cannot read looks exactly like a right one.
+
+It costs your browser **nothing**. Translated words travel over the connection, not in the bundle,
+so a build is byte-identical whether or not this file exists. What it costs is about 1.4 KB in one
+jar.
+
+!!! note "The framework's languages are not your deployment's languages"
+    `i18n/zeroz4j_de.properties` is on every application's classpath, translated or not - so if it
+    counted, every deployment would offer German, and a German browser would be answered with German
+    refusals over an English screen. It does not count. **What your deployment can answer in is
+    decided by your own catalogs**, and the framework's words ride along with whichever of them you
+    have: ship `app_de.properties` and your readers get German refusals for free.
+
+    A server with no interface at all, that wants German refusals and has no catalog of its own,
+    says so with `zeroz.i18n.defaultLocale=de`. That setting is for exactly this.
+
+## Changing the framework's own wording
 
 The framework ships its own words in English only. To have "Access denied" and the rest read in
 another language, put a file with the same keys on the server's classpath — the application's own
@@ -354,8 +378,11 @@ and it binds itself to the language, because there is nothing else a language se
 bound to.
 
 It is a real `<select>`, so the browser supplies the keyboard: Tab reaches it, the arrow keys move
-through the choices, typing jumps by first letters, Enter takes one and Escape leaves it alone. It
-announces itself as "Language" until `setLabel(...)` gives it words of your own.
+through the choices, typing jumps by first letters, Enter takes one and Escape leaves it alone.
+
+It announces itself as "Language" in English and "Sprache" in German out of the box, because those
+are the two languages this framework ships its own words in — and `setLabel(...)` replaces that
+built-in name with words of your own.
 
 **Each language is named in itself** — `Deutsch`, `Français`, `日本語` — never in the language
 currently on screen. Somebody who has landed on a page in a language they cannot read is exactly the
@@ -467,6 +494,8 @@ Four things it does not do:
 - **The framework's own words inside the browser** — the reconnect banner, `Close` on a drawer,
   `Copied` after a copy button, the offline page — are English literals and are not in a catalog.
   The words on a `LanguageSelector` are the exception; those are.
+- **The framework ships two languages, English and German.** A third is a `.properties` file
+  somebody contributes, and it costs the browser nothing to add.
 - **Validation messages** are compiled into `<Model>_Rules` as written and are not translatable.
 - **There is no check for English left hard-coded** in a screen.
 
@@ -478,6 +507,7 @@ are not planned. The reasoning is in the
 ## Seeing all of it working
 
 `zerozstack-examples/chat-livesync` is translated into German end to end: a catalog in its shared
-module, a `LanguageSelector` in the side panel, and a German copy of the framework's own words so
-even the picker announces itself as `Sprache`. Run it, type something into the topic box, and switch
-language while you look at it.
+module and a `LanguageSelector` in the side panel. It translates none of the framework's own words -
+it does not have to, because the framework ships German itself, which is why the picker announces
+itself as `Sprache` with nothing in the example doing that. Run it, type something into the topic
+box, and switch language while you look at it.

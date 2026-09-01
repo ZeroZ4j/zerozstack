@@ -55,9 +55,41 @@ upgrading.
   English left hard-coded in a screen, which no check can reliably tell from a CSS class or a log
   line.
 
-- **`chat-livesync` is translated into German end to end** — a catalog in its shared module, a
-  language picker in the side panel, and a German copy of the framework's own words, so even the
-  picker announces itself as `Sprache`. Run it and switch language with the topic box half typed in.
+- **The framework now ships its own words in German as well as English.** Access denied, not signed
+  in, no such service, and the name on the language picker all read in German for a reader who asked
+  for German, with nothing for an application to do. It was going to be English only; that was
+  wrong, because the one control a non-English reader most needs — the language picker — would have
+  been labeled in a language they may not read, unless every application shipped its own copy of
+  the framework's catalog to work around it. A default that only works if everybody works around it
+  is not a default. German specifically because it is the language this project's author writes, so
+  the translation can be reviewed rather than guessed at; a translation nobody here can check is
+  worse than one language, because a wrong sentence in a language you cannot read looks exactly like
+  a right one. **It costs the browser nothing** — measured: a build with the file and a build
+  without it are byte-identical, because translated words travel over the connection rather than in
+  the bundle. What it costs is about 1.4 KB in one jar.
+
+- **The framework's own languages deliberately do not become your deployment's languages.** Its
+  German is on every application's classpath, translated or not. If that counted, an English-only
+  application would answer a German browser with German refusals over an English screen — the
+  half-translated screen the whole design exists to prevent, arrived at from the other direction. So
+  what a deployment can answer in is decided by the deployment's own catalogs, and the framework's
+  words ride along with whichever of them it has: ship `app_de.properties` and German refusals come
+  free. A server with no interface at all says `zeroz.i18n.defaultLocale=de` instead, which is the
+  setting for exactly that.
+
+- **The drift check now finds a translation whose fallback lives in another module.** It compared a
+  file only with its siblings in one folder, so the one set of files it could never see was the
+  framework's own translations — a `zeroz4j_de.properties` anywhere, whose fallback stays in
+  `zerozstack-shared-api`. That is the documented way to change the framework's wording, and it now
+  matters more, because the framework has a translation of its own to keep honest. **It found a real
+  one the moment it was written:** this repository's own German test catalog had been missing a key
+  since that key was added, and nothing had noticed. A translation whose fallback exists nowhere at
+  all is reported too — there is no key list to read it against.
+
+- **`chat-livesync` is translated into German end to end** — one catalog in its shared module and a
+  language picker in the side panel. It translates none of the framework's own words and does not
+  have to: the picker announces itself as `Sprache` because the framework ships German itself. Run
+  it and switch language with the topic box half typed in.
 
 ### Changed
 

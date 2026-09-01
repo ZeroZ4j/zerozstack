@@ -127,6 +127,157 @@ class FrameworkCatalogParityTest {
                         + String.join(System.lineSeparator(), findings));
     }
 
+    /**
+     * A translation is checked against its fallback wherever in the checkout that fallback lives.
+     *
+     * <h2>The hole this closes</h2>
+     *
+     * <p>The check above walks each {@code i18n} folder and looks for files with no language suffix,
+     * because that is the fallback every other language is compared with. A folder that holds only
+     * translations therefore has nothing to compare against and was skipped in silence.</p>
+     *
+     * <p>That was not a corner case. Translating this framework's own words means putting
+     * {@code i18n/zeroz4j_de.properties} somewhere - and the fallback it belongs to,
+     * {@code i18n/zeroz4j.properties}, is in {@code zerozstack-shared-api} and stays there. So the
+     * framework's own translations, in the framework's own repository, were the one set of files
+     * the drift check could not see. It matters more now that this project ships German itself: its
+     * own translation would go unchecked by the very test written to catch drift.</p>
+     *
+     * <p>So the fallback is looked for by catalog name across the whole checkout rather than beside
+     * the file. A translation whose fallback exists nowhere at all is reported too: nothing will
+     * ever read it correctly, because there is no key list to read it against.</p>
+     */
+    @Test
+    @DisplayName("a translation whose fallback lives in another module is checked too")
+    void aTranslationIsCheckedAgainstItsFallbackWhereverItLives() {
+        List<String> findings = new ArrayList<>();
+        int orphansChecked = 0;
+
+        for (Path folder : catalogFolders()) {
+            for (String baseName : translationsWithNoFallbackBesideThem(folder)) {
+                Path fallbackFile = fallbackElsewhere(baseName, folder);
+                if (fallbackFile == null) {
+                    findings.add("  " + folder + " has translations of " + baseName
+                            + " and nothing in this checkout is " + baseName + ".properties. "
+                            + "There is no key list to read them against, so nothing can say "
+                            + "whether they are complete or even spelled right.");
+                    continue;
+                }
+                orphansChecked++;
+                findings.addAll(checkAgainst(fallbackFile, folder, baseName));
+            }
+        }
+
+        assertTrue(orphansChecked > 0,
+                "expected to find at least the framework's own German, whose fallback is in "
+                        + "zerozstack-shared-api and which is the reason this check exists");
+        assertTrue(findings.isEmpty(),
+                "A translation has drifted away from the language it was translated from."
+                        + System.lineSeparator()
+                        + String.join(System.lineSeparator(), findings));
+    }
+
+    /** Catalog names in this folder that have translations here and no fallback file here. */
+    private static List<String> translationsWithNoFallbackBesideThem(Path folder) {
+        Set<String> withFallback = new LinkedHashSet<>(fallbackFilesIn(folder));
+        Set<String> orphans = new TreeSet<>();
+        try (Stream<Path> files = Files.list(folder)) {
+            files.filter(Files::isRegularFile)
+                 .map(file -> file.getFileName().toString())
+                 .filter(name -> name.endsWith(".properties"))
+                 .map(name -> name.substring(0, name.length() - ".properties".length()))
+                 .filter(stem -> stem.indexOf('_') > 0)
+                 .map(stem -> stem.substring(0, stem.indexOf('_')))
+                 .filter(baseName -> !withFallback.contains(baseName))
+                 .forEach(orphans::add);
+        } catch (IOException unreadable) {
+            throw new UncheckedIOException(unreadable);
+        }
+        return new ArrayList<>(orphans);
+    }
+
+    /** The one {@code <baseName>.properties} in the checkout, outside this folder, or null. */
+    private static Path fallbackElsewhere(String baseName, Path except) {
+        for (Path folder : catalogFolders()) {
+            if (folder.equals(except)) {
+                continue;
+            }
+            Path candidate = folder.resolve(baseName + ".properties");
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The same comparison {@link CatalogParity#check} makes, with the fallback taken from somewhere
+     * else. Kept here rather than added to {@code CatalogParity}: an application's own catalog has
+     * its languages in one folder, and a published helper that encouraged spreading them around
+     * would be selling a shape nobody should copy.
+     */
+    private static List<String> checkAgainst(Path fallbackFile, Path folder, String baseName) {
+        List<String> findings = new ArrayList<>();
+        Map<String, String> fallback = CatalogParity.read(fallbackFile);
+        List<Path> translations = new ArrayList<>();
+        try (Stream<Path> files = Files.list(folder)) {
+            files.filter(Files::isRegularFile)
+                 .filter(file -> file.getFileName().toString().startsWith(baseName + "_")
+                         && file.getFileName().toString().endsWith(".properties"))
+                 .sorted()
+                 .forEach(translations::add);
+        } catch (IOException unreadable) {
+            throw new UncheckedIOException(unreadable);
+        }
+
+        for (Path translation : translations) {
+            Map<String, String> entries = CatalogParity.read(translation);
+            String name = translation.getFileName().toString();
+
+            Set<String> missing = new TreeSet<>(fallback.keySet());
+            missing.removeAll(entries.keySet());
+            for (String key : missing) {
+                findings.add("  " + name + " has no " + key + ", so that sentence comes out in the "
+                        + "fallback language. Its fallback is " + fallbackFile + ".");
+            }
+
+            Set<String> extra = new TreeSet<>(entries.keySet());
+            extra.removeAll(fallback.keySet());
+            for (String key : extra) {
+                findings.add("  " + name + " has " + key + ", which " + fallbackFile
+                        + " does not. Nothing will ever read it.");
+            }
+
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                String original = fallback.get(entry.getKey());
+                if (original == null) {
+                    continue;
+                }
+                Set<Integer> here = blanksIn(entry.getValue());
+                Set<Integer> there = blanksIn(original);
+                if (!here.equals(there)) {
+                    findings.add("  " + name + " gives " + entry.getKey() + " the blanks " + here
+                            + " where " + fallbackFile + " gives it " + there + ".");
+                }
+            }
+        }
+        return findings;
+    }
+
+    /** The {@code {0}} blanks in one pattern, by number. */
+    private static Set<Integer> blanksIn(String pattern) {
+        Set<Integer> blanks = new TreeSet<>();
+        if (pattern == null) {
+            return blanks;
+        }
+        java.util.regex.Matcher blank =
+                java.util.regex.Pattern.compile("\\{(\\d+)\\}").matcher(pattern);
+        while (blank.find()) {
+            blanks.add(Integer.valueOf(blank.group(1)));
+        }
+        return blanks;
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private static Path frameworkCatalogFile() {

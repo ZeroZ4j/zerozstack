@@ -167,4 +167,45 @@ class LocaleResolutionTest {
         assertEquals("en", LocaleResolution.localeOf(null).getLanguage());
         assertEquals("en", LocaleResolution.localeOf("!!!").getLanguage());
     }
+
+    /**
+     * The framework ships its own words in German, and that must not make every deployment offer
+     * German.
+     *
+     * <p>This is the trap the second language would otherwise be. {@code i18n/zeroz4j_de.properties}
+     * is inside {@code zerozstack-shared-api}, so it is on the classpath of every application ever
+     * built on this framework, translated or not. If it counted as a language the deployment can
+     * answer in, an English-only application would answer a German browser with German refusals
+     * over an English screen - which is the half-translated screen the narrowing rule exists to
+     * prevent, arrived at from the opposite direction.</p>
+     *
+     * <p>So what a deployment offers is decided by the deployment's own catalogs. The framework's
+     * words ride along with whichever of them it has.</p>
+     */
+    @Test
+    @DisplayName("the framework's own German does not make a deployment offer German")
+    void theFrameworksOwnLanguagesAreNotTheDeploymentsOwn() {
+        MessageCatalogs.forgetForTesting();
+        java.util.Set<String> offered = MessageCatalogs.offeredLanguages();
+
+        assertTrue(offered.contains("de"),
+                "this module's own test catalog has German, so German is offered here");
+        assertTrue(MessageCatalogs.read(com.zeroz4j.api.i18n.FrameworkText.CATALOG, "de")
+                        .containsKey(com.zeroz4j.api.i18n.FrameworkKeys.ACCESS_DENIED),
+                "and the framework's shipped German is readable, which is the point of shipping it");
+
+        // What a deployment offers comes from its own catalogs. Take the framework's file name and
+        // ask what it contributes: nothing.
+        java.util.Set<String> fromFrameworkFilesOnly = new java.util.LinkedHashSet<>();
+        MessageCatalogs.languageOfForTesting("zeroz4j_de.properties", fromFrameworkFilesOnly);
+        MessageCatalogs.languageOfForTesting("zeroz4j_ja.properties", fromFrameworkFilesOnly);
+        assertTrue(fromFrameworkFilesOnly.isEmpty(),
+                "a file of the framework's own catalog contributes no language to the offered list. "
+                        + "Got: " + fromFrameworkFilesOnly);
+
+        java.util.Set<String> fromAnApplicationsFiles = new java.util.LinkedHashSet<>();
+        MessageCatalogs.languageOfForTesting("app_de.properties", fromAnApplicationsFiles);
+        assertTrue(fromAnApplicationsFiles.contains("de"),
+                "an application's own catalog is what decides, and it still does");
+    }
 }

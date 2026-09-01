@@ -30,10 +30,32 @@ package com.zeroz4j.api.i18n;
  * that adds no language gets exactly the sentences it got before language support existed, with no
  * file to load and nothing that can fail.</p>
  *
- * <h2>Translating the framework's own refusals</h2>
+ * <h2>What languages this ships in</h2>
  *
- * <p>Put {@code i18n/zeroz4j_de.properties} on the server's classpath — the application's own
- * resources folder is the usual place — with the same keys. There is nothing to register.</p>
+ * <p><b>English and German, and nothing else.</b> German because it is the language this project's
+ * author writes, so the translation can be reviewed rather than guessed at; a translation nobody
+ * here can check is worse than one language, because a wrong sentence in a language you cannot read
+ * looks exactly like a right one.</p>
+ *
+ * <p>It costs the browser nothing. Only the English here is compiled in; every other language is a
+ * {@code .properties} file the server reads and sends over the connection, so a build is
+ * byte-identical whether or not German exists.</p>
+ *
+ * <p><b>These languages are not the deployment's languages.</b> {@code i18n/zeroz4j_de.properties}
+ * is on every application's classpath, translated or not, so it deliberately does not make a
+ * deployment offer German - see {@code MessageCatalogs.languageOf}.</p>
+ *
+ * <h2>Adding a language, or changing the wording of one</h2>
+ *
+ * <p>Put {@code i18n/zeroz4j_fr.properties} on the server's classpath - the application's own
+ * resources folder is the usual place - with the same keys. There is nothing to register, and a
+ * file there wins over the one shipped here, because an application's own classes come before the
+ * framework's jar.</p>
+ *
+ * <p><b>Give it every key.</b> One left out falls back to the wording shipped here for that one
+ * sentence, which reads as two voices in one screen. {@code CatalogParity} cannot catch that for
+ * you: your file's fallback is in another module, and comparing across modules is something only
+ * this repository's own drift check does.</p>
  *
  * @since 0.9.0
  */

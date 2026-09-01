@@ -323,14 +323,28 @@ without rebuilding anything — a half-filled form keeps its values.
 - **The framework's own words inside the browser** — the reconnect banner, `Close` on a drawer,
   `Copied` after a copy button, the offline page — are English literals and are not in a catalog.
   `LanguageSelector` is the exception; its own name is a catalog entry.
-- **The framework ships English only.** Another language for its own refusals is a `.properties`
-  file an application puts on the classpath, which the browser then receives like any other catalog.
+- **The framework ships two languages, English and German, and no more.** German because it is the
+  language this project's author writes, so the translation can be reviewed rather than guessed at;
+  a translation nobody here can check is worse than one language, because a wrong sentence in a
+  language you cannot read looks exactly like a right one. A third is a `.properties` file somebody
+  contributes. Adding one costs the browser nothing.
+- **The framework's own languages are deliberately not offered to a person.** `i18n/zeroz4j_de.properties`
+  is on every application's classpath, translated or not, so if it counted every deployment would
+  offer German - and a German browser would be answered with German refusals over an English screen.
+  What a deployment can answer in is decided by its own catalogs, and the framework's words ride
+  along with whichever of them it has. A server with no interface at all, wanting German refusals
+  and holding no catalog of its own, says so with `zeroz.i18n.defaultLocale`.
 - **The language is remembered per browser.** A second computer, or a private window, starts from
   that browser's `Accept-Language` again — unless the application registers a
   `LocalePreferenceStore` of its own.
 - **Validation messages are not translatable.** They are compiled into `<Model>_Rules` as written.
 - **There is no check for English left hard-coded** in a screen. No check can reliably tell a
   sentence a person reads from a CSS class, a DOM attribute or a log line.
+- **A translation whose fallback lives in another module is checked, but only in this repository.**
+  Overriding the framework's own wording means a `zeroz4j_de.properties` in your module whose
+  fallback stays in `zerozstack-shared-api`, and `CatalogParity` compares a file with its siblings
+  in one folder - so it cannot check that pairing for you. A key you leave out falls back to the
+  framework's own wording for that one sentence, which reads as two voices in one screen.
 - **The stale-label check has holes it cannot close.** `MessageReadContractTest` fails the build
   when `Message.text()` is called outside an effect, and it reads one file's text: it cannot follow
   an ordinary method call (it does follow a method reference handed straight to `Effect.create`, one
@@ -342,6 +356,15 @@ without rebuilding anything — a half-filled form keeps its values.
 - **A language switch made while the connection is down changes nothing on screen.** The choice is
   written to the cookie and queued, and takes effect when the connection returns. The words come
   from the server.
+- **The machinery itself is not free, and every application pays for it.** Translated languages cost
+  the browser nothing - they travel over the connection, and a build offering four languages is
+  byte-identical to one offering two, and removing the framework's own German leaves the file
+  byte-identical again — both measured. But the parts that receive them are compiled in
+  whether an application translates anything or not: the catalog store, the frame reader, the cookie
+  writer, the language signal and the framework's own English. Measured on the `todo-signals`
+  example, that is **26,561 bytes more to compile and 5,093 bytes more to download, gzipped — a
+  2.4 percent increase** on a 208 KB baseline. It is not opt-in and there is no switch to turn it
+  off. Anyone shipping to a slow connection should know the number without having to measure it.
 
 **Not planned at all**, with the reasoning in the [language support design](../design/language-support.md):
 right-to-left layout, plural rules of any kind, locale-aware sorting and searching, translation

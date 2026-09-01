@@ -62,9 +62,16 @@ import java.util.logging.Logger;
  *
  * <h2>What counts as an offered language</h2>
  *
- * <p>Everything under {@code i18n/} on the classpath whose name ends in a language suffix. That is
- * what a person's browser preference is narrowed against: asking for a language nobody translated
- * has to give the deployment's own language, not a half-translated screen.</p>
+ * <p>Everything under {@code i18n/} on the classpath whose name ends in a language suffix,
+ * <b>except the framework's own catalog</b>. That is what a person's browser preference is narrowed
+ * against: asking for a language nobody translated has to give the deployment's own language, not a
+ * half-translated screen.</p>
+ *
+ * <p>The exception is not tidiness. This project ships its own words in English and German, so
+ * {@code i18n/zeroz4j_de.properties} is on every application's classpath whether that application
+ * has been translated or not - and if it counted, an English-only deployment would answer a German
+ * browser with German refusals over an English screen, which is the same half-translated screen
+ * arrived at from the other direction. See {@link #languageOf}.</p>
  */
 final class MessageCatalogs implements Messages.Source {
 
@@ -72,6 +79,13 @@ final class MessageCatalogs implements Messages.Source {
 
     /** Where catalogs live on the classpath. One folder, so offered languages can be counted. */
     static final String CATALOG_FOLDER = "i18n/";
+
+    /**
+     * The file name of the framework's own catalog, which never decides what a deployment offers.
+     * See {@link #languageOf}.
+     */
+    private static final String FRAMEWORK_CATALOG_FILE =
+            com.zeroz4j.api.i18n.FrameworkText.CATALOG.substring(CATALOG_FOLDER.length());
 
     /** A file with no entries, cached so an absent language is looked for only once. */
     private static final Properties NONE = new Properties();
@@ -229,6 +243,20 @@ final class MessageCatalogs implements Messages.Source {
         }
     }
 
+    /**
+     * What one file name contributes to the offered-language list.
+     *
+     * <p>Package-private for {@code LocaleResolutionTest}, which pins the rule that the framework's
+     * own languages are not the deployment's. Reaching that rule through the classpath would mean
+     * building a jar in a test; reaching it through the one method that decides is enough.</p>
+     *
+     * @param fileName a file name such as {@code app_de.properties}
+     * @param found    the set to add to
+     */
+    static void languageOfForTesting(String fileName, Set<String> found) {
+        languageOf(fileName, found);
+    }
+
     /** Forgets what was read. Test support only: a test may put a new file on the classpath. */
     static void forgetForTesting() {
         LOADED.clear();
@@ -343,6 +371,18 @@ final class MessageCatalogs implements Messages.Source {
     /**
      * Reads the language suffix out of a file name such as {@code app_pt_BR.properties}. A file with
      * no suffix is the fallback language and is not a language of its own.
+     *
+     * <p><b>The framework's own catalog is skipped, and that is not tidiness.</b> This project ships
+     * its own forty-odd words in English and German, so {@code i18n/zeroz4j_de.properties} is on
+     * every application's classpath whether or not that application has been translated at all. If
+     * it counted, every deployment would offer German, and a visitor whose browser asks for German
+     * would be answered with German refusals over an English screen - the half-translated screen
+     * this whole design exists to prevent.</p>
+     *
+     * <p>So what a deployment can answer in is decided by the deployment's own catalogs, and the
+     * framework's languages ride along with whichever of them it has. A server with no interface at
+     * all that wants German refusals says so with {@code zeroz.i18n.defaultLocale}, which is the
+     * setting for exactly that.</p>
      */
     private static void languageOf(String fileName, Set<String> found) {
         if (!fileName.endsWith(".properties")) {
@@ -351,6 +391,9 @@ final class MessageCatalogs implements Messages.Source {
         String stem = fileName.substring(0, fileName.length() - ".properties".length());
         int underscore = stem.indexOf('_');
         if (underscore < 0 || underscore == stem.length() - 1) {
+            return;
+        }
+        if (FRAMEWORK_CATALOG_FILE.equals(stem.substring(0, underscore))) {
             return;
         }
         String tag = stem.substring(underscore + 1).replace('_', '-');

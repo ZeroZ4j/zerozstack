@@ -980,12 +980,37 @@ Settled on 2026-09-01. Section 9 keeps the reasoning that led to each.
    nobody has to ask for; an application that wants the choice to follow a person to a second
    computer implements `LocalePreferenceStore`. The framework does not learn to write application
    data, which keeps the question the transactions design left open still closed.
-2. **The framework ships its own forty strings in English only, for now.** English is the fallback,
-   so a project that adds no language sees no change at all, and every string the framework shows
-   is one an application can override in its own catalog. Shipping a second language costs every
-   application that download forever, and we have no evidence yet which second language is wanted.
-   The example application demonstrates a second language, which is where it proves the mechanism
-   without charging everybody for it.
+2. **The framework ships its own words in English and German.** ~~English only, for now.~~
+   **Reversed on 2026-09-01, while item 7 was being built.** The original reasoning was that a
+   second language costs every application that download forever and that there was no evidence
+   which one was wanted. Two things were wrong with it.
+
+   **The cost is not what the reasoning assumed.** The ~0.8 KB per language figure in §2 was
+   measured through TeaVM's `ResourceBundle`. This design does not use it: the browser is sent its
+   words over the wire (§4.4) and only the English fallback is compiled in, as a generated
+   `switch`. A second language is a `.properties` file the server reads, so **it costs the browser
+   nothing at all** - a build with it and a build without it are byte-identical, measured. What it
+   costs is about 1.4 KB in one jar, and the same on the wire once per connection for a reader who
+   asked for German.
+
+   **And English-only was not a default, it was a trap.** `LanguageSelector` (§4.11) carries a
+   built-in name from this catalog. In the release that adds language support, the one control a
+   non-English reader most needs would have been labeled in a language they may not read - unless
+   every application shipped its own framework catalog to work around it. A default that only works
+   if everybody works around it is not a default.
+
+   **German, specifically, because this project's author writes it,** so the translation can be
+   reviewed rather than guessed at. That is the whole of the criterion, and it is why there is not
+   a third: a language nobody here can check is worse than one language, because a wrong sentence
+   in a language you cannot read is indistinguishable from a right one.
+
+   **One consequence had to be designed for.** The framework's German is on every application's
+   classpath, translated or not. If it counted as a language the deployment can answer in, an
+   English-only application would answer a German browser with German refusals over an English
+   screen - the half-translated screen §4.6's narrowing rule exists to prevent, arrived at from
+   the other direction. So the framework's own catalog never contributes to the offered-language
+   list: what a deployment can answer in is decided by the deployment's own catalogs, and the
+   framework's words ride along with whichever of them it has.
 3. **The catalog rides on the AUTH frame.** As designed. It is already sent, it already carries a
    version byte, and a separate fetch would be a second round trip before the first screen.
 4. **Numbers, dates and money stay off unless a project asks.** One `MessageFormat` call makes the
