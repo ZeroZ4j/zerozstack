@@ -113,6 +113,7 @@ nav:
 
   - Design proposals:
       - Transactions and concurrency: design/persistence-transactions.md
+      - Language support: design/language-support.md
 
   - AI agents:
       - Agent prompts: AGENT_PROMPTS.md
