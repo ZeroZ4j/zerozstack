@@ -10,6 +10,14 @@ Read this before you write your first `@DataModel`, and again when a model start
 when several models are copying the same three fields, or when you find yourself adding a `type`
 field and casting on the other side. Both of those have a proper answer now.
 
+**All three shapes are in one working application:**
+[`payments-datamodels`](https://github.com/ZeroZ4j/zerozstack/tree/main/zerozstack-examples/payments-datamodels),
+a small payments desk on port 8092. Amounts and basket lines are records; the way a customer paid is
+a sealed family with a record per kind; a payment and a refund share a base class. They travel
+nested inside each other and inside collections, both directions, and its test drives real frames
+through a server rather than calling the service — which is the only way to find out whether the
+generated code works. Read it alongside this page.
+
 For the bytes themselves, and the reasons behind every rule below, see the
 [wire protocol reference](../PROTOCOL.md). For which field *types* are allowed, see
 [Limitations](../reference/limitations.md#serialization).

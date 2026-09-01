@@ -24,7 +24,7 @@ mvn clean install -DskipTests
 
 Expect a couple of minutes with a warm Maven cache, and considerably longer on the first run while
 dependencies download.
-The build compiles the framework, runs the annotation processor, compiles all eleven example
+The build compiles the framework, runs the annotation processor, compiles all twelve example
 clients with TeaVM, and installs everything into your local repository.
 
 !!! warning "Always include `clean`"
@@ -59,12 +59,13 @@ somewhere else, add `--port 9000` to the command, or pass the number to `run.bat
 `run.bat 9000`.
 
 !!! note "`mvn exec:java` never works, and most examples have no runnable jar"
-    There is no `exec-maven-plugin` anywhere, so `mvn exec:java` fails in every module. Seven of the
-    eleven examples also have no runnable jar — `todo-signals`, `chat-events`, `chat-livesync`,
-    `job-monitor`, `form-signup`, `inventory-crud` and `components-showcase` — because no shade or
-    assembly plugin is configured for them. For those seven, the classpath command above is the way,
-    and it is what `run.bat` does. The four added in 0.6.0 — `routing-tour`, `oidc-login`,
-    `scoped-signals` and `pwa-install` — do build one, so `java -jar …-server.jar` works for those.
+    There is no `exec-maven-plugin` anywhere, so `mvn exec:java` fails in every module. Eight of the
+    twelve examples also have no runnable jar — `todo-signals`, `chat-events`, `chat-livesync`,
+    `job-monitor`, `form-signup`, `inventory-crud`, `components-showcase` and
+    `payments-datamodels` — because no shade or assembly plugin is configured for them. For those
+    eight, the classpath command above is the way, and it is what `run.bat` does. The four added in
+    0.6.0 — `routing-tour`, `oidc-login`, `scoped-signals` and `pwa-install` — do build one, so
+    `java -jar …-server.jar` works for those.
 
 **What you should see.** Weld and Helidon start up, and the last lines report the server listening.
 The console stays open; stop it with `Ctrl+C`.
@@ -80,8 +81,8 @@ remaining count are `Computed` values, and the rendering is driven by `Effect`.
 ### Examples that do require signing in
 
 Four examples show a `Login` component: **`chat-events`**, **`chat-livesync`**, **`job-monitor`**
-and **`components-showcase`**. `todo-signals`, `form-signup` and `inventory-crud` connect
-anonymously.
+and **`components-showcase`**. `todo-signals`, `form-signup`, `inventory-crud` and
+`payments-datamodels` connect anonymously.
 
 **`routing-tour`** and **`scoped-signals`** also need an identity, but take the credentials from the
 URL — `?user=admin&password=admin` — so two windows can be open as different users at once.
@@ -126,6 +127,7 @@ differences between the three propagation examples are the point.
 | `scoped-signals` | One signal value per tenant, user or browser |
 | `pwa-install` | Installing the application, and a manifest built per request |
 | `oidc-login` | Signing in against a real Keycloak with OpenID Connect |
+| `payments-datamodels` | A record, a sealed family of types, and a shared base class, all crossing the wire |
 
 ## Next steps
 

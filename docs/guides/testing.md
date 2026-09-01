@@ -25,6 +25,12 @@ Everything here needs one extra dependency, with **test scope**:
 
 It starts a bean container, so keep it out of your production classpath.
 
+**Three examples use it, and they are the fastest way in.** `payments-datamodels` drives real call
+frames through a server to prove its models survive the wire; `chat-livesync` checks that a message
+one person sends is pushed to every browser and that clearing the history needs the admin role;
+`form-signup` checks that a browser ignoring the validation rules is stopped at the server. All
+three are under `zerozstack-examples/`.
+
 ## Start a server
 
 ```java
@@ -85,6 +91,35 @@ container stays up.
 | the browser identifier it carries | `browser.browserId()` |
 
 To send something up, `browser.send(bytes)` puts a frame in as though the browser had sent it.
+
+## Calling the way a browser calls
+
+`server.bean(OrderService.class).approve(17L)` calls the service directly. That is the right thing
+most of the time, and it is not the same as a browser calling it. Two differences matter.
+
+**An object gets its handle by going over the wire.** A `@LiveSync` object returned from a direct
+bean call is handed to your test and registered with nobody, so `notifyChanged` on it afterwards
+throws — correctly, because no browser holds it. A test about syncing has to fetch the object
+through the connection first, the way the view does.
+
+**Nothing that depends on the caller's identity is exercised.** Roles, `@Secured`, argument
+validation and the disclosure record all live on the dispatch path, and a direct call goes round it.
+
+So a test about any of those builds the frame itself. Its shape is in
+[the protocol reference](../PROTOCOL.md): a message number, the
+interface name, the method name, how many arguments there are, then the arguments, written with
+`BinarySerializer`. Two things then catch people out, and both are handled the same way in all
+three examples:
+
+- **The answer arrives a moment later.** A frame a browser sends is put on that connection's queue
+  and handled on another thread, so `send` returns before the call has run. Read the connection in a
+  short loop until the answer is there.
+- **The answer is not necessarily the last frame.** A call that changes a synced object is followed
+  by the object update it caused, on the same connection. Match on the number you put on the front
+  of the request, and on the opcode being `0x01` or `0x0F`, exactly as a browser does.
+
+`PaymentsWireRoundTripTest` in `zerozstack-examples/payments-datamodels` is about sixty lines of
+this, comments included, and is the one to copy.
 
 ## Settings belong to the server, not to the process
 
@@ -207,4 +242,6 @@ is the fast test, not the whole story.
   same way the client does. Most tests do not need to: counting frames and asserting on your own
   beans covers more than it sounds like it does.
 - **Persistence is yours to arrange.** The harness starts no store. Add whatever your beans need to
-  the `beans(...)` list.
+  the `beans(...)` list — for a store that is usually a four-line class with a `@Produces` method
+  handing back a node opened in a `@TempDir`, which is what `chat-livesync` and `form-signup` do.
+  Nothing is discovered by scanning, so a bean the test did not name does not exist.

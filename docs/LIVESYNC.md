@@ -54,6 +54,14 @@ how the whole up direction stayed broken for a version with nobody noticing.
 An edit made while the connection is **down** is a different thing and is not a refusal: it is kept
 and sent when the connection comes back. See [Reconnection](#reconnection).
 
+**Watch one happen.** The `chat-livesync` example registers this listener and shows the reason above
+the topic box. The topic is capped at eighty characters by an annotation on the model and the box
+does not stop you typing more, so typing a long sentence into it produces a real refusal: the server
+logs `Rejected invalid live mutation of ChatTopic`, sends its own value back, and the person is told
+the topic was not changed and why. The listener also puts the box itself back to the server's value,
+which matters because the box otherwise leaves itself alone while somebody is typing in it — and
+after a refusal what is in it is a value that exists nowhere else.
+
 ### Every object the change touches is checked, not just the outer one
 
 A mutation frame carries a whole object graph, and applying it writes each part into the server object that part names.
