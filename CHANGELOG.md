@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [0.8.0] — unreleased
+## [0.8.0] — 2026-09-01
 
 Every control in the library can now be worked from a keyboard and says what it is; a build check
 fails if a new one cannot. Overlays behave like overlays — a dialog takes over the page, Escape

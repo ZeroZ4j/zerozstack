@@ -105,12 +105,6 @@ Or start from the archetype, which generates the three-module shape for you:
 mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.8.0
 ```
 
-> **⚠️ TEMPORARY — DELETE THIS BOX WHEN 0.8.0 SHIPS.**
-> **0.8.0 is not released yet.** It is the version this repository is preparing, and the numbers in
-> the two blocks above are the ones it will publish under. Until it goes out, use **0.7.0** in both. <!-- version-check: naming the published release is the whole point of this box, which RELEASING.md has you delete -->
-> Deleting this box is a step in [RELEASING.md](RELEASING.md#before-a-release), so a release cannot
-> quietly leave it here.
-
 ## 6. Developer Resources
 
 This repository contains the core framework and reference implementations.

@@ -85,7 +85,7 @@
     </modules>
 
     <properties>
-        <revision>0.8.0-SNAPSHOT</revision>
+        <revision>0.8.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Everything the build writes is UTF-8 too, javadoc included. Without this the
              javadoc tool falls back through a chain of defaults to the platform encoding,
