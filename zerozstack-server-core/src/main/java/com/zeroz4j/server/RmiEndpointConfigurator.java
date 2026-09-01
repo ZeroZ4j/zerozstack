@@ -53,6 +53,13 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
     public static final String CLIENT_KEY = "zeroz.clientId";
 
     /**
+     * Key used to store the connection's language tag in user properties map ("zeroz.locale").
+     *
+     * @since 0.9.0
+     */
+    public static final String LOCALE_KEY = "zeroz.locale";
+
+    /**
      * Key marking a handshake refused by {@link OriginPolicy}. The upgrade itself cannot be failed
      * from here in a container-independent way, so the flag is read by
      * {@link WasmRmiServerEngine#onOpen} which closes the connection immediately.
@@ -196,6 +203,7 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         }
 
         resolveClientId(config, request, response);
+        resolveLocale(config, request, settings);
 
         Principal principal = request.getUserPrincipal();
         Set<String> userRoles = new LinkedHashSet<>();
@@ -356,6 +364,26 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         if (clientId != null) {
             config.getUserProperties().put(CLIENT_KEY, clientId);
         }
+    }
+
+    /**
+     * Decides once, here, what language this connection reads, and remembers it on the connection.
+     *
+     * <p>Here rather than per call because it is a property of the person on the other end, not of
+     * any one request, and because the handshake is the only place the browser's own
+     * {@code Accept-Language} preference is available at all.</p>
+     *
+     * <p>Nothing is written back to the browser. A language is not a secret and nothing is
+     * protected by it, so the client writes its own ordinary cookie when somebody picks one and the
+     * server only ever reads it — which works in every container and has no failure mode to log.</p>
+     */
+    private static void resolveLocale(ServerEndpointConfig config, HandshakeRequest request,
+                                      ServerConfig settings) {
+        String language = LocaleResolution.atHandshake(settings,
+                firstParam(request.getParameterMap(), LocaleResolution.LANGUAGE_PARAMETER),
+                firstHeader(request, "Cookie"),
+                firstHeader(request, "Accept-Language"));
+        config.getUserProperties().put(LOCALE_KEY, language);
     }
 
 }

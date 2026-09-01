@@ -130,4 +130,17 @@ public final class ServerSettings {
 
     /** Where a part-received upload is written. Defaults to the JVM temp directory. */
     public static final String UPLOAD_TEMP_DIR = "zeroz.upload.tempDir";
+
+    // ------------------------------------------------------------------ language
+
+    /**
+     * What language this deployment answers in when the browser has not said what it reads.
+     *
+     * <p>A language tag such as {@code de} or {@code pt-BR}. Default {@code en}. Deliberately not
+     * the machine's own locale: a server in Frankfurt has a German JVM locale that has nothing to
+     * do with whoever is calling it.</p>
+     *
+     * @since 0.9.0
+     */
+    public static final String I18N_DEFAULT_LOCALE = "zeroz.i18n.defaultLocale";
 }

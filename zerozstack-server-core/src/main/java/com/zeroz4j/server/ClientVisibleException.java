@@ -17,6 +17,8 @@
  */
 package com.zeroz4j.server;
 
+import com.zeroz4j.api.i18n.Message;
+
 /**
  * An error whose message is meant for the caller.
  *
@@ -49,16 +51,32 @@ package com.zeroz4j.server;
  * <p>Unchecked on purpose: a domain refusal is not something every caller in the chain should have
  * to declare, and the client stub the annotation processor generates has no matching checked type
  * to declare either.</p>
+ *
+ * <h2>Saying it in the caller's language (0.9.0+)</h2>
+ *
+ * <p>Give it a {@link Message} instead of a sentence and the caller reads the refusal in their own
+ * language, while the server log keeps English:</p>
+ *
+ * <pre>{@code
+ * throw new ClientVisibleException(AppText_Text.invoiceAlreadyApproved(invoiceNumber));
+ * }</pre>
+ *
+ * <p><b>Both forms are correct and both are here to stay.</b> They are not two ways to do one
+ * thing: one is the translated case and one is the untranslated case. An application that sells in
+ * one language should keep writing the sentence, and nothing about it has changed.</p>
  */
-public class ClientVisibleException extends RuntimeException {
+public class ClientVisibleException extends RuntimeException implements CarriesClientMessage {
 
     private static final long serialVersionUID = 1L;
+
+    private final transient Message clientMessage;
 
     /**
      * @param message the sentence the caller should see
      */
     public ClientVisibleException(String message) {
         super(message);
+        this.clientMessage = null;
     }
 
     /**
@@ -67,5 +85,43 @@ public class ClientVisibleException extends RuntimeException {
      */
     public ClientVisibleException(String message, Throwable cause) {
         super(message, cause);
+        this.clientMessage = null;
+    }
+
+    /**
+     * A refusal the caller reads in their own language.
+     *
+     * <p>The message is carried, not turned into words here: the language is decided at the edge of
+     * the server, where the connection is. {@link #getMessage()} is the English version, which is
+     * what goes to the log.</p>
+     *
+     * @param message what to tell the caller
+     * @since 0.9.0
+     */
+    public ClientVisibleException(Message message) {
+        super(ServerMessages.inEnglish(message));
+        this.clientMessage = message;
+    }
+
+    /**
+     * A refusal the caller reads in their own language, with the failure behind it.
+     *
+     * @param message what to tell the caller
+     * @param cause   the underlying failure; it is logged, never sent
+     * @since 0.9.0
+     */
+    public ClientVisibleException(Message message, Throwable cause) {
+        super(ServerMessages.inEnglish(message), cause);
+        this.clientMessage = message;
+    }
+
+    /**
+     * @return what to tell the caller, still unrendered, or null when this was thrown with a
+     *         sentence rather than a message
+     * @since 0.9.0
+     */
+    @Override
+    public Message clientMessage() {
+        return clientMessage;
     }
 }

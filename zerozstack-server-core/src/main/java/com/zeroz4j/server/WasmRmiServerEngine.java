@@ -26,6 +26,8 @@ import com.zeroz4j.api.SyncFrameTypes;
 import com.zeroz4j.api.ClientWritable;
 import com.zeroz4j.api.EventTopic;
 import com.zeroz4j.api.RmiService;
+import com.zeroz4j.api.i18n.FrameworkText;
+import com.zeroz4j.api.i18n.Message;
 import com.zeroz4j.api.validation.ValidationRegistry;
 import com.zeroz4j.api.RolesAllowed;
 import com.zeroz4j.api.Secured;
@@ -77,6 +79,13 @@ import java.util.HashSet;
 public class WasmRmiServerEngine implements EventPublisher {
 
     private static final Logger LOG = Logger.getLogger(WasmRmiServerEngine.class.getName());
+
+    static {
+        // Teach Message.text() where words come from on a server, and whose language to use.
+        // Here because this class is loaded before any connection exists, and a service method may
+        // render a message the moment the first call arrives.
+        ServerMessages.install();
+    }
 
     /**
      * AUTH frame layout version. Version 2 added the explicit {@code authenticated} flag; version 1
@@ -481,6 +490,12 @@ public class WasmRmiServerEngine implements EventPublisher {
         String clientId = (String) config.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY);
         if (clientId != null) {
             session.getUserProperties().put(RmiEndpointConfigurator.CLIENT_KEY, clientId);
+        }
+        // The language this connection reads, decided once at the handshake. Kept on the
+        // connection because it belongs to the person on the other end, not to any one call.
+        Object language = config.getUserProperties().get(RmiEndpointConfigurator.LOCALE_KEY);
+        if (language != null) {
+            session.getUserProperties().put(RmiEndpointConfigurator.LOCALE_KEY, language);
         }
 
         // Before the first byte is written to this connection: everything the server sends it is
@@ -982,8 +997,7 @@ public class WasmRmiServerEngine implements EventPublisher {
             ServerRuntime runtime = runtimeOf(session);
             Object lazy = runtime.lazyHandles().resolve(handle, session.getId());
             if (lazy == null) {
-                throw new SecurityException(
-                        "Unknown or unauthorized lazy handle: " + handle);
+                throw new RefusedException(FrameworkText.unknownLazyHandle(handle));
             }
 
             com.zeroz4j.api.LazyAdapter adapter = com.zeroz4j.api.BinaryRegistry.getLazyAdapter();
@@ -1106,7 +1120,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         LiveMutationGuard guard = new LiveMutationGuard(mapper, userRoles);
 
         Object proposed;
-        String refusal = null;
+        Message refusal = null;
         ObjectMapper tempMapper = new ObjectMapper();
         ObjectMapper.setResolutionGuard(guard);
         ObjectMapper.setModelGuard(guard);
@@ -1140,9 +1154,8 @@ public class WasmRmiServerEngine implements EventPublisher {
         // The class the server holds decides, not the class name the client sent. A payload naming a
         // writable class over a restricted object's handle would otherwise walk straight through.
         if (canonical != null && !canonical.getClass().isAssignableFrom(proposed.getClass())) {
-            String reason = "The change claims to be a " + proposed.getClass().getSimpleName()
-                + " but names an object the server holds as a " + canonical.getClass().getSimpleName()
-                + ". Nothing was changed.";
+            Message reason = FrameworkText.liveWrongType(
+                proposed.getClass().getSimpleName(), canonical.getClass().getSimpleName());
             LOG.warning("[zeroz4j] Rejected live mutation from session " + session.getId()
                 + ": frame class " + proposed.getClass().getName() + " does not match canonical "
                 + canonical.getClass().getName() + " for handle " + canonicalId);
@@ -1203,20 +1216,20 @@ public class WasmRmiServerEngine implements EventPublisher {
             // Every rejection reason is both logged and sent to the writer. Previously a failed role
             // check produced no log line at all, so an absent entry was indistinguishable from an
             // accepted mutation, and the client was never told why its change reverted.
-            String reason;
+            Message reason;
             if (writable == null) {
-                reason = authorizedType.getName() + " is not @ClientWritable";
+                reason = FrameworkText.liveNotClientWritable(authorizedType.getName());
                 LOG.warning("[zeroz4j] Rejected live mutation of non-@ClientWritable "
                     + authorizedType.getName() + " from session " + session.getId());
             } else if (!violations.isEmpty()) {
-                reason = "Validation failed: " + String.join("; ", violations);
+                reason = FrameworkText.liveValidationFailed(String.join("; ", violations));
                 LOG.info("[zeroz4j] Rejected invalid live mutation of "
                     + authorizedType.getSimpleName() + ": " + String.join("; ", violations));
             } else {
-                reason = "Requires one of the roles " + Arrays.toString(writable.value());
+                reason = FrameworkText.liveRequiresRole(Arrays.toString(writable.value()));
                 LOG.warning("[zeroz4j] Rejected live mutation of "
                     + authorizedType.getSimpleName() + " from session " + session.getId()
-                    + ": " + reason);
+                    + ": " + ServerMessages.inEnglish(reason));
             }
 
             // Corrective: revert the writer's optimistic local change to server truth.
@@ -1236,11 +1249,11 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param rootHandleId the outermost handle in the refused payload, or null if none was reached
      * @param reason       what to tell the writer
      */
-    private void rejectNestedWrite(Session session, String rootHandleId, String reason) {
+    private void rejectNestedWrite(Session session, String rootHandleId, Message reason) {
         Object root = rootHandleId != null ? mapper.getObject(rootHandleId) : null;
         String className = root != null ? root.getClass().getName() : "";
         LOG.warning("[zeroz4j] Rejected live mutation from session " + session.getId()
-            + ": " + reason + " (outermost object " + className + ")");
+            + ": " + ServerMessages.inEnglish(reason) + " (outermost object " + className + ")");
         if (root != null) {
             syncEngine.notifyChanged(root, Scope.SESSION, session.getId());
         }
@@ -1255,15 +1268,16 @@ public class WasmRmiServerEngine implements EventPublisher {
      *
      * @param session   the writer
      * @param className the model whose mutation was refused
-     * @param reason    human-readable explanation
+     * @param reason    what to tell the writer, rendered here in their own language because this
+     *                  is the one place that knows which connection is being answered
      */
-    private void sendMutationRejected(Session session, String className, String reason) {
+    private void sendMutationRejected(Session session, String className, Message reason) {
         try {
             GrowableBuffer buffer = new GrowableBuffer(256);
             buffer.putInt(0);
             buffer.put(SyncFrameTypes.REJECT);
             BinarySerializer.writeString(buffer, className);
-            BinarySerializer.writeString(buffer, reason);
+            BinarySerializer.writeString(buffer, ServerMessages.render(reason, localeOf(session)));
             WsWrites.send(session, buffer.toByteArray());
         } catch (Exception ex) {
             LOG.warning("[zeroz4j] Failed to send mutation rejection: " + ex.getMessage());
@@ -1284,8 +1298,8 @@ public class WasmRmiServerEngine implements EventPublisher {
         if (!violations.isEmpty()) {
             // A ClientVisibleException, so the violations survive the error sanitizer: telling the
             // caller which field it got wrong is the entire point of server-side validation.
-            throw new ClientVisibleException("Validation failed for "
-                + arg.getClass().getSimpleName() + ": " + String.join("; ", violations));
+            throw new ClientVisibleException(FrameworkText.validationFailed(
+                arg.getClass().getSimpleName(), String.join("; ", violations)));
         }
     }
 
@@ -1551,7 +1565,8 @@ public class WasmRmiServerEngine implements EventPublisher {
                 if (userRoles == null) userRoles = Collections.emptySet();
                 RmiRequestContext.setContext(principal, userRoles, session.getId(),
                         (String) session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY),
-                        (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY));
+                        (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY),
+                        localeOf(session));
 
                 try {
                     String interfaceName = BinarySerializer.readString(buffer);
@@ -1615,13 +1630,14 @@ public class WasmRmiServerEngine implements EventPublisher {
                     // Validate against service whitelist
                     Object beanInstance = serviceRegistry.get(interfaceName);
                     if (beanInstance == null) {
-                        throw new SecurityException("Rejected RMI call to unregistered service: " + interfaceName);
+                        throw new RefusedException(FrameworkText.unknownService(interfaceName));
                     }
 
                     Map<String, Method> methods = methodRegistry.get(interfaceName);
                     Method targetMethod = methods != null ? methods.get(methodName) : null;
                     if (targetMethod == null) {
-                        throw new NoSuchMethodException("No method '" + methodName + "' on service: " + interfaceName);
+                        throw new NoSuchServiceMethodException(
+                                FrameworkText.unknownMethod(methodName, interfaceName));
                     }
 
                     // --- Security enforcement ---
@@ -1631,7 +1647,8 @@ public class WasmRmiServerEngine implements EventPublisher {
                     boolean requiresAuth = Boolean.TRUE.equals(securedInterfaces.get(interfaceName))
                                         || Boolean.TRUE.equals(securedMethods.get(methodKey));
                     if (requiresAuth && principal == null) {
-                        throw new SecurityException("Authentication required for: " + interfaceName + "#" + methodName);
+                        throw new RefusedException(
+                                FrameworkText.authenticationRequired(interfaceName, methodName));
                     }
 
                     // Check @RolesAllowed (method-level overrides interface-level)
@@ -1648,8 +1665,8 @@ public class WasmRmiServerEngine implements EventPublisher {
                             }
                         }
                         if (!hasRole) {
-                            throw new SecurityException("Access denied: requires role "
-                                + requiredRoles + " but user has " + userRoles);
+                            throw new RefusedException(
+                                FrameworkText.accessDenied(requiredRoles, userRoles));
                         }
                     }
                     // --- End security enforcement ---
@@ -1704,7 +1721,8 @@ public class WasmRmiServerEngine implements EventPublisher {
             GrowableBuffer errorBuffer = new GrowableBuffer(512);
             errorBuffer.putInt(messageId);
             errorBuffer.put(SyncFrameTypes.RPC_ERROR);
-            BinarySerializer.writeString(errorBuffer, clientSafeMessage(failure, reference));
+            BinarySerializer.writeString(errorBuffer,
+                    clientSafeMessage(failure, reference, localeOf(session)));
             WsWrites.send(session, errorBuffer.toByteArray());
         } catch (Exception ioEx) {
             LOG.warning("[zeroz4j] Failed to send error: " + ioEx.getMessage());
@@ -1731,6 +1749,29 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @return the message to put on the wire
      */
     static String clientSafeMessage(Throwable failure, String reference) {
+        return clientSafeMessage(failure, reference, RmiRequestContext.getLocale());
+    }
+
+    /**
+     * The same decision, said in one named language.
+     *
+     * <p>A refusal thrown as a {@link Message} is turned into words <b>here</b> and nowhere else,
+     * because this is the one place that knows both what happened and who is being told. The log
+     * line above keeps English from the same value.</p>
+     *
+     * @param failure   what went wrong
+     * @param reference the code that also appears in the log line
+     * @param locale    the caller's language
+     * @return the message to put on the wire
+     * @since 0.9.0
+     */
+    static String clientSafeMessage(Throwable failure, String reference, java.util.Locale locale) {
+        if (failure instanceof CarriesClientMessage) {
+            Message carried = ((CarriesClientMessage) failure).clientMessage();
+            if (carried != null) {
+                return ServerMessages.render(carried, locale);
+            }
+        }
         if (failure instanceof ClientVisibleException
                 || failure instanceof SecurityException
                 || failure instanceof NoSuchMethodException) {
@@ -1739,7 +1780,28 @@ public class WasmRmiServerEngine implements EventPublisher {
                 return message;
             }
         }
-        return "The server could not complete this request. Reference: " + reference;
+        return ServerMessages.render(FrameworkText.unexpectedFailure(reference), locale);
+    }
+
+    /**
+     * The language of whoever is on the other end of one connection.
+     *
+     * <p>Resolved once at the handshake and kept on the connection, so every frame it sends is
+     * answered in the same language with nothing looked up again.</p>
+     *
+     * @param session the connection
+     * @return the locale; the deployment's own when the connection carries none
+     */
+    static java.util.Locale localeOf(Session session) {
+        Object tag = session == null ? null
+                : session.getUserProperties().get(RmiEndpointConfigurator.LOCALE_KEY);
+        if (tag instanceof java.util.Locale) {
+            return (java.util.Locale) tag;
+        }
+        if (tag instanceof String) {
+            return LocaleResolution.localeOf((String) tag);
+        }
+        return RmiRequestContext.getLocale();
     }
 
     /** A short code, unique enough to find one log line among a day of them. */

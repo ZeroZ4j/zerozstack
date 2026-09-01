@@ -189,6 +189,16 @@ default, and a fresh application needs none of them set.
 | `zeroz.upload.passSeconds` | How long an upload permission stays usable | **60** |
 | `zeroz.upload.tempDir` | Where a file is written while it arrives | `zeroz4j-uploads` inside the system temporary directory |
 
+### Language
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.i18n.defaultLocale` | What language the server answers in when the browser has not said what it reads | **`en`** |
+
+Deliberately not the machine's own locale: a server in Frankfurt has a German JVM locale that has
+nothing to do with whoever is calling it. Full explanation in
+[Answering in the reader's language](language.md).
+
 ### Inside an application server
 
 | Property | What it does | Unset |

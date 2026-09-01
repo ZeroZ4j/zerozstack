@@ -230,6 +230,22 @@ The other is the framework's own refusals — authentication required, access de
 unknown method, an argument that failed validation. Those exist to be read, and clients already act
 on them.
 
+!!! note "A refusal can now be said in the caller's language"
+    Give `ClientVisibleException` a message from a catalog instead of a sentence and the caller
+    reads the refusal in their own language, while the server log keeps English:
+
+    ```java
+    throw new ClientVisibleException(AppText_Text.invoiceAlreadyApproved(invoiceId));
+    ```
+
+    The framework's own refusals work the same way, and a deployment that adds no language sees
+    exactly the English it has always seen — character for character, including in tests that
+    assert on the wording. What changes for a project that does add one: **a test asserting on the
+    exact English of a framework refusal is asserting on a translation.** Assert on which refusal
+    it was instead — `Refusals.assertRefusedWith(FrameworkKeys.ACCESS_DENIED, thrown)` — and on
+    which language your own connection reads. See
+    [Answering in the reader's language](language.md).
+
 **Everything else becomes one sentence and a code.** The caller sees
 `The server could not complete this request. Reference: 4f2a91cc`, and the real message and stack
 trace go to the server log under the same code. A user quoting the code from their screen is enough
@@ -249,10 +265,12 @@ String user = RmiRequestContext.getPrincipal().getName();
 Set<String> roles = RmiRequestContext.getRoles();
 String tenant = RmiRequestContext.getTenantId();   // null when single-tenant
 String sessionId = RmiRequestContext.getSessionId();
+Locale language = RmiRequestContext.getLocale();   // never null
 ```
 
 Never take the caller's identity from a method argument. A client can send anything; the context is
-derived from the authenticated handshake.
+derived from the authenticated handshake. The caller's language is on the context for the same
+reason and follows the same rule.
 
 ## Tenancy
 

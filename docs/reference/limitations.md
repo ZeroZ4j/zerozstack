@@ -287,6 +287,41 @@ ordered but without its `Comparator`, so later insertions are not re-sorted.
 - Client-side validation is user feedback. It decides nothing; the server re-validates
   independently.
 
+## Language
+
+The server answers in the caller's language. The browser does not, and nobody can pick a language
+yet. What exists and what does not:
+
+**Works.** The connection's language is decided at the handshake — from a `lang` parameter, a
+`zeroz-lang` cookie, the browser's `Accept-Language` header, `zeroz.i18n.defaultLocale`, then
+English — and is readable in a service as `RmiRequestContext.getLocale()`. Every refusal the
+framework produces, and any `ClientVisibleException` an application throws with a message from a
+catalog, is written in that language on the wire and in English in the log. An application declares
+a catalog with `@MessageCatalog` and gets one compile-checked method per key.
+
+**Does not work yet.**
+
+- **Nothing sends a catalog to the browser**, so every word in the browser is still the one compiled
+  into it. `AppText_Catalog` is generated but nothing reads it there yet.
+- **There is no language picker and no live switching.** Nothing writes the `zeroz-lang` cookie or
+  the `lang` parameter, so steps 1 and 2 of the resolution order are read and never filled in. A
+  person gets what their browser asks for, or the deployment's own language.
+- **The framework's own words inside the browser** — the reconnect banner, `Close` on a drawer,
+  `Copied` after a copy button, the offline page — are English literals and are not in a catalog.
+- **The framework ships English only.** Another language for its own refusals is a `.properties`
+  file an application puts on the classpath.
+- **`LocalePreferenceStore` does not exist.** The language is remembered per browser, not per
+  person, so a second computer starts from that browser's setting again.
+- **Validation messages are not translatable.** They are compiled into `<Model>_Rules` as written.
+- **There is no build check for text left hard-coded**, and none for reading a message once and
+  leaving the label behind when the language changes. Both are planned with the browser half.
+
+**Not planned at all**, with the reasoning in the [language support design](../design/language-support.md):
+right-to-left layout, plural rules of any kind, locale-aware sorting and searching, translation
+tooling of any sort, per-tenant catalogs, translated route paths, and translating content stored in
+a database. Numbers, dates and money in the local format are opt-in and cost 43 KB of download the
+first time anything reaches for them.
+
 ## Compile-time warnings that are not errors
 
 The annotation processor warns rather than fails for two footguns. Read your build output.

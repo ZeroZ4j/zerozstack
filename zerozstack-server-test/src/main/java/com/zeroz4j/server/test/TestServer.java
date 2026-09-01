@@ -174,6 +174,38 @@ public final class TestServer implements AutoCloseable {
      * @return the connection
      */
     public TestConnection connectAsTenant(String user, String tenant, String... roles) {
+        return open(null, user, tenant, roles);
+    }
+
+    /**
+     * Opens a connection for somebody reading one language.
+     *
+     * <p>The same thing a real browser gets when it sends {@code Accept-Language} or carries the
+     * {@code zeroz-lang} cookie: the server answers this connection in that language, and every
+     * other connection in its own.</p>
+     *
+     * @param language an IETF language tag such as {@code "de"}
+     * @return the connection
+     * @since 0.9.0
+     */
+    public TestConnection connectSpeaking(String language) {
+        return open(language, null, null);
+    }
+
+    /**
+     * Opens a connection for a signed-in person reading one language.
+     *
+     * @param language an IETF language tag such as {@code "de"}
+     * @param user     the user name, or null for an anonymous connection
+     * @param roles    the roles the sign-in granted
+     * @return the connection
+     * @since 0.9.0
+     */
+    public TestConnection connectSpeaking(String language, String user, String... roles) {
+        return open(language, user, null, roles);
+    }
+
+    private TestConnection open(String language, String user, String tenant, String... roles) {
         requireRunning();
         String connectionId = name + "-c" + connectionSerial.incrementAndGet();
         TestConnection connection = new TestConnection(this, connectionId);
@@ -189,8 +221,12 @@ public final class TestServer implements AutoCloseable {
         // Every connection carries a browser id, the way a real one does: it is what Scope.CLIENT
         // uses, and what the record of "we sent this browser that object" is kept under.
         String browserId = connectionId + "-browser";
+        // Narrowed the same way a real handshake narrows it, so a test cannot put a connection in
+        // a state no browser could reach - asking for a language this deployment does not have.
+        String spoken = language == null ? null
+                : com.zeroz4j.server.ServerMessages.languageFor(runtime.config(), language);
         engine.onOpen(connection,
-                connection.openingConfig(principal, granted, tenant, browserId));
+                connection.openingConfig(principal, granted, tenant, browserId, spoken));
         connections.add(connection);
         return connection;
     }
