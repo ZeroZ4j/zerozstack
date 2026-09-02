@@ -86,6 +86,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * one is itself a finding: {@code (0.5.1+)} appeared in a guide for a release that was never
  * made.</p>
  *
+ * <h2>The number, not the build state: {@code -SNAPSHOT} is ignored on both sides</h2>
+ *
+ * <p>A version is compared on its three numbers alone. {@code 0.9.0} in a sentence satisfies a
+ * {@code <revision>} of {@code 0.9.0-SNAPSHOT}, and the other way round, and documentation is
+ * required to write the plain number: a {@code -SNAPSHOT} suffix on one of this framework's own
+ * versions is reported as a finding of its own.</p>
+ *
+ * <p><b>Why.</b> Comparing the whole string made a release two passes over the same sixteen files —
+ * one to take {@code -SNAPSHOT} off every sentence on the day of the release, one to put it back on
+ * every sentence the moment the next line opened — with no reader served by either pass. The
+ * numbers now change exactly once, when the version changes, which is the only moment a sentence
+ * about the version has actually gone stale.</p>
+ *
+ * <p><b>What this gives up, deliberately.</b> The documentation can no longer tell a reader that
+ * the version it names is not published yet. Between opening a line and cutting it, every page says
+ * a number that Maven Central does not have — and a copied {@code -DarchetypeVersion=} or
+ * {@code <version>} from a page read in that window fails to resolve until the release is out. That
+ * was judged worth paying: this project has one maintainer, who builds from source and always runs
+ * the newest thing, and no version of the check can stop a page being read before its release
+ * anyway. <b>Do not "fix" this back into a whole-string comparison.</b> If a future reader really
+ * has to be warned, warn them in one sentence in {@code README.md} — which is what the
+ * {@code version-check} escape hatch below already exists for — rather than by putting a build
+ * suffix into sixteen pages of prose.</p>
+ *
  * <h2>What is out of scope, and why</h2>
  *
  * <ul>
@@ -172,6 +196,10 @@ class VersionStatementTest {
                         + System.lineSeparator()
                         + "'(0.6.0+)'. VersionStatementTest's javadoc lists every phrase it recognizes."
                         + System.lineSeparator()
+                        + "A version is compared on its three numbers only, so documentation never writes"
+                        + System.lineSeparator()
+                        + "-SNAPSHOT: the plain number is correct before the release and after it."
+                        + System.lineSeparator()
                         + String.join(System.lineSeparator(), findings));
     }
 
@@ -187,8 +215,9 @@ class VersionStatementTest {
         List<String> problems = new ArrayList<>();
         Matcher m = VERSION.matcher(text);
         while (m.find()) {
-            String base = m.group(1);
+            String base = m.group(1);                       // the three numbers, never the suffix
             String found = m.group();
+            boolean snapshot = m.group(2) != null;
             if (!released.contains(base) && !base.equals(current)) {
                 if (isThisFrameworksNumber(text, m.start(), m.end())) {
                     problems.add("  " + where + ":" + lineOf(text, m.start()) + "  names " + found
@@ -197,6 +226,14 @@ class VersionStatementTest {
                 continue;                                   // somebody else's version number
             }
             if (exemptionOn(text, m.start()) != null) {
+                continue;
+            }
+            if (snapshot) {
+                // Not a stale number - a build state that has no business being in prose. Reported
+                // even on a sentence about the past, because "added in 0.6.0-SNAPSHOT" is nonsense
+                // in either direction.
+                problems.add("  " + where + ":" + lineOf(text, m.start()) + "  says " + found
+                        + ", and documentation writes the plain number: " + base + ".");
                 continue;
             }
             if (isHistory(text, m.start(), m.end())) {
@@ -284,12 +321,24 @@ class VersionStatementTest {
 
     // ------------------------------------------------------------------ what the build says it is
 
-    /** The version under {@code <revision>}, without any {@code -SNAPSHOT}. */
+    /**
+     * The version under {@code <revision>}, reduced to its three numbers.
+     *
+     * <p>The suffix is dropped here and the matched text is compared on {@code group(1)}, so
+     * neither side of the comparison ever sees a {@code -SNAPSHOT}. That is what lets a page say
+     * {@code 0.9.0} through the whole of 0.9.0's development, its release, and after it.</p>
+     */
     private static String currentVersion(Path root) throws IOException {
         String pom = Files.readString(root.resolve("pom.xml"), StandardCharsets.UTF_8);
         Matcher m = Pattern.compile("<revision>\\s*([^<\\s]+)\\s*</revision>").matcher(pom);
         assertTrue(m.find(), "The root pom.xml has no <revision>, so there is nothing to check against.");
-        return m.group(1).replace("-SNAPSHOT", "");
+        return baseVersion(m.group(1));
+    }
+
+    /** {@code 0.9.0-SNAPSHOT} and {@code 0.9.0} are the same version as far as prose is concerned. */
+    private static String baseVersion(String version) {
+        int suffix = version.indexOf("-SNAPSHOT");
+        return suffix < 0 ? version : version.substring(0, suffix);
     }
 
     /** Every version {@code CHANGELOG.md} has a release section for. */

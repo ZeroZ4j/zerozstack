@@ -92,7 +92,7 @@ The accounts those six use are the framework's built-in development ones, and **
 does not switch them on.** Ask for them with `--dev-login`:
 
 ```bash
-java -jar scoped-signals-server/target/scoped-signals-server-0.9.0-SNAPSHOT.jar --dev-login
+java -jar scoped-signals-server/target/scoped-signals-server-0.9.0.jar --dev-login
 ```
 
 The `run.bat` scripts pass the flag already. A server running this way prints a warning saying so.
@@ -149,7 +149,7 @@ Helidon already wired up.
 mvn archetype:generate \
   -DarchetypeGroupId=com.zeroz4j \
   -DarchetypeArtifactId=zerozstack-archetype \
-  -DarchetypeVersion=0.9.0-SNAPSHOT \
+  -DarchetypeVersion=0.9.0 \
   -DgroupId=com.example \
   -DartifactId=myapp \
   -Dversion=1.0.0-SNAPSHOT

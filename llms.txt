@@ -1,16 +1,16 @@
 # ZeroZ4j
 
-> An experimental pure-Java full-stack framework (version 0.9.0-SNAPSHOT). The UI is Java compiled
+> An experimental pure-Java full-stack framework (version 0.9.0). The UI is Java compiled
 > for the browser by TeaVM, client and server communicate over a binary RPC protocol on a persistent
 > WebSocket, and the server persists the JVM object graph with ZeroZ DB over EclipseStore. You write no
 > JavaScript, JSON, REST routes or SQL.
 
 Key things to know before generating ZeroZ Stack code:
 
-- Consume through the BOM: import `com.zeroz4j:zerozstack-bom:0.9.0-SNAPSHOT` and depend on
+- Consume through the BOM: import `com.zeroz4j:zerozstack-bom:0.9.0` and depend on
   `zerozstack-server-core`, `zerozstack-client`, `zerozstack-shared-api`, `zerozstack-ui-components`
   and `zerozstack-store-eclipsestore` without versions.
-- To build the framework itself, requires JDK 21 and `mvn clean install -DskipTests` from the repository root; the `clean` is
+- To build the framework itself, requires JDK 21 and `mvn clean package -DskipTests` from the repository root (use `package`, not `install`: installing writes the version being developed into the shared local repository under the same name as the released one); the `clean` is
   required because each example server's `target/libs` is never pruned.
 - An application has three modules: shared (`@DataModel` models, `@RmiService` interfaces), client
   (UI), server (`@ApplicationScoped` CDI implementations).
@@ -61,6 +61,14 @@ Key things to know before generating ZeroZ Stack code:
 - Name every form field with `withLabel("...")`, not with the constructor argument — the constructor
   argument is the placeholder, which disappears the moment somebody types. Anything clickable must be
   a `Button` or a `Link` with a real `href`, never a click listener on a `Div`.
+- The server answers in the caller's language. Put `.properties` files in the shared module, mark
+  them with an empty class annotated `@MessageCatalog`, and use the generated one-method-per-key
+  class; a refusal is `throw new ClientVisibleException(AppText_Text.someKey(value))`. The language
+  is settled once at the handshake — `lang` parameter, `zeroz-lang` cookie, `Accept-Language`,
+  `zeroz.i18n.defaultLocale`, then English — narrowed to the languages the deployment has files for,
+  and readable as `RmiRequestContext.getLocale()`. In client code a message must be read inside an
+  `Effect` or a `Computed`, never once in a constructor, or the words never change again. Blanks are
+  `{0}`, `{1}` only. `new LanguageSelector()` is a complete language picker.
 - Test a server in-process with `zerozstack-server-test` (test scope): `TestServer.builder().beans(...)
   .start()` and `server.connect(user, roles)`. Two servers can run side by side.
 - **This page describes the framework's main line.** An application depends on one released version,
@@ -85,7 +93,7 @@ Key things to know before generating ZeroZ Stack code:
 ## Reference
 
 - [Glossary](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/glossary.md): Event, signal, push, message, sync, mutation, handle, retained value — defined once, not interchangeable.
-- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.9.0-SNAPSHOT, including features that are declared but not implemented.
+- [Limitations](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/reference/limitations.md): Every known gap in 0.9.0, including features that are declared but not implemented.
 - [Wire protocol](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/PROTOCOL.md): Frame structure, opcodes and type tags.
 - [Validation](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/VALIDATION.md): Annotate once on the model; enforced by the client binder and independently by the server.
 
@@ -102,6 +110,9 @@ Key things to know before generating ZeroZ Stack code:
 - [Stacking overlays](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/ui-layering.md): The named Layer scale, and the browser's top layer that no number can beat.
 - [Accepting file uploads](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/file-uploads.md): The FileUpload component, the FileUploadHandler bean, the size limit and what the application must check itself.
 - [Authentication and authorization](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/security-auth.md): AuthenticationProvider, @Secured, @RolesAllowed, client identity without a login, and which connections are accepted.
+- [Answering in the reader's language](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/language.md): Declaring a catalog, the order the connection's language is decided in, reading a message so it changes when the language does, and what a translation costs.
+- [Saving data](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/persistence.md): Persisting the object graph, the one-call-one-save rule that prevents the most common data-loss bug, reading, deferring part of the graph, and saving after a client edit.
+- [Logging in with OpenID Connect](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/oidc-auth.md): How a browser gets an identity from a provider such as Keycloak, what the server checks, expiry and reconnection, and what this does not protect.
 - [Packaging and running](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/packaging.md): The four shapes a server ships in, and every zeroz.* setting with its default.
 
 ## For coding agents

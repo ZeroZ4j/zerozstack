@@ -24,25 +24,37 @@ error at the point of the mistake.
 The generated project is deliberately minimal — it has no `@RmiService` and no shared signal — so the
 fixtures in `fixtures/` add the smallest thing that exercises each path.
 
-```bash
-mvn -o install -DskipTests
-```
-
-**Build into a private repository, not the shared one.** This procedure installs a throwaway
-`com.smoke` application, and nothing should be able to resolve that afterwards. Give every command
-below a repository of its own with the shared one behind it as a read-only fallback, and the
-throwaway artifacts land somewhere you can delete in one go:
+**Build into a private repository, not the shared one — starting with the framework itself.** This
+procedure installs a throwaway `com.smoke` application, and nothing should be able to resolve that
+afterwards. Give **every** command a repository of its own with the shared one behind it as a
+read-only fallback, and the throwaway artifacts land somewhere you can delete in one go:
 
 ```bash
 REPO="-Dmaven.repo.local=$PWD/.m2smoke -Dmaven.repo.local.tail=$HOME/.m2/repository"
 ```
 
-Pin the plugin coordinates. The bare `archetype:generate` prefix resolves against the current
-project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
-Use the version the repository is on - `0.9.0-SNAPSHOT`, which is what a local build installs.
+Then install the framework into that private repository, which is what the archetype is resolved
+from:
 
 ```bash
-mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.9.0-SNAPSHOT -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
+mvn -o $REPO install -DskipTests
+```
+
+**The `$REPO` on that line is not optional, and it is the one people leave off.** Without it the
+framework you are about to smoke-test is installed into the shared repository under the number you
+are releasing — so every later build on this machine resolves a pre-release scratch build in place
+of what actually goes to Maven Central, silently. That is the accident `RELEASING.md` was rewritten
+for after 0.8.0, arrived at from the other direction: it costs nothing to avoid and gives no sign
+when it happens.
+
+Pin the plugin coordinates. The bare `archetype:generate` prefix resolves against the current
+project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
+Use the version the repository is on - `0.9.0`, which is what a local build installs. While
+`<revision>` still carries `-SNAPSHOT`, add it here too: this is a coordinate Maven has to resolve,
+not a sentence about the framework, so it has to be the exact version on the jar.
+
+```bash
+mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.9.0 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
 ```
 
 Copy the fixtures over the generated sources, keeping each one's subdirectory — the fixture packages
@@ -148,14 +160,14 @@ Two things about it are worth knowing, because getting either wrong has already 
 ## Packaged-app variant
 
 The smoke test can also run against the jpackage output instead of the classpath launch, which
-proves CDI discovery survives packaging. Build with `mvn verify -Ppackage`, start
+proves CDI discovery survives packaging. Build with `mvn $REPO verify -Ppackage`, start
 `smokeapp-server/target/dist/smokeapp/smokeapp.exe` (or `bin/smokeapp` on Linux) instead of the
 `java -cp` line, and run `smoke-test.mjs` as above. Same five checks, same expected 5/5.
 
 ## Also worth eyeballing
 
 - `smokeapp/AGENTS.md` should exist, and its second line under "The version this project is built
-  on" should name a real version — `0.9.0-SNAPSHOT`, not the literal `${zeroz4jVersion}`. It should
+  on" should name a real version — `0.9.0`, not the literal `${zeroz4jVersion}`. It should
   also still have its six `##` headings. Velocity, which filters the file, reads `##` as the start
   of a comment and drops the rest of the line without a word, so the headings are escaped in the
   archetype's copy and an accidental un-escaping shows up here as missing headings and nothing else.
