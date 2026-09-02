@@ -6,7 +6,7 @@ What installing a zeroz4j application actually does — and, just as plainly, wh
 
 ```bash
 mvn -pl zerozstack-examples/pwa-install/pwa-install-server -am install
-java -jar zerozstack-examples/pwa-install/pwa-install-server/target/pwa-install-server-0.9.0-SNAPSHOT.jar
+java -jar zerozstack-examples/pwa-install/pwa-install-server/target/pwa-install-server-0.9.0.jar
 ```
 
 Open <http://localhost:8083/>. No login: installability has nothing to do with authentication.

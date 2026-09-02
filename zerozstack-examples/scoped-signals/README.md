@@ -7,7 +7,7 @@ identical in all three cases — an `Effect` over a signal. Only the declaration
 
 ```bash
 mvn -pl zerozstack-examples/scoped-signals/scoped-signals-server -am install
-java -jar zerozstack-examples/scoped-signals/scoped-signals-server/target/scoped-signals-server-0.9.0-SNAPSHOT.jar --dev-login
+java -jar zerozstack-examples/scoped-signals/scoped-signals-server/target/scoped-signals-server-0.9.0.jar --dev-login
 ```
 
 `--dev-login` switches on the framework's built-in development accounts, which the per-user signal

@@ -96,9 +96,11 @@ Two tests enforce it and both are worth knowing about before you hit them:
   This one also checks itself. It reads the list of published modules out of the POM files rather
   than having it written down, and it fails if any of those modules turned out to have nothing for
   it to read — naming the module. So it cannot quietly end up inspecting less than it says it does.
-  The practical consequence: build the whole project once (`mvn install` from the root) before
+  The practical consequence: build the whole project once (`mvn clean package` from the root) before
   running it. If you have only built part of the project, it will tell you which module it could
-  not see, and that is the message, not a bug.
+  not see, and that is the message, not a bug. `package` rather than `install`: the reactor gives
+  every module its siblings, and installing publishes into the local repository everything else on
+  the machine resolves from.
 
 They look for text that was saved as UTF-8 once and then read back as if it were Windows-1252 or
 one of the console code pages. That accident turns a dash into three or four pieces of nonsense,

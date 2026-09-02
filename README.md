@@ -81,7 +81,7 @@ the modules you need; the BOM keeps versions aligned:
         <dependency>
             <groupId>com.zeroz4j</groupId>
             <artifactId>zerozstack-bom</artifactId>
-            <version>0.9.0-SNAPSHOT</version>
+            <version>0.9.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -103,7 +103,7 @@ the modules you need; the BOM keeps versions aligned:
 Or start from the archetype, which generates the three-module shape for you:
 
 ```bash
-mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.9.0-SNAPSHOT
+mvn archetype:generate   -DarchetypeGroupId=com.zeroz4j   -DarchetypeArtifactId=zerozstack-archetype   -DarchetypeVersion=0.9.0
 ```
 
 ## 6. Developer Resources
@@ -115,7 +115,7 @@ This repository contains the core framework and reference implementations.
 * **[Quickstart](docs/start/quickstart.md)** — build the framework and run a working example in about five minutes. Every command verified.
 * **[Choosing how state moves](docs/decide/index.md)** — ZeroZ Stack gives you five ways to propagate state (local signals, RMI, server events, shared signals, LiveSync). Picking the wrong one is the most common source of trouble in ZeroZ Stack applications; this is the decision procedure.
 * **[Troubleshooting](docs/guides/troubleshooting.md)** — symptom-first, and specifically covering the cases where nothing happens and there is no exception to search for.
-* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.9.0-SNAPSHOT, stated plainly.
+* **[Limitations](docs/reference/limitations.md)** — every known gap in 0.9.0, stated plainly.
 * **[Changelog](CHANGELOG.md)** — what changed and what breaks. Read the Breaking section before upgrading. The changes released in 0.8.0 make a dialog take over the page, turn `Drawer`, `Tooltip` and `Toast` into working components you no longer assemble by hand, and run `onDetach` for the first time — so code you wrote and watched do nothing is about to execute.
 * **[Glossary](docs/reference/glossary.md)** — event, signal, push, sync and mutation are not interchangeable terms here.
 

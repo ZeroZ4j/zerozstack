@@ -5,10 +5,20 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
 
 ## Before a release
 
-1. `mvn clean install` from the root — the whole build, tests included. Since 0.4.1 each server
-   module prunes its own `target/libs` before refilling it, so a plain `install` no longer leaves
+1. `mvn clean package` from the root — the whole build, tests included. Since 0.4.1 each server
+   module prunes its own `target/libs` before refilling it, so a plain build no longer leaves
    stale jars behind and dies with "WELD-001409: Ambiguous dependencies"; `clean` is still the
    honest choice before a release.
+
+   **`package`, not `install`.** Every module resolves its siblings from the reactor, so nothing is
+   lost — and an `install` here would write the number you are about to release into the shared
+   local repository, filled with a pre-release build, days before Maven Central has the real one.
+   Everything on this machine would then resolve that scratch build in place of the release, with
+   nothing to notice. That already happened once after 0.8.0 and cost an afternoon of deleting
+   directories; the last section of this page exists because of it. If some step genuinely needs the
+   artifacts installed, install them into a private repository with the shared one behind it as a
+   read-only fallback:
+   `-Dmaven.repo.local=<somewhere>/.m2head -Dmaven.repo.local.tail=$HOME/.m2/repository`.
 2. **Run the archetype smoke test** — [`zerozstack-archetype/smoke/README.md`](zerozstack-archetype/smoke/README.md).
    It generates a project from the archetype, builds it, starts it and drives it with a headless
    browser. The three blockers fixed in 0.4.1 all produced a project that compiled, started and
@@ -34,9 +44,13 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    `@project.version@` in `archetype-metadata.xml`, which that module's POM filters at build time,
    so it follows `<revision>` too. (Until 0.8.0 there was a step here saying to check it by hand.)
 
-   There is also nothing temporary to remove. Documentation always names the version in
-   `<revision>`, whatever that is, so no page ever holds a number that has to be swapped back on
-   the day of a release.
+   There is also nothing temporary to remove, and **nothing in the documentation changes on release
+   day**. Prose names the three numbers only — `0.9.0`, never the same number with a `-SNAPSHOT`
+   suffix — and `VersionStatementTest` compares on those three, so the same sentence is correct while the
+   line is open, on the day the release is cut, and afterwards. Taking a suffix off sixteen pages
+   and putting it back a day later served no reader and is not done. The one exception is a literal
+   Maven coordinate somebody types, such as the archetype smoke test's `-DarchetypeVersion=`: that
+   has to be the exact version on the jar, `-SNAPSHOT` and all, and its page says so.
 5. **Read the four documents an AI coding assistant reads, and correct the version in each.**
    `AGENTS.md`, `llms.txt`, `context7.json` and [`docs/AGENT_PROMPTS.md`](docs/AGENT_PROMPTS.md)
    state the version in prose, and nothing in `${revision}` reaches them. This step exists because
@@ -123,10 +137,11 @@ worse than no tag.
 lands. The moment the tag is pushed, `main` is no longer the released version and must stop claiming
 to be it.
 
-1. Set `<revision>` in the root `pom.xml` to the next version with `-SNAPSHOT` on it —
-   `0.9.0-SNAPSHOT` after 0.8.0. A protocol change or new public API makes it a minor bump, not a patch.
-2. Run `VersionStatementTest` and correct every line it names, exactly as at step 5 above. The
-   documentation always describes the code sitting next to it, which is the development version.
+1. Set `<revision>` in the root `pom.xml` to the next version with `-SNAPSHOT` on it. A protocol
+   change or new public API makes it a minor bump, not a patch.
+2. Run `VersionStatementTest` and correct every line it names, exactly as at step 5 above — writing
+   the plain number, never the `-SNAPSHOT`. The documentation always describes the code sitting next
+   to it, which is the development version.
 3. Add a `## [Unreleased]` heading to [CHANGELOG.md](CHANGELOG.md) with a compare link from the tag
    you just pushed to `HEAD`.
 

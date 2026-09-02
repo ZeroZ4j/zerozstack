@@ -8,9 +8,90 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.9.0] — 2026-09-02
+
+This release teaches the framework to speak more than one language, end to end. A connection is
+given a language at the handshake, every refusal the server produces is written in that language on
+the wire and in English in the log, and an application declares its own words as ordinary
+`.properties` files and gets one compile-checked method per key. The words for the connection arrive
+in the browser on the frame that already says "you can start", so no screen is ever drawn in English
+and corrected a moment later. `new LanguageSelector()` is the whole of letting somebody change
+language, and the screen changes while they watch it without losing a half-filled form. The
+framework ships its own words in German as well as English. Away from language, a generated project
+now has two build shapes — a fast readable one for working, `-Pproduction` for what you ship — and a
+`README.md` that says which is which.
+
+**Read the Breaking section before upgrading, but expect a quiet upgrade.** One thing changed on the
+wire: the AUTH frame's version byte moved from 2 to 3. Both halves of a mismatch were tested and
+both are safe, so an application on 0.8.0 can meet a 0.9.0 server and the reverse, and neither side
+has to go first. The only thing likely to catch anybody is a test that asserts on the exact English
+of a framework refusal, and that only bites once you add a second language.
+
+### Breaking
+
+- **The AUTH frame's protocol version byte moved from 2 to 3**, because that frame now carries the
+  translated words. **What to do: nothing, and upgrade the two sides in whichever order suits you.**
+  Both directions of a mismatch were checked and both are safe. A client built before this release
+  reads the name and the roles and stops, never looking at the bytes after them, so it connects
+  normally and shows the words its own build compiled in. A new client meeting an older server sees
+  a version below 3 and does not look for a catalog at all, which leaves it in the same place.
+  Nothing in an application changes. A new server-to-client frame, `0x04`, carries the words when
+  somebody switches language on a connection that is already open; it is written before the value
+  that redraws the screen, so nothing redraws twice.
+
+- **The framework's own refusals are now named, not just written.** They travel as a key plus values
+  and are turned into words at the edge of the server. Two new exception types carry the name:
+  `RefusedException` (a `SecurityException`, as before) and `NoSuchServiceMethodException` (a
+  `NoSuchMethodException`, as before), so everything that caught or tested for those still does, and
+  `getMessage()` on both is the same English sentence it always was.
+
+  **English is unchanged, character for character, for any project that adds no language** — every
+  one of this project's own tests that asserts on the wording of a refusal passes untouched.
+
+  **What to do:** nothing, unless you add a language. If you do, a test asserting on the exact
+  English of a framework refusal is now asserting on a translation, so replace it with
+  `Refusals.assertRefusedWith(FrameworkKeys.ACCESS_DENIED, thrown)`. The same applies to any client
+  code that compares an error message to a literal to decide what to show — that was always
+  fragile and is now wrong. And know that a validation message you wrote in a `@NotBlank(message =
+  "...")` is still one language whichever language the caller reads: it is compiled into the
+  generated rules as written. Check the value in your service method and throw
+  `ClientVisibleException` with a message from your own catalog where that matters.
+
+- **A generated project no longer produces an optimized browser bundle by default.** The bundle is
+  built readable and unoptimized unless you ask for `-Pproduction`, which turns on whole-program
+  optimization and minification and produces exactly what earlier versions produced from a plain
+  build. This only reaches a project generated from this release's archetype; an existing project
+  keeps the build it was generated with. **What to do: build and run with `-Pproduction` before you
+  ship.** Minification renames things, and renaming can break code that a readable build runs
+  perfectly — it is why this framework's own outage banner read `[object HTMLDivElement]` for two
+  releases. The generated `README.md` and `AGENTS.md` both say so, and so do the rules that travel
+  inside `zerozstack-shared-api`.
 
 ### Added
+
+- **The server now answers in the language the person is reading.** Every refusal it produces —
+  access denied, not signed in, no such service, an argument that broke a rule, a live edit it
+  would not accept — is written in the caller's language on the wire and in English in the server
+  log, from one value. An application declares its own text as ordinary `.properties` files in its
+  shared module, marks them with `@MessageCatalog`, and gets one compile-checked method per key: a
+  misspelled key and a wrong number of values are both compile errors instead of something wrong on
+  somebody's screen. Throwing `new ClientVisibleException(AppText_Text.invoiceAlreadyApproved(id))`
+  is the whole of translating a refusal. The connection's language is decided once at the handshake
+  — a `lang` parameter, a `zeroz-lang` cookie, the browser's `Accept-Language` header,
+  `zeroz.i18n.defaultLocale`, then English — narrowed to what the deployment actually translated,
+  and readable in a service as `RmiRequestContext.getLocale()`, which is never null. Adding a
+  language is dropping a `.properties` file in and restarting: nothing is regenerated and no browser
+  download grows. Blanks in a sentence are `{0}`, `{1}` and nothing else, on purpose — one call into
+  Java's own message formatting makes the browser download 43 percent bigger, which is more than
+  twenty languages of translated text put together. Full instructions in
+  [docs/guides/language.md](docs/guides/language.md).
+
+- **The words for a connection's language now reach the browser, on the frame that already says
+  "you can start".** There is nothing to fetch and nothing to configure: by the time an application
+  mounts its first screen the words are in hand, so no screen is ever drawn in English and corrected
+  a moment later. A three-hundred-string catalog is about 12 KB per connection, against a 4 MB
+  message ceiling. **Extra languages still cost the browser nothing** — measured: a build offering
+  four languages produced a byte-identical bundle to one offering two.
 
 - **Somebody can now pick a language, and the screen changes while they watch it.** Drop
   `new LanguageSelector()` into a header or a side panel and that is the whole of it: it offers
@@ -21,39 +102,6 @@ upgrading.
   words change, because every label that reads a message inside an effect re-runs and calls
   `setText` on the label it already owns. The choice is written to a `zeroz-lang` cookie by the
   browser, so it survives a reload, and every tab of that browser changes together.
-
-- **The words for a connection's language now reach the browser, on the frame that already says
-  "you can start".** There is nothing to fetch and nothing to configure: by the time an application
-  mounts its first screen the words are in hand, so no screen is ever drawn in English and corrected
-  a moment later. A three-hundred-string catalog is about 12 KB per connection, against a 4 MB
-  message ceiling. **Extra languages still cost the browser nothing** — measured: a build offering
-  four languages produced a byte-identical bundle to one offering two.
-
-- **`LocalePreferenceStore`, so the language can follow a person to their second computer.** Without
-  it the choice is remembered per browser, in a cookie, which is right for nearly everybody. An
-  application that already has somewhere to keep a person's settings implements two methods and
-  names the class in `META-INF/services`; it is consulted at the handshake, after the language the
-  browser asked for outright and before the cookie.
-
-- **`Formats`, for numbers, money and dates written the reader's way — opt-in, with the price
-  printed on the door.** `Formats.currency().format(amount)` reads the language on screen in the
-  browser and the caller's language on the server, so one call site is right on both tiers. **The
-  first call from a client module adds 233 KB to the bundle and 43 KB to every visitor's download,
-  gzipped**, plus about 6 KB gzipped for each locale named in `java.util.Locale.available`. That is
-  more than every language of translated text this project will ever ship, several times over, which
-  is why nothing in the framework calls it and a build check keeps it that way.
-
-- **A build-failing check for the mistake everybody makes with translated text.**
-  `new Button(AppText_Text.taskAdd().text())` reads the words once and never changes again, and it
-  is nearly invisible in testing, because screens are rebuilt when you navigate and the label that
-  stayed behind is on the screen that was open at the moment of the switch.
-  `MessageReadContractTest` reads every file that can run in a browser and fails when `.text()` is
-  called outside an `Effect` or a `Computed`. `@ReadsMessagesOnce` on the method is the way out
-  where a read really is once-only. **Its own documentation says plainly what it cannot see:** a
-  read one ordinary method call deep (it does follow a method reference handed straight to
-  `Effect.create`, one hop), words put in a variable inside an effect and used outside it, and
-  English left hard-coded in a screen, which no check can reliably tell from a CSS class or a log
-  line.
 
 - **The framework now ships its own words in German as well as English.** Access denied, not signed
   in, no such service, and the name on the language picker all read in German for a reader who asked
@@ -77,35 +125,43 @@ upgrading.
   free. A server with no interface at all says `zeroz.i18n.defaultLocale=de` instead, which is the
   setting for exactly that.
 
-- **The drift check now finds a translation whose fallback lives in another module.** It compared a
-  file only with its siblings in one folder, so the one set of files it could never see was the
-  framework's own translations — a `zeroz4j_de.properties` anywhere, whose fallback stays in
-  `zerozstack-shared-api`. That is the documented way to change the framework's wording, and it now
-  matters more, because the framework has a translation of its own to keep honest. **It found a real
-  one the moment it was written:** this repository's own German test catalog had been missing a key
-  since that key was added, and nothing had noticed. A translation whose fallback exists nowhere at
-  all is reported too — there is no key list to read it against.
+- **`LocalePreferenceStore`, so the language can follow a person to their second computer.** Without
+  it the choice is remembered per browser, in a cookie, which is right for nearly everybody. An
+  application that already has somewhere to keep a person's settings implements two methods and
+  names the class in `META-INF/services`; it is consulted at the handshake, after the language the
+  browser asked for outright and before the cookie.
+
+- **`zeroz.i18n.defaultLocale`** — what language a deployment answers in when the browser has not
+  said. Default `en`. Deliberately not the machine's own locale: a server in Frankfurt has a German
+  JVM locale that has nothing to do with whoever is calling it.
+
+- **`Formats`, for numbers, money and dates written the reader's way — opt-in, with the price
+  printed on the door.** `Formats.currency().format(amount)` reads the language on screen in the
+  browser and the caller's language on the server, so one call site is right on both tiers. **The
+  first call from a client module adds 233 KB to the bundle and 43 KB to every visitor's download,
+  gzipped**, plus about 6 KB gzipped for each locale named in `java.util.Locale.available`. That is
+  more than every language of translated text this project will ever ship, several times over, which
+  is why nothing in the framework calls it and a build check keeps it that way.
+
+- **`CatalogParity`, a three-line test that stops a translation drifting.** Only the fallback
+  language is read at compile time, so nothing about the others is checked by the compiler; a key
+  a translator missed leaves the fallback language showing mid-screen, and a sentence whose blanks
+  disagree either drops a value the reader needed or leaves a blank showing. Point the check at the
+  folder and the build fails naming the file, the key, and what is wrong with it.
+
+- **`TestServer.connectSpeaking(language, ...)` and `Refusals.assertRefusedWith(key, thrown)`**, so
+  one test can prove the same call is answered two ways, and so a test can assert on *which* refusal
+  happened rather than on the wording of it.
+
+- **A generated project now carries a `README.md`.** It says what the three modules are, which build
+  command to use for a quick check, which one produces something you can run, and which one produces
+  what you ship — and it says plainly that the quick check does not compile the user interface, so a
+  mistake only the browser compiler can see will not surface until the next full build.
 
 - **`chat-livesync` is translated into German end to end** — one catalog in its shared module and a
   language picker in the side panel. It translates none of the framework's own words and does not
   have to: the picker announces itself as `Sprache` because the framework ships German itself. Run
   it and switch language with the topic box half typed in.
-
-### Changed
-
-- **The AUTH frame's protocol version byte moved from 2 to 3**, because that frame now carries the
-  translated words. **What to do: nothing.** Both directions of a mismatch were checked and both are
-  safe. A client built before this release reads the name and the roles and stops, never looking at
-  the bytes after them, so it connects normally and shows the words its own build compiled in. A new
-  client meeting an older server sees a version below 3 and does not look for a catalog at all,
-  which leaves it in the same place. Neither side has to be upgraded first, and nothing in an
-  application changes. A new server-to-client frame, `0x04`, carries the words when somebody
-  switches language on a connection that is already open; it is written before the value that
-  redraws the screen, so nothing redraws twice.
-
-- **The connection's language is now decided after the sign-in rather than before it**, so a
-  registered `LocalePreferenceStore` can be asked what this particular person reads. Nothing changes
-  for a deployment that registers none.
 
 ### Changed
 
@@ -116,75 +172,13 @@ upgrading.
   compiling, which is how a coding assistant works, paid for a full browser compile every time. It
   now happens at `prepare-package` instead, so `mvn compile` and `mvn test-compile` run `javac` and
   stop, and `mvn package`, `mvn install` and `mvn verify` behave as before. On a freshly generated
-  project with a warm Maven cache, `mvn test-compile` went from about 14 seconds to about 5.
+  project with a warm Maven cache, `mvn test-compile` went from about 14 seconds to about 5. A full
+  `mvn install` still produces a working, runnable application, so nothing that ran a build before
+  stops working.
 
-- **A generated project now builds for development by default and for release on request.** The
-  browser bundle is built readable and unoptimized unless you ask for `-Pproduction`, which turns on
-  whole-program optimization and minification and produces exactly what earlier versions produced.
-  The name matches the convention other Java web frameworks use. A full `mvn install` still produces
-  a working, runnable application, so nothing that ran a build before stops working.
-
-  **Build and run `-Pproduction` before you ship.** Minification renames things, and renaming can
-  break code that a readable build runs perfectly — it is why this framework's own outage banner
-  read `[object HTMLDivElement]` for two releases. The generated `README.md` and `AGENTS.md` both
-  say so, and so do the rules that travel inside `zerozstack-shared-api`.
-
-### Added
-
-- **A generated project now carries a `README.md`.** It says what the three modules are, which build
-  command to use for a quick check, which one produces something you can run, and which one produces
-  what you ship — and it says plainly that the quick check does not compile the user interface, so a
-  mistake only the browser compiler can see will not surface until the next full build.
-
-### Added
-
-- **The server now answers in the language the person is reading.** Every refusal it produces —
-  access denied, not signed in, no such service, an argument that broke a rule, a live edit it
-  would not accept — is written in the caller's language on the wire and in English in the server
-  log, from one value. An application declares its own text as ordinary `.properties` files in its
-  shared module, marks them with `@MessageCatalog`, and gets one compile-checked method per key: a
-  misspelled key and a wrong number of values are both compile errors instead of something wrong on
-  somebody's screen. Throwing `new ClientVisibleException(AppText_Text.invoiceAlreadyApproved(id))`
-  is the whole of translating a refusal. The connection's language is decided once at the handshake
-  — a `lang` parameter, a `zeroz-lang` cookie, the browser's `Accept-Language` header,
-  `zeroz.i18n.defaultLocale`, then English — narrowed to what the deployment actually translated,
-  and readable in a service as `RmiRequestContext.getLocale()`, which is never null. Adding a
-  language is dropping a `.properties` file in and restarting: nothing is regenerated and no browser
-  download grows. Blanks in a sentence are `{0}`, `{1}` and nothing else, on purpose — one call into
-  Java's own message formatting makes the browser download 43 percent bigger, which is more than
-  twenty languages of translated text put together. Full instructions in
-  [docs/guides/language.md](docs/guides/language.md).
-- **`CatalogParity`, a three-line test that stops a translation drifting.** Only the fallback
-  language is read at compile time, so nothing about the others is checked by the compiler; a key
-  a translator missed leaves the fallback language showing mid-screen, and a sentence whose blanks
-  disagree either drops a value the reader needed or leaves a blank showing. Point the check at the
-  folder and the build fails naming the file, the key, and what is wrong with it.
-- **`TestServer.connectSpeaking(language, ...)` and `Refusals.assertRefusedWith(key, thrown)`**, so
-  one test can prove the same call is answered two ways, and so a test can assert on *which* refusal
-  happened rather than on the wording of it.
-- **`zeroz.i18n.defaultLocale`** — what language a deployment answers in when the browser has not
-  said. Default `en`. Deliberately not the machine's own locale: a server in Frankfurt has a German
-  JVM locale that has nothing to do with whoever is calling it.
-
-### Changed
-
-- **The framework's own refusals are now named, not just written.** They travel as a key plus values
-  and are turned into words at the edge of the server. Two new exception types carry the name:
-  `RefusedException` (a `SecurityException`, as before) and `NoSuchServiceMethodException` (a
-  `NoSuchMethodException`, as before), so everything that caught or tested for those still does, and
-  `getMessage()` on both is the same English sentence it always was.
-
-  **English is unchanged, character for character, for any project that adds no language** — every
-  one of this project's own tests that asserts on the wording of a refusal passes untouched.
-
-  **What to do:** nothing, unless you add a language. If you do, a test asserting on the exact
-  English of a framework refusal is now asserting on a translation, so replace it with
-  `Refusals.assertRefusedWith(FrameworkKeys.ACCESS_DENIED, thrown)`. The same applies to any client
-  code that compares an error message to a literal to decide what to show — that was always
-  fragile and is now wrong. And know that a validation message you wrote in a `@NotBlank(message =
-  "...")` is still one language whichever language the caller reads: it is compiled into the
-  generated rules as written. Check the value in your service method and throw
-  `ClientVisibleException` with a message from your own catalog where that matters.
+- **The connection's language is now decided after the sign-in rather than before it**, so a
+  registered `LocalePreferenceStore` can be asked what this particular person reads. Nothing changes
+  for a deployment that registers none.
 
 ### Fixed
 
@@ -207,6 +201,28 @@ upgrading.
 
 ### Internal
 
+- **A build-failing check for the mistake everybody makes with translated text**, guarding this
+  repository's own code rather than yours. `new Button(AppText_Text.taskAdd().text())` reads the
+  words once and never changes again, and it is nearly invisible in testing, because screens are
+  rebuilt when you navigate and the label that stayed behind is on the screen that was open at the
+  moment of the switch. `MessageReadContractTest` reads every file in this checkout that can run in
+  a browser and fails when `.text()` is called outside an `Effect` or a `Computed`.
+  `@ReadsMessagesOnce` on the method is the way out where a read really is once-only, and that
+  annotation ships in `zerozstack-shared-api`, so an application that copies the check has it.
+  **Its own documentation says plainly what it cannot see:** a read one ordinary method call deep
+  (it does follow a method reference handed straight to `Effect.create`, one hop), words put in a
+  variable inside an effect and used outside it, and English left hard-coded in a screen, which no
+  check can reliably tell from a CSS class or a log line.
+
+- **The translation drift check now finds a translation whose fallback lives in another module.** It
+  compared a file only with its siblings in one folder, so the one set of files it could never see
+  was the framework's own translations — a `zeroz4j_de.properties` anywhere, whose fallback stays in
+  `zerozstack-shared-api`. That is the documented way to change the framework's wording, and it now
+  matters more, because the framework has a translation of its own to keep honest. **It found a real
+  one the moment it was written:** this repository's own German test catalog had been missing a key
+  since that key was added, and nothing had noticed. A translation whose fallback exists nowhere at
+  all is reported too — there is no key list to read it against.
+
 - **Three tests answered differently depending on where they landed in the run**, which is why
   continuous integration had been red since the release before last while the same command passed
   on a developer's machine. One waited for "a frame" to come back from the server and was satisfied
@@ -216,6 +232,11 @@ upgrading.
   it passed came down to whether the garbage collector ran in the two lines between. All three
   passed at the top of a run and failed further down; none touched anything an application can see.
   The rules that keep them out are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+- **A version named in prose is now compared on its three numbers alone.** Documentation writes
+  `0.9.0` whether the build is `0.9.0-SNAPSHOT` or `0.9.0`, and `VersionStatementTest` fails on a
+  `-SNAPSHOT` written into a page. Cutting a release used to mean taking the suffix off sixteen
+  files and putting it back the next day, which served no reader.
 
 ## [0.8.0] — 2026-09-01
 
@@ -2509,7 +2530,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...HEAD
+[0.9.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.1...v0.6.2
