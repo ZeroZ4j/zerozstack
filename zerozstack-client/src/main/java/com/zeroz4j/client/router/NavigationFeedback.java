@@ -27,8 +27,8 @@ import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
 
 /**
- * The router's built-in busy indicator and failure message, switched on with
- * {@link Router#showBusyIndicator(boolean)} and {@link Router#showFailureMessage(boolean)}.
+ * The router's built-in busy indicator and failure message. Both are on by default -
+ * {@link Router#showBusyIndicator(boolean)} and {@link Router#showFailureMessage(boolean)} opt out.
  *
  * <p>Framework-internal. Both are an ordinary {@link Router.LifecycleListener} and nothing more, so
  * everything here is something an application could build for itself from the public API.</p>
@@ -66,8 +66,8 @@ final class NavigationFeedback implements Router.LifecycleListener {
 
     private static final NavigationFeedback INSTANCE = new NavigationFeedback();
 
-    private static boolean busyEnabled;
-    private static boolean failureEnabled;
+    private static boolean busyEnabled = true;
+    private static boolean failureEnabled = true;
     private static Disposable registration;
     private static Disposable labelEffect;
     private static Disposable failureEffect;
@@ -107,6 +107,39 @@ final class NavigationFeedback implements Router.LifecycleListener {
     private static void register() {
         if (registration == null) {
             registration = Router.addLifecycleListener(INSTANCE);
+        }
+    }
+
+    /**
+     * Switches on whichever of the two is still at its default, the moment {@link Router#start}
+     * runs for the first time. An application that called {@link Router#showBusyIndicator(boolean)}
+     * or {@link Router#showFailureMessage(boolean)} itself, in either direction, before this point
+     * already has its own answer installed or its own opt-out recorded, and this changes nothing for
+     * it either way - both methods are idempotent.
+     *
+     * <p>Catches rather than asking "am I in a browser?", which has no honest answer in TeaVM: the
+     * framework's own router tests call {@link Router#start} on the JVM, where there is no DOM and
+     * the calls below are native. Same guard as {@code Keepalive.start()}.</p>
+     */
+    static void installDefaults() {
+        try {
+            if (busyEnabled) {
+                installStyles();
+                installBusyElements();
+                if (labelEffect == null) {
+                    labelEffect = Effect.create(NavigationFeedback::redrawBusyLabel);
+                }
+            }
+            if (failureEnabled) {
+                installStyles();
+            }
+            if (busyEnabled || failureEnabled) {
+                register();
+            }
+        } catch (Throwable outsideABrowser) {
+            // No DOM on the JVM. Left exactly as a fresh page would be if nothing had run yet: the
+            // flags still say what the application asked for, but nothing is installed and nothing
+            // is registered, matching how these tests behaved before this feature existed.
         }
     }
 

@@ -9,7 +9,7 @@ cannot be opened.
 
 ```bash
 mvn -pl zerozstack-examples/routing-tour/routing-tour-server -am install
-java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.9.0.jar --dev-login
+java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.10.0.jar --dev-login
 ```
 
 Then open <http://localhost:8091/?user=admin&password=admin>.
@@ -46,8 +46,8 @@ nothing can sign in, and the server says so when it starts. Sign in as `demo` an
   the view appears once. Nothing fetches after mounting.
 - **Click Slow page.** After 300 milliseconds a bar sweeps along the top, a spinner appears in the
   middle and the cursor turns to a wait cursor. They go the moment the page is on screen. None of it
-  is code in a view: `RoutingTourApp` switches it on with `Router.showBusyIndicator(true)`, and every
-  other page here is too fast for it to appear.
+  is code in a view: the router's busy indicator is on by default, and every other page here is too
+  fast for it to appear.
 - **Click Slow page, then Projects before it finishes.** Projects stays, with `/projects` in the
   address bar, even though the slow page's answer arrives afterwards. The same happens if you press
   Back while it loads, or click the link for the page still showing.
@@ -55,7 +55,8 @@ nothing can sign in, and the server says so when it starts. Sign in as `demo` an
   the bottom: "We could not open this page. Check your connection and try again." While the server is
   down it says Retry will work once the connection is back, and Retry does nothing. Once the tab has
   reconnected by itself, Retry opens the page. The page is not opened again on its own: that would be
-  repeating a call, and calls are never repeated for you. This is `Router.showFailureMessage(true)`.
+  repeating a call, and calls are never repeated for you. This is the router's failure message, also
+  on by default.
 - **Open `/stalled?user=admin&password=admin&timeout=3000`** from the home page's address. The server
   does not answer in time, and four or five seconds later the navigation fails with the same message.
   `timeout` sets the client's request timeout for this tab; without it the wait is the default 30

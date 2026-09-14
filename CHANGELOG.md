@@ -11,20 +11,34 @@ upgrading.
 ## [Unreleased]
 
 This release is about the seconds between clicking a link and seeing the page. The router now says
-when a navigation starts, finishes and fails, for every way one can begin, and two calls put that on
-the screen: `Router.showBusyIndicator(true)` for a bar, a spinner and a wait cursor once a page takes
-longer than 300 milliseconds, and `Router.showFailureMessage(true)` for a plain message with a Retry
-button when it cannot be opened. Underneath, two faults that made a slow page look broken are gone:
-an older navigation that finished last could put its page over the one clicked since, and a call on
-a network that had died without closing the socket waited for minutes with nothing to end it.
+when a navigation starts, finishes and fails, for every way one can begin, and puts that on the
+screen with no call at all: a bar, a spinner and a wait cursor once a page takes longer than 300
+milliseconds, and a plain message with a Retry button when a page cannot be opened.
+`Router.showBusyIndicator(false)` and `Router.showFailureMessage(false)` opt out. Underneath, two
+faults that made a slow page look broken are gone: an older navigation that finished last could put
+its page over the one clicked since, and a call on a network that had died without closing the
+socket waited for minutes with nothing to end it.
 
-**Two things in the Breaking section can catch an application.** `Router.onError` now adds a
-handler instead of replacing the last one, so an application that registers it from a callback that
-runs again after every reconnect collects one more handler per reconnect. And the client now closes a
-connection whose keepalive ping goes unanswered for ten seconds, which matters only on a network
-that routinely stalls for longer, or behind a server that has raised its own ping limit.
+**Three things in the Breaking section can catch an application.** The busy indicator and the
+failure message are now on by default, so an application that already built its own of either now
+shows two for the same navigation. `Router.onError` now adds a handler instead of replacing the last
+one, so an application that registers it from a callback that runs again after every reconnect
+collects one more handler per reconnect. And the client now closes a connection whose keepalive ping
+goes unanswered for ten seconds, which matters only on a network that routinely stalls for longer, or
+behind a server that has raised its own ping limit.
 
 ### Breaking
+
+- **The busy indicator and the failure message are now on by default.** Through 0.9.0 an application
+  had to call `Router.showBusyIndicator(true)` and `Router.showFailureMessage(true)` to get either;
+  now both show unless turned off. An application that already has its own - a loading indicator
+  built on `Router.addLifecycleListener`, an error banner wired to `Router.onError` - now shows two
+  for the same navigation.
+
+  If you built your own, call `Router.showBusyIndicator(false)` and `Router.showFailureMessage(false)`
+  to keep it and stop the built-in one showing alongside it, or delete your own and keep the
+  framework's - `docs/ROUTING.md` shows the `--zeroz4j-busy-*` and `--zeroz4j-failure-*` custom
+  properties for making it look like yours.
 
 - **`Router.onError(handler)` adds a handler; it no longer replaces the previous one.** Through
   0.9.0 only the handler registered last was ever called, which is how one application's busy
@@ -65,33 +79,33 @@ that routinely stalls for longer, or behind a server that has raised its own pin
 
 ### Added
 
-- **A busy indicator for every navigation, with one call.** `Router.showBusyIndicator(true)` shows a
-  3-pixel bar sweeping along the top, a 48-pixel spinner on a small card in the middle of the window,
-  and a wait cursor over the whole page - once a navigation has taken 300 milliseconds, so a fast
-  page shows nothing. It hides the moment the latest navigation finishes or fails, and it has no
-  timeout of its own: it never goes away while the work is still running. It follows links,
-  `navigate`, `replace`, Back and Forward with no listener or wrapper in the application. A screen
-  reader hears "Loading"; under `prefers-reduced-motion` it pulses instead of moving; it covers
-  nothing and takes no clicks. Color, bar height, spinner size, card background and an offset for
-  centering beside a side menu are CSS custom properties (`--zeroz4j-busy-color`,
-  `--zeroz4j-busy-offset-x` and the rest, listed in `docs/ROUTING.md`), with DaisyUI tokens as
-  defaults, so it is right in light and dark themes unconfigured.
+- **A busy indicator for every navigation, on by default.** A bar sweeping along the top (3 pixels),
+  a spinner on a small card in the middle of the window (48 pixels), and a wait cursor over the whole
+  page - once a navigation has taken 300 milliseconds, so a fast page shows nothing. It hides the
+  moment the latest navigation finishes or fails, and it has no timeout of its own: it never goes
+  away while the work is still running. It follows links, `navigate`, `replace`, Back and Forward
+  with no listener or wrapper in the application. A screen reader hears "Loading"; under
+  `prefers-reduced-motion` it pulses instead of moving; it covers nothing and takes no clicks. Color,
+  bar height, spinner size, card background and an offset for centering beside a side menu are CSS
+  custom properties (`--zeroz4j-busy-color`, `--zeroz4j-busy-offset-x` and the rest, listed in
+  `docs/ROUTING.md`), with DaisyUI tokens as defaults, so it is right in light and dark themes
+  unconfigured. `Router.showBusyIndicator(false)` turns it off - see Breaking.
 
   If you have your own - a `BusyIndicator` class watching clicks and popstate, wrappers around
-  `Router.navigate` and `Router.replace`, an error handler passed through to hide it - delete them
-  and call `Router.showBusyIndicator(true)`. To keep your look, set the custom properties; to keep a
-  side-menu offset, set `--zeroz4j-busy-offset-x` in the same media query you use today.
+  `Router.navigate` and `Router.replace`, an error handler passed through to hide it - delete them.
+  To keep your own look on the built-in one instead, set the custom properties; to keep a side-menu
+  offset, set `--zeroz4j-busy-offset-x` in the same media query you use today.
 
-- **A failure message with a Retry button, with one call.** `Router.showFailureMessage(true)` puts a
-  short message at the bottom of the window when the latest navigation fails. For a dropped or
-  silent connection, or a call the server did not answer in time: "We could not open this page.
-  Check your connection and try again." For a loader the server refused: "We could not open this
-  page. Something went wrong while loading it." Both offer Retry and Dismiss, which are real buttons,
-  first in the Tab order. While the connection is still down it adds "Reconnecting. Retry will work
-  once the connection is back." and Retry waits; the framework reconnects by itself but never opens
-  the page again by itself, because that would repeat calls. It goes when the next navigation starts.
-  A slow page overtaken by another click never shows it. The words are in the framework's catalog,
-  in English and German.
+- **A failure message with a Retry button, on by default.** A short message at the bottom of the
+  window when the latest navigation fails. For a dropped or silent connection, or a call the server
+  did not answer in time: "We could not open this page. Check your connection and try again." For a
+  loader the server refused: "We could not open this page. Something went wrong while loading it."
+  Both offer Retry and Dismiss, which are real buttons, first in the Tab order. While the connection
+  is still down it adds "Reconnecting. Retry will work once the connection is back." and Retry waits;
+  the framework reconnects by itself but never opens the page again by itself, because that would
+  repeat calls. It goes when the next navigation starts. A slow page overtaken by another click never
+  shows it. The words are in the framework's catalog, in English and German.
+  `Router.showFailureMessage(false)` turns it off - see Breaking.
 
   If you ship your own translation of the framework's words (`i18n/zeroz4j_<language>.properties`),
   add the eight new keys - `ui.loading`, `ui.retry`, `ui.dismiss` and the five `ui.navigation.*` keys.
@@ -2692,6 +2706,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
+[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.0...HEAD
 [0.9.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0

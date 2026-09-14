@@ -49,12 +49,12 @@ when it happens.
 
 Pin the plugin coordinates. The bare `archetype:generate` prefix resolves against the current
 project, so outside one Maven 3.9 fails with "requires a project to execute but there is no POM".
-Use the version the repository is on - `0.9.0`, which is what a local build installs. While
+Use the version the repository is on - `0.10.0`, which is what a local build installs. While
 `<revision>` still carries `-SNAPSHOT`, add it here too: this is a coordinate Maven has to resolve,
 not a sentence about the framework, so it has to be the exact version on the jar.
 
 ```bash
-mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.9.0 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
+mvn -B $REPO org.apache.maven.plugins:maven-archetype-plugin:3.3.1:generate -DarchetypeGroupId=com.zeroz4j -DarchetypeArtifactId=zerozstack-archetype -DarchetypeVersion=0.10.0 -DgroupId=com.smoke -DartifactId=smokeapp -Dversion=1.0.0-SNAPSHOT -Dpackage=com.smoke -DinteractiveMode=false
 ```
 
 Copy the fixtures over the generated sources, keeping each one's subdirectory — the fixture packages
@@ -167,7 +167,7 @@ proves CDI discovery survives packaging. Build with `mvn $REPO verify -Ppackage`
 ## Also worth eyeballing
 
 - `smokeapp/AGENTS.md` should exist, and its second line under "The version this project is built
-  on" should name a real version — `0.9.0`, not the literal `${zeroz4jVersion}`. It should
+  on" should name a real version — `0.10.0`, not the literal `${zeroz4jVersion}`. It should
   also still have its six `##` headings. Velocity, which filters the file, reads `##` as the start
   of a comment and drops the rest of the line without a word, so the headings are escaped in the
   archetype's copy and an accidental un-escaping shows up here as missing headings and nothing else.

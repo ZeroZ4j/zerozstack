@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.9.0, in one place. This page exists because surprises are
+Every known gap in ZeroZ Stack 0.10.0, in one place. This page exists because surprises are
 what make people abandon a framework, and because a coding agent that reads it will not generate
 code against features that do not exist.
 
@@ -33,7 +33,8 @@ What automatic recovery deliberately does **not** cover:
   framework cannot know whether repeating it is safe. Catch `DisconnectedException`, or disable
   controls while `WasmRmiClient.connectionState()` is not `CONNECTED`. The same holds for a
   navigation: its loaders are calls, so a page that failed to open is not opened again on reconnect.
-  `Router.retry()`, or the Retry button on `Router.showFailureMessage(true)`, runs it again.
+  `Router.retry()`, or the Retry button on the router's failure message (on by default), runs it
+  again.
 - **A server restart empties the handle registry.** Re-sync can only restore objects the server
   still knows. After a restart, live objects held by clients stay as they were and the application
   must re-fetch them the way it first obtained them; the server logs how many handles it could not

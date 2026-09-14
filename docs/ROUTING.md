@@ -159,14 +159,17 @@ again. `replace`, Back and Forward always run.
 
 ## Showing that a page is loading
 
+An application gets both with no call at all. Opt out of either with:
+
 ```java
-Router.showBusyIndicator(true);
-Router.showFailureMessage(true);
+Router.showBusyIndicator(false);
+Router.showFailureMessage(false);
 ```
 
-Two lines, usually next to `Router.start`. Both are off unless switched on. Neither needs a click
-listener, a popstate listener or a wrapper around `navigate` and `replace`: they follow every
-navigation the router runs, however it started.
+Turn one off when the application already renders its own - a busy indicator or a failure message
+built before this feature existed, say - so it is not shown twice. Neither needs a click listener, a
+popstate listener or a wrapper around `navigate` and `replace`: they follow every navigation the
+router runs, however it started.
 
 **The busy indicator** appears once a navigation has been running for 300 milliseconds, so a fast
 page shows nothing at all. It is three things at once: a 3-pixel bar sweeping along the top edge, a
@@ -219,7 +222,7 @@ A navigation whose loader throws leaves the page as it was — replacing a worki
 one because a fetch failed loses whatever the user was doing. The address bar keeps the address
 that failed, so reloading the page tries it again.
 
-**The failure message** (`Router.showFailureMessage(true)`) is a short box at the bottom of the
+**The failure message** (on by default; `Router.showFailureMessage(false)` opts out) is a short box at the bottom of the
 window, announced to a screen reader as an alert, with a **Retry** button and a **Dismiss** button.
 Both are real buttons, first in the page's Tab order, pressed with Enter or Space. What it says
 depends on why the navigation failed:

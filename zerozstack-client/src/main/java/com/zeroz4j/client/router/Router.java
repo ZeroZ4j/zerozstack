@@ -52,15 +52,18 @@ import java.util.Map;
  * to design around — and no view that mounts, discovers it needs data, and re-renders.</p>
  *
  * <h2>Showing that something is happening</h2>
+ * <p>An application gets both with no call at all: a bar, a spinner and a wait cursor once a page
+ * takes 300 ms, and "We could not open this page..." with a Retry button when one fails. Opt out of
+ * either with:</p>
  * <pre>{@code
- * Router.showBusyIndicator(true);   // a bar, a spinner and a wait cursor once a page takes 300 ms
- * Router.showFailureMessage(true);  // "We could not open this page..." with a Retry button
+ * Router.showBusyIndicator(false);
+ * Router.showFailureMessage(false);
  * }</pre>
  *
- * <p>Both are off unless switched on, and both work with every way a navigation can start - links,
- * {@code navigate}, {@code replace}, Back and Forward - with nothing else to wire. An application
- * drawing its own uses {@link #addLifecycleListener(LifecycleListener)}, which is what those two
- * are built on.</p>
+ * <p>Both work with every way a navigation can start - links, {@code navigate}, {@code replace},
+ * Back and Forward - with nothing else to wire. An application drawing its own turns the built-in
+ * one off and uses {@link #addLifecycleListener(LifecycleListener)}, which is what those two are
+ * built on.</p>
  *
  * <h2>Navigations that overlap</h2>
  * <p>Every navigation carries a sequence number. Start a second one while the first is still
@@ -206,6 +209,10 @@ public final class Router {
         RouteRegistry.init();
         if (!listening) {
             listening = true;
+            // Switches on the busy indicator and the failure message for an application that made
+            // neither call, so both work with no wiring at all. A no-op for one that already called
+            // showBusyIndicator or showFailureMessage itself, in either direction.
+            NavigationFeedback.installDefaults();
             // Route paths are what the route table is written in and what @Route declares; browser
             // locations carry the deployment's context path in front of them. Every crossing between
             // the two goes through the host, so a route table never has to know where it was
@@ -272,7 +279,8 @@ public final class Router {
      * <p>The framework reconnects a dropped connection by itself but never repeats a failed
      * navigation by itself, because a navigation is loader calls and RMI calls are never replayed:
      * the framework cannot know a call is safe to repeat. This is the explicit "try again". It is
-     * what the Retry button on {@link #showFailureMessage(boolean) the failure message} does.</p>
+     * what the Retry button on {@link #showFailureMessage(boolean) the failure message}, on by
+     * default, does.</p>
      *
      * <p>While the connection is still down a retry fails straight away, with a
      * {@code DisconnectedException}, so it is only useful once the connection is back.</p>
@@ -370,7 +378,9 @@ public final class Router {
     }
 
     /**
-     * Turns the router's built-in busy indicator on or off. Off unless switched on.
+     * Turns the router's built-in busy indicator on or off. On by default, so an application gets it
+     * with no call at all; call with {@code false} to opt out - for one that already renders its own
+     * loading indicator, showing two would be worse than showing none.
      *
      * <p>Once a navigation has been running for 300 milliseconds it shows a thin bar across the top
      * of the page, a spinner on a small card in the middle, and a wait cursor over the whole page.
@@ -384,14 +394,16 @@ public final class Router {
      * properties - color, bar height, spinner size, card background, and an offset to center it in
      * a content area beside a side menu; the names are in {@code docs/ROUTING.md}.</p>
      *
-     * @param enabled true to show it
+     * @param enabled false to opt out
      */
     public static void showBusyIndicator(boolean enabled) {
         NavigationFeedback.busyIndicator(enabled);
     }
 
     /**
-     * Turns the router's built-in failure message on or off. Off unless switched on.
+     * Turns the router's built-in failure message on or off. On by default, so an application gets
+     * it with no call at all; call with {@code false} to opt out - for one that already renders its
+     * own failure message, showing two would be worse than showing none.
      *
      * <p>When the navigation started last fails, it shows a short message near the top of the page
      * with a Retry button and a Dismiss button. For a dropped connection or a call the server did
@@ -404,7 +416,7 @@ public final class Router {
      * <p>It goes away when the next navigation starts, including the one Retry starts, and when
      * Dismiss is pressed. It does not replace error listeners; they are still called.</p>
      *
-     * @param enabled true to show it
+     * @param enabled false to opt out
      */
     public static void showFailureMessage(boolean enabled) {
         NavigationFeedback.failureMessage(enabled);

@@ -3,7 +3,7 @@
 Instructions for AI coding agents. Humans should start at [README.md](README.md) and
 [docs/](docs/).
 
-ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.9.0**. The
+ZeroZ Stack is an experimental pure-Java full-stack framework at version **0.10.0**. The
 Java UI is compiled by TeaVM to run in the browser, client and server talk over a binary WebSocket
 RPC protocol, and the server persists a live object graph with EclipseStore. You write no
 JavaScript, JSON, REST routes or SQL.
@@ -324,11 +324,13 @@ public class TaskDetailView implements RouteView<Task> {
   the router or registering router listeners there needs a once-only guard.
 - Guard with `@RequiresRole`; it decides what to *show*, the server still decides what is allowed.
 - **Do not generate a loading spinner, a navigation wrapper, or click and popstate listeners to
-  drive one.** `Router.showBusyIndicator(true)` shows a bar, a centered spinner and a wait cursor once
-  any navigation has run 300 ms, and hides it when the latest navigation finishes or fails - it has
-  no timeout of its own. `Router.showFailureMessage(true)` shows "We could not open this page..."
-  with a Retry button when the latest navigation fails. Style both with the `--zeroz4j-busy-*` and
-  `--zeroz4j-failure-*` custom properties listed in docs/ROUTING.md.
+  drive one.** An application gets both with no call at all: a bar, a centered spinner and a wait
+  cursor once any navigation has run 300 ms, hidden when the latest navigation finishes or fails and
+  with no timeout of its own (`Router.showBusyIndicator(false)` to opt out), and "We could not open
+  this page..." with a Retry button when the latest navigation fails
+  (`Router.showFailureMessage(false)` to opt out). Turn one off only when the application already
+  renders its own - two saying the same thing is worse than either. Style both with the
+  `--zeroz4j-busy-*` and `--zeroz4j-failure-*` custom properties listed in docs/ROUTING.md.
 - For a custom indicator, `Router.addLifecycleListener` raises started, finished and failed for every
   way a navigation begins. The navigation started last always ends in exactly one finished or failed;
   an older one it overtook is superseded and raises nothing more, even when its loader answers later.
@@ -448,7 +450,7 @@ not**: each has a main class of its own, and three of them also build a runnable
 | `chat-livesync` | 8086 | `payments-datamodels` | 8092 |
 
 `routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
-`java -jar routing-tour-server/target/routing-tour-server-0.9.0.jar`.
+`java -jar routing-tour-server/target/routing-tour-server-0.10.0.jar`.
 
 **To move one:** `--port 9000` on the command line, or `-Dzeroz.port=9000`, or — for the seven with
 a `run.bat` — `run.bat 9000`. Each server reads them in that order and falls back to its own

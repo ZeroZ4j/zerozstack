@@ -40,6 +40,26 @@ import fs from 'node:fs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..', '..');
 
+/**
+ * The routing tour server jar, wherever the build left it. Its name carries the framework's
+ * version, which moves at every release, so this looks rather than hard-codes it - the previous
+ * hard-coded name went stale at the first version bump after this tool was written.
+ */
+function findServerJar() {
+    const targetDir = path.join(ROOT, 'zerozstack-examples', 'routing-tour', 'routing-tour-server',
+        'target');
+    if (!fs.existsSync(targetDir)) {
+        return path.join(targetDir, 'routing-tour-server.jar');   // reported missing below
+    }
+    const jars = fs.readdirSync(targetDir)
+        .filter(name => /^routing-tour-server-.*\.jar$/.test(name) && !name.endsWith('-sources.jar'));
+    if (jars.length === 0) {
+        return path.join(targetDir, 'routing-tour-server.jar');   // reported missing below
+    }
+    jars.sort();
+    return path.join(targetDir, jars[jars.length - 1]);
+}
+
 const args = process.argv.slice(2);
 function option(name, fallback) {
     const index = args.indexOf(name);
@@ -51,8 +71,7 @@ const serverPort = Number(option('--port', '8191'));
 const proxyPort = Number(option('--proxy-port', '8192'));
 const java = option('--java', process.env.JAVA_HOME_21
     ? path.join(process.env.JAVA_HOME_21, 'bin', 'java') : 'java');
-const jar = option('--jar', path.join(ROOT, 'zerozstack-examples', 'routing-tour',
-    'routing-tour-server', 'target', 'routing-tour-server-0.9.0.jar'));
+const jar = option('--jar', findServerJar());
 const pwHome = option('--playwright', path.join(ROOT, 'zerozstack-archetype', 'smoke'));
 
 const require = createRequire(path.join(pwHome, 'package.json'));

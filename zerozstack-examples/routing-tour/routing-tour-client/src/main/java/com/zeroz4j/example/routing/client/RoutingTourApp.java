@@ -29,9 +29,9 @@ import org.teavm.jso.JSBody;
  * <p>The whole navigation story is the {@code Router} calls below — the route table itself is
  * generated from the {@code @Route} annotations at compile time, so nothing here enumerates views.</p>
  *
- * <p>Two of them are about what a person sees while a page loads and when it cannot be opened:
- * {@code showBusyIndicator} and {@code showFailureMessage}. They need no click listener, no wrapper
- * around {@code navigate}, and nothing in any view.</p>
+ * <p>What a person sees while a page loads and when it cannot be opened - the busy indicator and the
+ * failure message - is on by default, and needs no click listener, no wrapper around
+ * {@code navigate}, and nothing in any view; neither is switched on below.</p>
  */
 public class RoutingTourApp {
 
@@ -45,9 +45,6 @@ public class RoutingTourApp {
         if (timeout > 0) {
             WasmRmiClient.setRequestTimeout(timeout);
         }
-
-        Router.showBusyIndicator(true);
-        Router.showFailureMessage(true);
 
         Zeroz4jClient.connect(webSocketUrl(), () -> {
             // Only a real sign-in reaches this. A connection the server declined fires
