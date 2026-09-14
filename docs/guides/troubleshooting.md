@@ -185,11 +185,17 @@ control it.
 
 ### An RMI call never returns
 
-The default request timeout is 30 seconds. If a call hangs, check the server log for an exception
+The default request timeout is 30 seconds, and a call still unanswered then fails with
+`RequestTimeoutException`. The deadline is checked by a timer of its own, so it fires even when
+nothing else is happening on the connection. If calls time out, check the server log for an exception
 inside the service method — an error becomes an error frame, but a hung method produces nothing.
 
 A hang is **not** the connection: since 0.5.0 a call made while the socket is down, or in flight
-when it drops, fails immediately with `DisconnectedException` instead of hanging.
+when it drops, fails immediately with `DisconnectedException` instead of hanging. A network that
+dies without closing the socket is caught too: a call that has waited five seconds with nothing
+arriving makes the client ping, and a ping unanswered for ten seconds closes the socket, which fails
+the call with `DisconnectedException`. Raise that bound with `Keepalive.configureLiveness(seconds)`
+on a network known to pause for longer.
 
 ### The page loads but the WebSocket handshake answers 404 — on Linux only
 

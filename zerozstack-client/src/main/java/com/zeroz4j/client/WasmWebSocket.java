@@ -109,6 +109,27 @@ public class WasmWebSocket {
     )
     private static native void closeSocket(JSObject ws);
 
+    /**
+     * Closes a connection that has stopped answering.
+     *
+     * <p>Code 4000 rather than 1000, so a server log that does see it can tell "the client gave up
+     * waiting" from "the client was finished". On a silent network the close handshake usually
+     * never completes and the browser may report the close much later or not at all, which is why
+     * the caller stops listening to this socket before calling it rather than waiting for its
+     * close event.</p>
+     */
+    public void closeUnresponsive() {
+        closeUnresponsiveSocket(ws);
+    }
+
+    @JSBody(params = { "ws" }, script =
+        "try {" +
+        "  ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null;" +
+        "  if (ws.readyState === 0 || ws.readyState === 1) { ws.close(4000, 'Connection unresponsive'); }" +
+        "} catch (ignored) { }"
+    )
+    private static native void closeUnresponsiveSocket(JSObject ws);
+
     /** TeaVM JSFunctor for inbound message array buffer callbacks. */
     @JSFunctor
     public interface MessageHandler extends JSObject {

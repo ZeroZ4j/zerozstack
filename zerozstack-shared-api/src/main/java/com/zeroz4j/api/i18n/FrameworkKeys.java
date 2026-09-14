@@ -74,6 +74,31 @@ public final class FrameworkKeys {
     /** The name a language selector announces itself by. */
     public static final String UI_LANGUAGE = "ui.language";
 
+    /** What the router's busy indicator says to a screen reader while a page is loading. */
+    public static final String UI_LOADING = "ui.loading";
+
+    /** A page that could not be opened because the connection dropped or the server did not answer. */
+    public static final String UI_NAVIGATION_CONNECTION_FAILED = "ui.navigation.connectionFailed";
+
+    /** A page that could not be opened for any other reason, such as a loader the server refused. */
+    public static final String UI_NAVIGATION_FAILED = "ui.navigation.failed";
+
+    /** An address no route answers to, when the application has set no not-found route. */
+    public static final String UI_NAVIGATION_NOT_FOUND = "ui.navigation.notFound";
+
+    /** A page the person's roles do not allow, when the application has set no forbidden route. */
+    public static final String UI_NAVIGATION_FORBIDDEN = "ui.navigation.forbidden";
+
+    /** Said under a failed page while the connection is still down, so Retry is not pressed in vain. */
+    public static final String UI_NAVIGATION_WAITING_FOR_CONNECTION =
+            "ui.navigation.waitingForConnection";
+
+    /** The button that runs a failed navigation again. */
+    public static final String UI_RETRY = "ui.retry";
+
+    /** The button that closes a message. */
+    public static final String UI_DISMISS = "ui.dismiss";
+
     private FrameworkKeys() {
     }
 }

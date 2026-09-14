@@ -37,8 +37,9 @@ public class HomeView implements RouteView<Void> {
         return Ui.box("flex flex-col gap-3 max-w-2xl",
                 Ui.text("Routing tour", TextStyle.PAGE_TITLE.getClassNames()),
                 Ui.text("Every route below declares the data it needs. The loader finishes before "
-                        + "the view is built, so nothing here renders a spinner or refetches after "
-                        + "mounting.", TextStyle.SECONDARY.getClassNames()),
+                        + "the view is built, so no view here renders a spinner of its own or "
+                        + "refetches after mounting. The router shows one busy indicator for all of "
+                        + "them, and only for a page that takes longer than 300 milliseconds.", TextStyle.SECONDARY.getClassNames()),
                 Ui.box("flex flex-col gap-1 pt-2",
                         Ui.text("Try these:", TextStyle.SECTION_TITLE.getClassNames()),
                         Ui.routerLink("/projects", "/projects — a list, loaded by the route"),
@@ -46,6 +47,7 @@ public class HomeView implements RouteView<Void> {
                         Ui.routerLink("/projects/new", "/projects/new — a literal beating :id"),
                         Ui.routerLink("/projects/1/tasks/11", "/projects/1/tasks/11 — two parameters"),
                         Ui.routerLink("/projects?sort=name", "/projects?sort=name — a query parameter"),
+                        Ui.routerLink("/slow", "/slow — a loader that takes two seconds"),
                         Ui.routerLink("/admin", "/admin — guarded by a role"),
                         Ui.routerLink("/nowhere", "/nowhere — falls through to not-found")));
     }

@@ -181,6 +181,18 @@ request context.
 Any real traffic postpones the next ping, so a connection in use sends none at all. `Keepalive.configure(seconds)`
 changes the interval; zero turns it off.
 
+**A ping also expects an answer.** If nothing at all arrives within ten seconds of a ping, the client
+closes the socket with code `4000` and treats the connection as dropped: calls in flight fail with
+`DisconnectedException` and the reconnect starts. A call that has waited five seconds with nothing
+arriving sends a ping at once rather than at the end of the idle interval, which is what turns a
+network that died silently into a failed call in about fifteen seconds instead of however long the
+browser takes to notice. `Keepalive.configureLiveness(seconds)` changes the ten seconds; zero turns
+the check off. Pings are never closer together than the server's once-a-second limit below, because
+every ping waits for the previous one to be answered or given up on. A deployment that raises
+`zeroz.ws.keepaliveMinIntervalMillis` above five seconds makes the server ignore some of those
+pings, and a slow call could then be mistaken for a dead connection: keep the two consistent, or turn
+the check off.
+
 **One connection is answered at most once per second** (`zeroz.ws.keepaliveMinIntervalMillis`).
 Pings that arrive faster than that are ignored and cost nothing. A working client is nowhere near
 the limit — it waits 25 seconds between pings. The answer is written on the connection's own read

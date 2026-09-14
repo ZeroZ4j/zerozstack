@@ -1,6 +1,6 @@
 # Limitations
 
-Every known gap in ZeroZ Stack 0.9.0, in one place. This page exists because surprises are
+Every known gap in ZeroZ Stack 0.10.0, in one place. This page exists because surprises are
 what make people abandon a framework, and because a coding agent that reads it will not generate
 code against features that do not exist.
 
@@ -23,13 +23,18 @@ Since 0.5.0 a dropped WebSocket recovers by itself: the channel reconnects with 
 banner shows the outage, shared signals re-subscribe, live objects are re-synced from the server,
 edits and writes made while offline are sent on reconnect, and RMI calls fail immediately with
 `DisconnectedException` instead of hanging. Since 0.6.1 an idle connection also sends a keepalive
-every 25 seconds, so a proxy in front of the application does not close it for silence.
+every 25 seconds, so a proxy in front of the application does not close it for silence. A connection
+that goes silent without closing is given up on when a ping gets no answer within ten seconds, and a
+call the server never answers fails at the request timeout with `RequestTimeoutException`.
 
 What automatic recovery deliberately does **not** cover:
 
 - **RMI calls are never replayed.** A call that failed to a drop is the application's to retry — the
   framework cannot know whether repeating it is safe. Catch `DisconnectedException`, or disable
-  controls while `WasmRmiClient.connectionState()` is not `CONNECTED`.
+  controls while `WasmRmiClient.connectionState()` is not `CONNECTED`. The same holds for a
+  navigation: its loaders are calls, so a page that failed to open is not opened again on reconnect.
+  `Router.retry()`, or the Retry button on the router's failure message (on by default), runs it
+  again.
 - **A server restart empties the handle registry.** Re-sync can only restore objects the server
   still knows. After a restart, live objects held by clients stay as they were and the application
   must re-fetch them the way it first obtained them; the server logs how many handles it could not

@@ -18,6 +18,7 @@
 package com.zeroz4j.example.routing.client;
 
 import com.zeroz4j.api.RmiSecurityContext;
+import com.zeroz4j.client.WasmRmiClient;
 import com.zeroz4j.client.Zeroz4jClient;
 import com.zeroz4j.client.router.Router;
 import org.teavm.jso.JSBody;
@@ -25,16 +26,39 @@ import org.teavm.jso.JSBody;
 /**
  * Starts the routing tour.
  *
- * <p>The whole navigation story is the four {@code Router} calls below — the route table itself is
+ * <p>The whole navigation story is the {@code Router} calls below — the route table itself is
  * generated from the {@code @Route} annotations at compile time, so nothing here enumerates views.</p>
+ *
+ * <p>What a person sees while a page loads and when it cannot be opened - the busy indicator and the
+ * failure message - is on by default, and needs no click listener, no wrapper around
+ * {@code navigate}, and nothing in any view; neither is switched on below.</p>
  */
 public class RoutingTourApp {
 
+    private static boolean started;
+
     public static void main(String[] args) {
+        // ?timeout=3000 on the page address makes an unanswered call fail after three seconds
+        // instead of thirty. The browser test uses it on /stalled; it is also the quickest way to
+        // see the failure message by hand.
+        int timeout = requestTimeoutFromAddress();
+        if (timeout > 0) {
+            WasmRmiClient.setRequestTimeout(timeout);
+        }
+
         Zeroz4jClient.connect(webSocketUrl(), () -> {
             // Only a real sign-in reaches this. A connection the server declined fires
             // onAuthenticationFailed instead, so the tour never starts half-authenticated.
+            //
+            // It also runs again after every reconnect, because every new connection signs in
+            // again. Starting the router a second time would load the current address again by
+            // itself - quietly repeating a page the person may have just seen fail - and would add
+            // the error listener once more on every reconnect. So it starts once.
             RmiSecurityContext.onAuthenticated(() -> {
+                if (started) {
+                    return;
+                }
+                started = true;
                 Router.notFoundRoute("/not-found");
                 Router.forbiddenRoute("/forbidden");
                 Router.onError((path, reason) ->
@@ -54,6 +78,11 @@ public class RoutingTourApp {
         + "return (l.protocol === 'https:' ? 'wss://' : 'ws://') + l.host + '/wasm-rmi'"
         + "     + '?user=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(password);")
     private static native String webSocketUrl();
+
+    @JSBody(script =
+        "var value = parseInt(new URLSearchParams(window.location.search).get('timeout'), 10);"
+        + "return isNaN(value) ? 0 : value;")
+    private static native int requestTimeoutFromAddress();
 
     @JSBody(params = { "message" }, script = "console.warn(message);")
     private static native void warn(String message);

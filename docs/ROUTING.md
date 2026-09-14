@@ -37,6 +37,12 @@ Start the router once, pointing at the element it owns:
 Zeroz4jClient.connect(wsUrl, () -> Router.start("app-root"));
 ```
 
+`connect`'s second argument runs once, on the first connection. `RmiSecurityContext.onAuthenticated`
+and `onResolved` do not: they run again after every reconnect, because every new connection signs in
+again. Starting the router from one of those renders the current address again on each reconnect and
+adds any listener registered alongside it once more, so guard it with a flag if that is where it
+lives — `zerozstack-examples/routing-tour` shows how.
+
 ## Paths
 
 Real paths through the history API — `/tasks/42`, not `#/tasks/42`. A segment beginning with `:` is a
@@ -146,6 +152,150 @@ In markup, add `data-route` to an anchor and the router takes it over:
 Only anchors carrying that attribute are intercepted — taking over every link would swallow links to
 other sites and to downloads. Modified clicks (new tab, new window) are always left to the browser.
 
+A link or `navigate` to the route already on the screen does nothing, and neither does one to the
+route already loading. The query string counts: `/projects?sort=name` from `/projects` is a
+navigation. The one exception is a route whose last navigation failed — asking for it again runs it
+again. `replace`, Back and Forward always run.
+
+## Showing that a page is loading
+
+An application gets both with no call at all. Opt out of either with:
+
+```java
+Router.showBusyIndicator(false);
+Router.showFailureMessage(false);
+```
+
+Turn one off when the application already renders its own - a busy indicator or a failure message
+built before this feature existed, say - so it is not shown twice. Neither needs a click listener, a
+popstate listener or a wrapper around `navigate` and `replace`: they follow every navigation the
+router runs, however it started.
+
+**The busy indicator** appears once a navigation has been running for 300 milliseconds, so a fast
+page shows nothing at all. It is three things at once: a 3-pixel bar sweeping along the top edge, a
+48-pixel spinner on a small card in the middle of the window, and a wait cursor over the whole page,
+which wins over the pointer a link or a button would show. The card is a `role="status"`,
+`aria-live="polite"` region, so a screen reader hears "Loading". Under `prefers-reduced-motion` the
+spinner and the bar pulse instead of moving. Nothing covers the page, and nothing takes a click.
+
+It hides the moment the navigation started last finishes or fails. **It has no timeout of its own.**
+It is never hidden on a timer while the work is still running; a navigation that cannot complete
+ends because its call really fails, and the indicator goes with it. See
+[When a page cannot be opened](#when-a-page-cannot-be-opened) for how long that takes.
+
+**Its look is yours to set** with CSS custom properties, set anywhere the elements inherit from —
+`:root`, `body`, or the element carrying a DaisyUI `data-theme`:
+
+| Property | Default | What it is |
+|---|---|---|
+| `--zeroz4j-busy-color` | `var(--color-primary)` | The bar, the spinner, the Retry button |
+| `--zeroz4j-busy-bar-height` | `3px` | The bar's thickness |
+| `--zeroz4j-busy-spinner-size` | `48px` | The spinner's diameter |
+| `--zeroz4j-busy-card-size` | `72px` | The card's width and height |
+| `--zeroz4j-busy-card-background` | the page's text color at 7% over `var(--color-base-100)` | The card |
+| `--zeroz4j-busy-card-border` | the page's text color at 14% | The card's edge |
+| `--zeroz4j-busy-card-radius` | `16px` | The card's corners |
+| `--zeroz4j-busy-offset-x`, `--zeroz4j-busy-offset-y` | `0px` | How far the card sits from the middle of the window |
+| `--zeroz4j-busy-z-index` | `9999` | What it is drawn above |
+
+Every default is a DaisyUI token with a plain color behind it, so it is right in a light theme and a
+dark one without a rule for either, and still draws in a page with no DaisyUI at all.
+
+The offset is for a layout with a side menu, where the middle of the window is not the middle of the
+content. With an 18rem menu on the left from 1024 pixels up:
+
+```css
+@media (min-width: 1024px) {
+    html:has(.side-menu) { --zeroz4j-busy-offset-x: 9rem; }
+}
+```
+
+For anything the properties do not reach, the elements are a contract: `#zeroz4j-busy-bar`,
+`#zeroz4j-busy-spinner` (holding `.zeroz4j-busy-ring` and the visually hidden `.zeroz4j-busy-label`),
+and the class `zeroz4j-busy` on `<html>`, which is present while the indicator shows and only then.
+The router's stylesheet goes in first in `<head>`, so a stylesheet of the application's own wins
+over it at equal specificity.
+
+## When a page cannot be opened
+
+A navigation whose loader throws leaves the page as it was — replacing a working view with a blank
+one because a fetch failed loses whatever the user was doing. The address bar keeps the address
+that failed, so reloading the page tries it again.
+
+**The failure message** (on by default; `Router.showFailureMessage(false)` opts out) is a short box at the bottom of the
+window, announced to a screen reader as an alert, with a **Retry** button and a **Dismiss** button.
+Both are real buttons, first in the page's Tab order, pressed with Enter or Space. What it says
+depends on why the navigation failed:
+
+| Why | It says | Retry |
+|---|---|---|
+| The connection dropped, went silent, or the server did not answer in time | We could not open this page. Check your connection and try again. | yes |
+| A loader's call failed any other way — the server refused it, or it threw | We could not open this page. Something went wrong while loading it. | yes |
+| No route matches, and no not-found route is set | There is no page at this address. | no |
+| A `@RequiresRole` refuses, and no forbidden route is set | You do not have access to this page. | no |
+
+It goes away when the next navigation starts, Retry's included, and when Dismiss is pressed. Only the
+navigation started last can show it: a slow page overtaken by a click elsewhere never puts its
+failure over the page that was asked for. The words come from the framework's own catalog, so a
+deployment offering German gets them in German. The elements are `#zeroz4j-navigation-failure`, holding
+`.zeroz4j-navigation-failure-text`, `.zeroz4j-navigation-failure-note`,
+`.zeroz4j-navigation-failure-retry` and `.zeroz4j-navigation-failure-dismiss`. Its look is set with
+`--zeroz4j-failure-background`, `--zeroz4j-failure-color`, `--zeroz4j-failure-accent`,
+`--zeroz4j-failure-radius`, `--zeroz4j-failure-bottom` (default `24px`) and
+`--zeroz4j-failure-offset-x`, which defaults to the busy indicator's offset.
+
+**What reconnecting does, and does not do.** The framework reconnects a dropped socket by itself.
+It does **not** run the failed navigation again by itself: a navigation is loader calls, and RMI
+calls are never replayed, because the framework cannot know whether repeating one is safe. While
+the connection is still down the message adds "Reconnecting. Retry will work once the connection is
+back." and Retry does nothing; once the connection is back that line goes and Retry runs the
+navigation again. `Router.retry()` does the same from code.
+
+**How long a lost connection takes to show.** A socket the browser sees closing fails every call at
+once. A network that goes silent without closing anything is found by the keepalive: a call that has
+waited five seconds with nothing arriving from the server sends a ping, and a ping with no answer
+within ten seconds closes the connection, so the page fails about fifteen seconds after it was
+asked for. The server answers pings ahead of everything else on the connection, so a slow call on a
+live connection is never mistaken for a dead one. A call the server simply never answers fails at
+the request timeout, 30 seconds by default, with a `RequestTimeoutException`. Change those with
+`Keepalive.configureLiveness(seconds)` and `WasmRmiClient.setRequestTimeout(millis)`.
+
+## Navigation events
+
+The indicator and the message are built on a public listener, and an application drawing its own
+uses the same one:
+
+```java
+Disposable events = Router.addLifecycleListener(new Router.LifecycleListener() {
+    @Override public void onNavigationStarted(Navigation navigation) { spinner.show(); }
+    @Override public void onNavigationFinished(Navigation navigation, RouteParams params) { spinner.hide(); }
+    @Override public void onNavigationFailed(Navigation navigation, Throwable reason) { spinner.hide(); }
+});
+```
+
+What is promised:
+
+- **Every way in raises "started"**: a `data-route` link, `navigate`, `replace`, Back and Forward,
+  the first render in `start`, a redirect to the not-found or forbidden route, and `retry`.
+  `Navigation.trigger()` says which.
+- **The navigation started last always ends in exactly one "finished" or "failed".** So a listener
+  that turns something on at "started" and off at the other two is never left on.
+- **An older navigation still loading when a newer one starts is superseded.** It raises nothing
+  more: not "finished", not "failed", even when its loader comes back afterwards. Its view is not
+  mounted and `currentPath()` does not change. Every navigation carries a sequence number,
+  `Navigation.id()`, and the newer one names the one it overtook in `supersededId()`. A superseded
+  navigation also stops before its remaining loaders, so a page nobody will see costs no more round
+  trips than it had already started.
+- **A redirect is a navigation of its own.** An address nothing matches, with a not-found route set,
+  raises "started" for the address, then "started" for the not-found route — which supersedes the
+  first and names it in `redirectedFrom()` — then "finished" for the not-found route.
+- **A link or `navigate` to what is already on screen, or already loading, raises nothing at all**,
+  unless the last navigation to it failed.
+- **Events arrive one at a time, in order.** A listener that navigates from inside a callback does
+  not interrupt the event being delivered: every listener hears the current event first.
+
+`Router.latestNavigation()` is the navigation started last, whatever became of it.
+
 ## Deployed somewhere other than the site root
 
 A WAR is usually deployed under a context path — `/coachapp`, `/clientportal` — and then the browser
@@ -194,12 +344,16 @@ counts. Skipping the annotation only means the user reaches a view whose calls t
 ```java
 Router.notFoundRoute("/not-found");
 Router.forbiddenRoute("/login");
-Router.onError((path, reason) -> toast.show("Could not open " + path));
+Disposable errors = Router.addErrorListener((path, reason) -> toast.show("Could not open " + path));
 ```
 
-A navigation whose loader throws leaves the page as it was and reports through the error handler —
-replacing a working view with a blank one because a fetch failed loses whatever the user was doing.
-Without a handler the failure is logged to the console rather than vanishing.
+A navigation that fails reports to every error listener, in the order they were added.
+`Router.onError(handler)` is the same call under its older name; up to and including 0.9.0 it
+replaced the previous handler, and it now adds. With no error listener at all, the failure is
+written to the console rather than vanishing. The reason is a `RouteNotFoundException` for an
+address nothing matches and a `RouteForbiddenException` for a refused `@RequiresRole`, when no
+fallback route is set; otherwise it is whatever the loader threw — `DisconnectedException` or
+`RequestTimeoutException` when the connection was the problem.
 
 ## Rules the compiler enforces
 
@@ -222,3 +376,6 @@ The processor refuses, at compile time:
 * **The whole view is rebuilt on every navigation**, including a layout that did not change. Layout
   loaders therefore re-run when navigating between two children of the same layout.
 * **No lazy loading.** Everything is in one bundle; a route does not defer any code.
+* **A superseded navigation's call in flight is not canceled.** The server still runs it; only its
+  answer is ignored. Overtaking a navigation stops it before its next loader, not during the current
+  one.

@@ -17,11 +17,14 @@
  */
 package com.zeroz4j.client.router;
 
+import com.zeroz4j.client.AppBase;
 import com.zeroz4j.ui.component.Component;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
 import org.teavm.jso.dom.html.HTMLElement;
+
+import java.util.function.Consumer;
 
 /**
  * The browser APIs the {@link Router} drives: the history API, the address bar, and the container
@@ -29,9 +32,72 @@ import org.teavm.jso.dom.html.HTMLElement;
  *
  * <p>Framework-internal.</p>
  */
-final class RouterBrowser {
+final class RouterBrowser implements RouterHost {
 
-    private RouterBrowser() {}
+    RouterBrowser() {}
+
+    @Override
+    public String currentLocation() {
+        return currentPath();
+    }
+
+    @Override
+    public void pushState(String location) {
+        pushLocation(location);
+    }
+
+    @Override
+    public void replaceState(String location) {
+        replaceLocation(location);
+    }
+
+    @Override
+    public String toRoute(String location) {
+        return AppBase.route(location);
+    }
+
+    @Override
+    public String toLocation(String route) {
+        return AppBase.location(route);
+    }
+
+    @Override
+    public void onPopState(Consumer<String> listener) {
+        listenForPopState(listener::accept);
+    }
+
+    @Override
+    public void interceptRouteLinks(Consumer<String> listener) {
+        listenForRouteLinks(listener::accept);
+    }
+
+    @Override
+    public void mount(String containerId, Component view) {
+        mountView(containerId, view);
+    }
+
+    @Override
+    public void warn(String message) {
+        consoleWarn(message);
+    }
+
+    /**
+     * Runs a navigation on a green thread.
+     *
+     * <p>Navigation is triggered from browser callbacks - a click, a popstate, the frame that
+     * reports authentication - and TeaVM cannot suspend a coroutine on a stack that started in
+     * native JavaScript. A loader making an RMI call is exactly such a suspension, so calling it
+     * directly from those callbacks fails with "suspension point reached from non-threading
+     * context" and the navigation dies before rendering anything.</p>
+     *
+     * <p>Starting a thread re-enters TeaVM's own scheduler, which is what makes the loaders legal.
+     * It is a green thread on the browser's event loop, not parallelism - nothing here runs at the
+     * same time as anything else.</p>
+     */
+    @Override
+    public void runNavigation(Runnable navigation) {
+        new Thread(navigation).start();
+    }
 
     /** Receives a path. */
     @JSFunctor
@@ -41,22 +107,22 @@ final class RouterBrowser {
 
     /** @return the current path including its query string */
     @JSBody(params = {}, script = "return window.location.pathname + window.location.search;")
-    static native String currentPath();
+    private static native String currentPath();
 
     /** Adds a history entry, so Back returns to where the user came from. */
     @JSBody(params = { "path" }, script = "window.history.pushState({}, '', path);")
-    static native void pushState(String path);
+    private static native void pushLocation(String path);
 
     /** Replaces the current history entry, for a redirect that should not be re-enterable. */
     @JSBody(params = { "path" }, script = "window.history.replaceState({}, '', path);")
-    static native void replaceState(String path);
+    private static native void replaceLocation(String path);
 
     /** Fires when the user presses Back or Forward. */
     @JSBody(params = { "callback" }, script =
         "window.addEventListener('popstate', function() {"
         + "  callback(window.location.pathname + window.location.search);"
         + "});")
-    static native void onPopState(PathCallback callback);
+    private static native void listenForPopState(PathCallback callback);
 
     /**
      * Routes clicks on in-application links without a page reload.
@@ -79,7 +145,7 @@ final class RouterBrowser {
         + "  event.preventDefault();"
         + "  callback(href);"
         + "});")
-    static native void interceptRouteLinks(PathCallback callback);
+    private static native void listenForRouteLinks(PathCallback callback);
 
     /**
      * Replaces the container's contents with the rendered view, shutting the old one down.
@@ -88,10 +154,10 @@ final class RouterBrowser {
      * timers, its effects, its subscriptions - so {@code Component.replaceContents} does it
      * instead, which runs {@code onDetach} on the old view and everything inside it.</p>
      */
-    static void mount(String containerId, Component view) {
+    private static void mountView(String containerId, Component view) {
         HTMLElement container = elementById(containerId);
         if (container == null) {
-            warn("[zeroz4j] Router cannot mount: no element with id '" + containerId + "'.");
+            consoleWarn("[zeroz4j] Router cannot mount: no element with id '" + containerId + "'.");
             return;
         }
         Component.replaceContents(container, view);
@@ -102,5 +168,5 @@ final class RouterBrowser {
 
     /** Writes a diagnostic line to the browser console. */
     @JSBody(params = { "message" }, script = "console.warn(message);")
-    static native void warn(String message);
+    static native void consoleWarn(String message);
 }

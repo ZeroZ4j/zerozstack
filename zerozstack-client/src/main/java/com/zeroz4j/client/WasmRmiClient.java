@@ -124,6 +124,9 @@ public class WasmRmiClient {
         // seconds, Cloudflare at 100 - and a browser cannot send a WebSocket ping frame itself.
         // Only pings a connection that has gone quiet; see Keepalive.
         Keepalive.start();
+        // The call deadline is checked by a timer of its own, so a call on a connection that has
+        // gone completely quiet still fails at its deadline instead of waiting for traffic.
+        startRequestTimer();
         if (channel instanceof WasmRmiClientChannel) {
             ((WasmRmiClientChannel) channel).addStateListener(WasmRmiClient::onStateChange);
         }
@@ -192,7 +195,12 @@ public class WasmRmiClient {
      * knew.
      */
     private static void failAllPending(String reason) {
-        for (Integer id : pendingRequests.keySet()) {
+        // Over a copy of the ids. The browser's ConcurrentHashMap is TeaVM's, and its iterator
+        // throws ConcurrentModificationException when the map changes underneath it - which removing
+        // each request as it is failed does, as soon as two calls are waiting. The exception escaped
+        // into whichever browser callback reported the drop, and every call after the first stayed
+        // pending until its timeout.
+        for (Integer id : new ArrayList<>(pendingRequests.keySet())) {
             PendingRequest pending = pendingRequests.remove(id);
             if (pending != null) {
                 pending.callback.error(new com.zeroz4j.api.DisconnectedException(
@@ -301,8 +309,12 @@ public class WasmRmiClient {
 
     /**
      * Configures how long an unanswered RMI request may stay pending before its suspended
-     * coroutine is resumed with an error. Defaults to 30 seconds; pass 0 or a negative
-     * value to disable timeouts.
+     * coroutine is resumed with a {@link com.zeroz4j.api.RequestTimeoutException}. Defaults to 30
+     * seconds; pass 0 or a negative value to disable timeouts.
+     *
+     * <p>The deadline is checked once a second by a timer of its own, and a call is failed on the
+     * second check that finds it overdue, so it fails between one and two seconds after its
+     * deadline whether or not anything else is happening on the connection.</p>
      *
      * @param timeoutMs maximum pending age in milliseconds
      */
@@ -310,20 +322,98 @@ public class WasmRmiClient {
         requestTimeoutMs = timeoutMs;
     }
 
+    /** How often the request timer looks for calls past their deadline. */
+    static final int REQUEST_TIMER_MILLIS = 1_000;
+
+    private static boolean requestTimerStarted;
+
+    /**
+     * Starts the timer that fails overdue calls. Idempotent.
+     *
+     * <p>Before this timer existed, the deadline was only checked when another call was made or
+     * another frame arrived. On a connection that had gone completely silent neither happens, so a
+     * call waited for as long as the browser took to notice the network was gone - minutes - with
+     * its screen showing nothing but a loading indicator.</p>
+     *
+     * <p>Outside a browser there is no {@code setInterval}; the framework's own tests install the
+     * client on the JVM, so the failure to schedule is caught rather than guarded against, exactly
+     * as {@link Keepalive} does.</p>
+     */
+    static void startRequestTimer() {
+        if (requestTimerStarted) {
+            return;
+        }
+        requestTimerStarted = true;
+        try {
+            Keepalive.every(REQUEST_TIMER_MILLIS, () -> timeoutTick(System.currentTimeMillis()));
+        } catch (Throwable outsideABrowser) {
+            requestTimerStarted = false;
+        }
+    }
+
+    /**
+     * One look at the pending calls, from the timer.
+     *
+     * <p>A call is failed on the second look that finds it overdue, not the first. A tab the browser
+     * froze in the background, or a laptop waking up, runs its timers before it delivers the frames
+     * that arrived while it slept; failing on the first look would time out calls whose answers are
+     * sitting in the queue right behind the timer. One tick later they have been delivered.</p>
+     *
+     * @param nowMillis the clock, passed in so a test can move it
+     */
+    static void timeoutTick(long nowMillis) {
+        if (requestTimeoutMs <= 0 || pendingRequests.isEmpty()) {
+            return;
+        }
+        // Over a copy, for the reason given in failAllPending.
+        for (Map.Entry<Integer, PendingRequest> entry : new ArrayList<>(pendingRequests.entrySet())) {
+            PendingRequest request = entry.getValue();
+            if (nowMillis - request.createdAtMs < requestTimeoutMs) {
+                continue;
+            }
+            if (!request.seenOverdue) {
+                request.seenOverdue = true;
+                continue;
+            }
+            failTimedOut(entry.getKey());
+        }
+    }
+
     static void sweepStaleRequests() {
         if (requestTimeoutMs <= 0 || pendingRequests.isEmpty()) {
             return;
         }
         long now = System.currentTimeMillis();
-        for (Map.Entry<Integer, PendingRequest> entry : pendingRequests.entrySet()) {
+        // Over a copy, for the reason given in failAllPending.
+        for (Map.Entry<Integer, PendingRequest> entry : new ArrayList<>(pendingRequests.entrySet())) {
             if (now - entry.getValue().createdAtMs > requestTimeoutMs) {
-                PendingRequest stale = pendingRequests.remove(entry.getKey());
-                if (stale != null) {
-                    stale.callback.error(new RuntimeException(
-                        "RMI request " + entry.getKey() + " timed out after " + requestTimeoutMs + " ms"));
-                }
+                failTimedOut(entry.getKey());
             }
         }
+    }
+
+    private static void failTimedOut(Integer id) {
+        PendingRequest stale = pendingRequests.remove(id);
+        if (stale != null) {
+            stale.callback.error(new com.zeroz4j.api.RequestTimeoutException(
+                    "RMI call " + stale.description + " (request " + id + ") timed out: no answer "
+                    + "within " + requestTimeoutMs + " ms"));
+        }
+    }
+
+    /**
+     * When the oldest call still waiting for an answer was sent.
+     *
+     * @return the send time in milliseconds, or -1 when nothing is waiting
+     */
+    static long oldestPendingSince() {
+        long oldest = -1;
+        for (PendingRequest request : pendingRequests.values()) {
+            if (oldest < 0 || request.createdAtMs < oldest) {
+                oldest = request.createdAtMs;
+            }
+        }
+        return oldest;
     }
 
     static void executeCall(String interfaceName, String methodName, Object[] args,
@@ -350,7 +440,8 @@ public class WasmRmiClient {
         LiveMutations.flushBeforeOutboundCall();
 
         int msgId = messageIdGenerator.incrementAndGet() & 0x7FFFFFFF;
-        pendingRequests.put(msgId, new PendingRequest(callback, System.currentTimeMillis()));
+        pendingRequests.put(msgId, new PendingRequest(callback, System.currentTimeMillis(),
+                interfaceName + "#" + methodName));
 
         try {
             GrowableBuffer buffer = new GrowableBuffer();
@@ -380,7 +471,7 @@ public class WasmRmiClient {
     static void routeIncomingMessage(byte[] rawPayload) {
         // Anything arriving postpones the next keepalive: a connection carrying real traffic needs
         // no heartbeat, which is what keeps this from being a poll.
-        Keepalive.noteActivity();
+        Keepalive.noteReceived();
         sweepStaleRequests();
         // Inbound deserialization populates live instances through their setters;
         // suppress mutation tracking so applied state is never echoed back as a write.
@@ -608,9 +699,16 @@ public class WasmRmiClient {
     static class PendingRequest {
         final AsyncCallback<Object> callback;
         final long createdAtMs;
+        final String description;
+        /** Set by the first timer look that finds this call overdue; see {@link #timeoutTick}. */
+        boolean seenOverdue;
         PendingRequest(AsyncCallback<Object> callback, long createdAtMs) {
+            this(callback, createdAtMs, "(unnamed)");
+        }
+        PendingRequest(AsyncCallback<Object> callback, long createdAtMs, String description) {
             this.callback = callback;
             this.createdAtMs = createdAtMs;
+            this.description = description;
         }
     }
 }

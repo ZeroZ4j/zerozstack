@@ -11,6 +11,16 @@
     <artifactId>routing-tour-client</artifactId>
     <packaging>jar</packaging>
 
+    <!-- Unoptimized and unminified by default, like every example here. -Pproduction below builds
+         the shape a generated application ships, which is the only way to run the router's busy
+         indicator and failure message the way users receive them: their embedded scripts are
+         exactly the kind of code a minified build has broken before (the connection bar, twice).
+         tools/navigation-proof runs its browser test against both. -->
+    <properties>
+        <teavm.optimizationLevel>SIMPLE</teavm.optimizationLevel>
+        <teavm.minifying>false</teavm.minifying>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.teavm</groupId>
@@ -68,8 +78,8 @@
                             <targetDirectory>${project.build.directory}/js</targetDirectory>
                             <mainClass>com.zeroz4j.example.routing.client.RoutingTourApp</mainClass>
                             <targetType>JAVASCRIPT</targetType>
-                            <minifying>false</minifying>
-                            <optimizationLevel>SIMPLE</optimizationLevel>
+                            <minifying>${teavm.minifying}</minifying>
+                            <optimizationLevel>${teavm.optimizationLevel}</optimizationLevel>
                             <debugInformationGenerated>true</debugInformationGenerated>
                             <sourceMapsGenerated>true</sourceMapsGenerated>
                             <strict>false</strict>
@@ -88,4 +98,14 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>production</id>
+            <properties>
+                <teavm.optimizationLevel>ADVANCED</teavm.optimizationLevel>
+                <teavm.minifying>true</teavm.minifying>
+            </properties>
+        </profile>
+    </profiles>
 </project>
