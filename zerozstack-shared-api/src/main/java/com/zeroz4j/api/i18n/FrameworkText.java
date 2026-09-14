@@ -88,7 +88,15 @@ public final class FrameworkText {
             FrameworkKeys.LIVE_REQUIRES_ROLE,
             FrameworkKeys.LIVE_NESTED_NOT_WRITABLE,
             FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE,
-            FrameworkKeys.UI_LANGUAGE
+            FrameworkKeys.UI_LANGUAGE,
+            FrameworkKeys.UI_LOADING,
+            FrameworkKeys.UI_NAVIGATION_CONNECTION_FAILED,
+            FrameworkKeys.UI_NAVIGATION_FAILED,
+            FrameworkKeys.UI_NAVIGATION_NOT_FOUND,
+            FrameworkKeys.UI_NAVIGATION_FORBIDDEN,
+            FrameworkKeys.UI_NAVIGATION_WAITING_FOR_CONNECTION,
+            FrameworkKeys.UI_RETRY,
+            FrameworkKeys.UI_DISMISS
         };
     }
 
@@ -134,6 +142,22 @@ public final class FrameworkText {
                         + " Nothing was changed.";
             case FrameworkKeys.UI_LANGUAGE:
                 return "Language";
+            case FrameworkKeys.UI_LOADING:
+                return "Loading";
+            case FrameworkKeys.UI_NAVIGATION_CONNECTION_FAILED:
+                return "We could not open this page. Check your connection and try again.";
+            case FrameworkKeys.UI_NAVIGATION_FAILED:
+                return "We could not open this page. Something went wrong while loading it.";
+            case FrameworkKeys.UI_NAVIGATION_NOT_FOUND:
+                return "There is no page at this address.";
+            case FrameworkKeys.UI_NAVIGATION_FORBIDDEN:
+                return "You do not have access to this page.";
+            case FrameworkKeys.UI_NAVIGATION_WAITING_FOR_CONNECTION:
+                return "Reconnecting. Retry will work once the connection is back.";
+            case FrameworkKeys.UI_RETRY:
+                return "Retry";
+            case FrameworkKeys.UI_DISMISS:
+                return "Dismiss";
             default:
                 return null;
         }
@@ -264,5 +288,62 @@ public final class FrameworkText {
      */
     public static Message uiLanguage() {
         return new Message(CATALOG, FrameworkKeys.UI_LANGUAGE);
+    }
+
+    /**
+     * @return what the router's busy indicator tells a screen reader
+     */
+    public static Message uiLoading() {
+        return new Message(CATALOG, FrameworkKeys.UI_LOADING);
+    }
+
+    /**
+     * @return the router's message for a page that failed because the connection dropped or the
+     *         server did not answer in time
+     */
+    public static Message uiNavigationConnectionFailed() {
+        return new Message(CATALOG, FrameworkKeys.UI_NAVIGATION_CONNECTION_FAILED);
+    }
+
+    /**
+     * @return the router's message for a page that failed for any other reason
+     */
+    public static Message uiNavigationFailed() {
+        return new Message(CATALOG, FrameworkKeys.UI_NAVIGATION_FAILED);
+    }
+
+    /**
+     * @return the router's message for an address no route answers to
+     */
+    public static Message uiNavigationNotFound() {
+        return new Message(CATALOG, FrameworkKeys.UI_NAVIGATION_NOT_FOUND);
+    }
+
+    /**
+     * @return the router's message for a page the person's roles do not allow
+     */
+    public static Message uiNavigationForbidden() {
+        return new Message(CATALOG, FrameworkKeys.UI_NAVIGATION_FORBIDDEN);
+    }
+
+    /**
+     * @return the line under a failed page while the connection is still down
+     */
+    public static Message uiNavigationWaitingForConnection() {
+        return new Message(CATALOG, FrameworkKeys.UI_NAVIGATION_WAITING_FOR_CONNECTION);
+    }
+
+    /**
+     * @return the words on a button that runs a failed action again
+     */
+    public static Message uiRetry() {
+        return new Message(CATALOG, FrameworkKeys.UI_RETRY);
+    }
+
+    /**
+     * @return the words on a button that closes a message
+     */
+    public static Message uiDismiss() {
+        return new Message(CATALOG, FrameworkKeys.UI_DISMISS);
     }
 }

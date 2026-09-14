@@ -52,4 +52,20 @@ public interface WasmWebSocketChannel {
     default boolean isOpen() {
         return true;
     }
+
+    /**
+     * Gives up on a connection that has stopped answering, and starts recovering from it.
+     *
+     * <p>Called by the keepalive when a ping got no answer in time. A network that goes silent -
+     * a laptop leaving a Wi-Fi network, a proxy that stopped forwarding - often never tells the
+     * browser, so the socket still reads as open for minutes while every call on it waits. After
+     * this, the channel behaves exactly as if the socket had dropped: calls in flight fail with a
+     * {@link com.zeroz4j.api.DisconnectedException} at once, and reconnecting starts.</p>
+     *
+     * <p>Does nothing by default, for transports with no notion of reconnecting.</p>
+     *
+     * @param reason why, for the console line the channel writes
+     */
+    default void dropUnresponsive(String reason) {
+    }
 }

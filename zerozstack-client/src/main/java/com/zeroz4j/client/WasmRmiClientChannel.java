@@ -252,9 +252,20 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
         this.urlProvider = provider;
     }
 
+    /**
+     * Which socket is the current one. Every callback of a socket checks it and goes quiet once a
+     * newer socket has replaced its own, so a socket given up on by {@link #dropUnresponsive} cannot
+     * schedule a second reconnect, or deliver a late frame, when its close finally arrives.
+     */
+    private int socketGeneration;
+
     private void connect() {
+        final int generation = ++socketGeneration;
         this.ws = new WasmWebSocket(urlProvider != null ? urlProvider.get() : url,
             data -> {
+                if (generation != socketGeneration) {
+                    return;
+                }
                 int len = data.getLength();
                 byte[] bytes = new byte[len];
                 for (int i = 0; i < len; i++) {
@@ -265,6 +276,9 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
                 }
             },
             () -> {
+                if (generation != socketGeneration) {
+                    return;
+                }
                 attempt = 0;
                 setState(State.CONNECTED);
                 // onOpen is the application's bootstrap: it builds the UI. It must run once, on the
@@ -279,10 +293,16 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
                 }
             },
             errorMsg -> {
+                if (generation != socketGeneration) {
+                    return;
+                }
                 System.err.println("[zeroz4j] WebSocket error: " + errorMsg);
                 if (connectionListener != null) connectionListener.onError(errorMsg);
             },
             (code, reason) -> {
+                if (generation != socketGeneration) {
+                    return;
+                }
                 System.err.println("[zeroz4j] WebSocket closed: code=" + code + " reason=" + reason);
                 if (connectionListener != null) connectionListener.onClose(code, reason);
                 scheduleReconnect();
@@ -305,6 +325,35 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
         closedByApplication = false;
         setState(State.RECONNECTING);
         connect();
+    }
+
+    /**
+     * Treats a socket that has stopped answering as dropped.
+     *
+     * <p>The old socket is disowned first - every callback it still has checks which socket is
+     * current and ignores itself - then closed with code 4000, and then the ordinary drop path
+     * runs: state goes to {@link State#RECONNECTING}, which fails every call in flight with a
+     * {@code DisconnectedException}, and a reconnect is scheduled with the usual backoff. Waiting
+     * for the old socket's own close event instead is what this exists to avoid: on a network that
+     * went silent the browser may not report it for minutes.</p>
+     *
+     * <p>Does nothing unless the channel is {@link State#CONNECTED}: a socket that is already
+     * reconnecting, or was closed by the application, has nothing to give up on.</p>
+     *
+     * @param reason why, for the console
+     */
+    @Override
+    public void dropUnresponsive(String reason) {
+        if (state != State.CONNECTED || closedByApplication) {
+            return;
+        }
+        System.err.println("[zeroz4j] Giving up on the connection: " + reason);
+        WasmWebSocket unresponsive = ws;
+        socketGeneration++;
+        if (unresponsive != null) {
+            unresponsive.closeUnresponsive();
+        }
+        scheduleReconnect();
     }
 
     /**

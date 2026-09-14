@@ -17,10 +17,11 @@
  */
 package com.zeroz4j.client.router;
 
+import com.zeroz4j.api.Disposable;
 import com.zeroz4j.api.RmiSecurityContext;
-import com.zeroz4j.client.AppBase;
 import com.zeroz4j.ui.component.Component;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,30 @@ import java.util.Map;
  *
  * <p>Nothing reaches the screen until every loader has returned, so there is no intermediate state
  * to design around — and no view that mounts, discovers it needs data, and re-renders.</p>
+ *
+ * <h2>Showing that something is happening</h2>
+ * <pre>{@code
+ * Router.showBusyIndicator(true);   // a bar, a spinner and a wait cursor once a page takes 300 ms
+ * Router.showFailureMessage(true);  // "We could not open this page..." with a Retry button
+ * }</pre>
+ *
+ * <p>Both are off unless switched on, and both work with every way a navigation can start - links,
+ * {@code navigate}, {@code replace}, Back and Forward - with nothing else to wire. An application
+ * drawing its own uses {@link #addLifecycleListener(LifecycleListener)}, which is what those two
+ * are built on.</p>
+ *
+ * <h2>Navigations that overlap</h2>
+ * <p>Every navigation carries a sequence number. Start a second one while the first is still
+ * loading and the first is abandoned: whatever it produces later - a view or a failure - is thrown
+ * away. The screen and the address bar always end up at the navigation started last. See
+ * {@link Navigation}.</p>
+ *
+ * <h2>When a navigation fails</h2>
+ * <p>The page is left as it was, and the address bar keeps the address that failed, so reloading
+ * the page tries it again. The failure goes to every error listener and every lifecycle listener.
+ * When the cause was the connection, the framework reconnects the socket by itself, but it never
+ * runs the navigation again by itself - a navigation is loader calls, and RMI calls are never
+ * replayed. {@link #retry()} runs it again.</p>
  *
  * <h2>Deployed under a context path</h2>
  * <p>Route paths are written the way {@code @Route} declares them, and stay that way whether the
@@ -90,12 +115,79 @@ public final class Router {
         void onError(String path, Throwable reason);
     }
 
+    /**
+     * Told when a navigation starts, and when it finishes or fails.
+     *
+     * <h2>What is promised</h2>
+     * <ul>
+     *   <li>Every way a navigation can begin raises {@code onNavigationStarted}: a
+     *       {@code data-route} link, {@link #navigate}, {@link #replace}, Back and Forward, the
+     *       first render in {@link #start}, a redirect to the not-found or forbidden route, and
+     *       {@link #retry()}.</li>
+     *   <li>The navigation started last always ends in exactly one {@code onNavigationFinished} or
+     *       {@code onNavigationFailed}. An older one that was still loading when a newer one started
+     *       ends in neither: it is superseded, and its result is thrown away. The newer navigation
+     *       names it in {@link Navigation#supersededId()}.</li>
+     *   <li>A redirect supersedes the navigation that caused it and then ends like any other; see
+     *       {@link Navigation#redirectedFrom()}.</li>
+     *   <li>A link or {@link #navigate} to the route already on the screen, or already loading,
+     *       starts nothing and raises nothing - unless the last navigation to it failed, in which
+     *       case it runs again. {@link #replace}, Back and Forward always start a navigation.</li>
+     *   <li>Events arrive in the order they happened, one at a time. A listener that starts a
+     *       navigation from inside a callback does not interrupt the event being delivered: every
+     *       listener hears about it first, then about the new navigation.</li>
+     * </ul>
+     *
+     * <p>So a loading indicator is two lines: on at started, off at finished or failed.</p>
+     */
+    public interface LifecycleListener {
+        /**
+         * A navigation has begun. Nothing has been loaded yet.
+         *
+         * @param navigation the navigation
+         */
+        default void onNavigationStarted(Navigation navigation) {
+        }
+
+        /**
+         * The navigation started last has its view on the screen.
+         *
+         * @param navigation the navigation
+         * @param params     the parameters of the route now displayed
+         */
+        default void onNavigationFinished(Navigation navigation, RouteParams params) {
+        }
+
+        /**
+         * The navigation started last could not be completed. The page was left as it was.
+         *
+         * @param navigation the navigation
+         * @param reason     what went wrong; also {@link Navigation#failure()}
+         */
+        default void onNavigationFailed(Navigation navigation, Throwable reason) {
+        }
+    }
+
+    static RouterHost host = new RouterBrowser();
+
     private static String containerId;
-    private static ErrorHandler errorHandler;
+    private static final List<ErrorHandler> errorHandlers = new ArrayList<>();
     private static final List<NavigationListener> listeners = new ArrayList<>();
+    private static final List<LifecycleListener> lifecycleListeners = new ArrayList<>();
     private static String notFoundPath;
     private static String forbiddenPath;
     private static String currentPath;
+    private static boolean listening;
+
+    /** The sequence number the next navigation takes. */
+    private static long sequence;
+
+    /** The navigation started last, whatever became of it; null before the first. */
+    private static Navigation latest;
+
+    /** Events waiting to be delivered, so one is never delivered from inside another. */
+    private static final ArrayDeque<Runnable> events = new ArrayDeque<>();
+    private static boolean delivering;
 
     private Router() {}
 
@@ -103,57 +195,103 @@ public final class Router {
      * Loads the route table, renders whatever the current URL points at, and starts listening for
      * navigation.
      *
+     * <p>Calling it again renders the current URL into the given container again; it does not add a
+     * second set of click and Back/Forward listeners.</p>
+     *
      * @param containerElementId id of the element the router owns; its contents are replaced on
      *                           every navigation
      */
     public static void start(String containerElementId) {
         containerId = containerElementId;
         RouteRegistry.init();
-        // Route paths are what the route table is written in and what @Route declares; browser
-        // locations carry the deployment's context path in front of them. Every crossing between the
-        // two goes through AppBase, so a route table never has to know where it was deployed.
-        RouterBrowser.onPopState(path -> renderInCoroutine(AppBase.route(path)));
-        RouterBrowser.interceptRouteLinks(Router::navigate);
-        renderInCoroutine(AppBase.route(RouterBrowser.currentPath()));
+        if (!listening) {
+            listening = true;
+            // Route paths are what the route table is written in and what @Route declares; browser
+            // locations carry the deployment's context path in front of them. Every crossing between
+            // the two goes through the host, so a route table never has to know where it was
+            // deployed.
+            host.onPopState(location -> begin(host.toRoute(location), Navigation.Trigger.HISTORY));
+            host.interceptRouteLinks(href -> navigate(href, Navigation.Trigger.LINK));
+        }
+        begin(host.toRoute(host.currentLocation()), Navigation.Trigger.INITIAL);
     }
 
     /**
      * Navigates to a path, adding a history entry so Back returns where the user came from.
      *
+     * <p>Does nothing, and raises no event, when the path is the route already on the screen or the
+     * route already loading. The comparison includes the query string, so {@code /projects?sort=name}
+     * from {@code /projects} is a navigation.</p>
+     *
      * @param path the path, e.g. {@code "/tasks/42"}
      */
     public static void navigate(String path) {
+        navigate(path, Navigation.Trigger.NAVIGATE);
+    }
+
+    private static void navigate(String path, Navigation.Trigger trigger) {
         // Either form is accepted: a route path as @Route declares it, or a full location as an
         // anchor written with AppBase.location carries it. Anchors are the reason -- an href has to
         // be a real URL for middle-click and "open in new tab" to land in the right application.
         if (path == null) {
             return;
         }
-        String route = AppBase.route(path);
-        if (route.equals(currentPath)) {
+        String route = host.toRoute(path);
+        // Compared with the navigation started last, not with the view on screen. Comparing with
+        // the screen alone is how a pending navigation used to win against a later click: with
+        // /tasks still loading, a click on the link for the screen still showing matched the
+        // screen, did nothing, and /tasks then arrived on top of what the person had just asked
+        // for. A failed navigation is the exception, because asking again for a page that failed
+        // is asking to try it again.
+        if (latest != null && route.equals(latest.path())
+                && latest.outcome() != Navigation.Outcome.FAILED) {
             return;
         }
-        RouterBrowser.pushState(AppBase.location(route));
-        renderInCoroutine(route);
+        host.pushState(host.toLocation(route));
+        begin(route, trigger);
     }
 
     /**
      * Navigates without adding a history entry, replacing the current one.
      *
      * <p>For a redirect the user should not be able to go Back into — a landing path that resolves
-     * elsewhere, or a route they were bounced off.</p>
+     * elsewhere, or a route they were bounced off. Always starts a navigation, even to the route
+     * already on the screen, so it also serves to load the current page again.</p>
      *
      * @param path the path
      */
     public static void replace(String path) {
-        String route = AppBase.route(path);
-        RouterBrowser.replaceState(AppBase.location(route));
-        renderInCoroutine(route);
+        String route = host.toRoute(path);
+        host.replaceState(host.toLocation(route));
+        begin(route, Navigation.Trigger.REPLACE);
     }
 
     /**
-     * Where to send a navigation that matches no route. Without one, an unmatched path reports
-     * through the error handler and leaves the page as it was.
+     * Runs the last navigation again, if it failed.
+     *
+     * <p>The framework reconnects a dropped connection by itself but never repeats a failed
+     * navigation by itself, because a navigation is loader calls and RMI calls are never replayed:
+     * the framework cannot know a call is safe to repeat. This is the explicit "try again". It is
+     * what the Retry button on {@link #showFailureMessage(boolean) the failure message} does.</p>
+     *
+     * <p>While the connection is still down a retry fails straight away, with a
+     * {@code DisconnectedException}, so it is only useful once the connection is back.</p>
+     *
+     * @return true when a navigation was started; false when the last navigation did not fail
+     */
+    public static boolean retry() {
+        Navigation failed = latest;
+        if (failed == null || failed.outcome() != Navigation.Outcome.FAILED) {
+            return false;
+        }
+        host.replaceState(host.toLocation(failed.path()));
+        begin(failed.path(), Navigation.Trigger.RETRY);
+        return true;
+    }
+
+    /**
+     * Where to send a navigation that matches no route. Without one, an unmatched path fails with a
+     * {@link RouteNotFoundException} and leaves the page as it was.
      *
      * @param path the fallback path
      */
@@ -162,7 +300,8 @@ public final class Router {
     }
 
     /**
-     * Where to send a navigation the user's roles do not permit.
+     * Where to send a navigation the user's roles do not permit. Without one, it fails with a
+     * {@link RouteForbiddenException}.
      *
      * <p>Client-side role checks are for showing the right thing, never for protection — the server
      * re-checks every call. Skipping this only means the user reaches a view that fails.</p>
@@ -174,12 +313,34 @@ public final class Router {
     }
 
     /**
-     * Handles a navigation that threw — usually a loader whose call failed.
+     * Adds a handler for a navigation that failed — usually a loader whose call failed.
+     *
+     * <p>The same as {@link #addErrorListener(ErrorHandler)}. Up to and including 0.9.0 this <em>replaced</em>
+     * the previous handler, so only the last one registered was ever called; it now adds.</p>
      *
      * @param handler the handler
      */
     public static void onError(ErrorHandler handler) {
-        errorHandler = handler;
+        addErrorListener(handler);
+    }
+
+    /**
+     * Adds a handler for a navigation that failed. Every handler added is called, in the order they
+     * were added.
+     *
+     * <p>Only the navigation started last reports a failure; one that was overtaken by a newer
+     * navigation reports nothing. With no handler at all, a failure is written to the browser
+     * console rather than vanishing.</p>
+     *
+     * @param handler the handler
+     * @return removes the handler again
+     */
+    public static Disposable addErrorListener(ErrorHandler handler) {
+        if (handler == null) {
+            return () -> { };
+        }
+        errorHandlers.add(handler);
+        return () -> errorHandlers.remove(handler);
     }
 
     /**
@@ -194,6 +355,62 @@ public final class Router {
     }
 
     /**
+     * Adds a listener told when each navigation starts, finishes and fails. See
+     * {@link LifecycleListener} for exactly what is promised.
+     *
+     * @param listener the listener
+     * @return removes the listener again
+     */
+    public static Disposable addLifecycleListener(LifecycleListener listener) {
+        if (listener == null) {
+            return () -> { };
+        }
+        lifecycleListeners.add(listener);
+        return () -> lifecycleListeners.remove(listener);
+    }
+
+    /**
+     * Turns the router's built-in busy indicator on or off. Off unless switched on.
+     *
+     * <p>Once a navigation has been running for 300 milliseconds it shows a thin bar across the top
+     * of the page, a spinner on a small card in the middle, and a wait cursor over the whole page.
+     * It hides the moment the navigation started last finishes or fails. It has no timeout of its
+     * own: it stays for exactly as long as the navigation is really running. A navigation that
+     * cannot complete does end - a dropped or silent connection fails its calls, and a call the
+     * server never answers fails at the request timeout - and the indicator goes with it.</p>
+     *
+     * <p>It covers nothing and takes no clicks. A screen reader hears "Loading". Under
+     * {@code prefers-reduced-motion} it pulses instead of moving. Its look is set with CSS custom
+     * properties - color, bar height, spinner size, card background, and an offset to center it in
+     * a content area beside a side menu; the names are in {@code docs/ROUTING.md}.</p>
+     *
+     * @param enabled true to show it
+     */
+    public static void showBusyIndicator(boolean enabled) {
+        NavigationFeedback.busyIndicator(enabled);
+    }
+
+    /**
+     * Turns the router's built-in failure message on or off. Off unless switched on.
+     *
+     * <p>When the navigation started last fails, it shows a short message near the top of the page
+     * with a Retry button and a Dismiss button. For a dropped connection or a call the server did
+     * not answer in time: "We could not open this page. Check your connection and try again." While
+     * the connection is still down it adds that Retry will work once it is back, and Retry does
+     * nothing until then. For a loader the server refused: "We could not open this page. Something
+     * went wrong while loading it." For an address with no route, or a route the person may not
+     * see, it says so and offers no Retry, because trying again cannot help.</p>
+     *
+     * <p>It goes away when the next navigation starts, including the one Retry starts, and when
+     * Dismiss is pressed. It does not replace error listeners; they are still called.</p>
+     *
+     * @param enabled true to show it
+     */
+    public static void showFailureMessage(boolean enabled) {
+        NavigationFeedback.failureMessage(enabled);
+    }
+
+    /**
      * The path whose view is on screen. Updated only once a navigation has fully succeeded, so it
      * never reports a route whose loader failed.
      *
@@ -203,57 +420,88 @@ public final class Router {
         return currentPath;
     }
 
-    // ---------------------------------------------------------------- rendering
-
     /**
-     * Runs a navigation where its loaders are allowed to suspend.
+     * The navigation started last, whether it is still loading, finished or failed.
      *
-     * <p>Navigation is triggered from browser callbacks — a click, a popstate, the frame that
-     * reports authentication — and TeaVM cannot suspend a coroutine on a stack that started in
-     * native JavaScript. A loader making an RMI call is exactly such a suspension, so calling it
-     * directly from those callbacks fails with "suspension point reached from non-threading
-     * context" and the navigation dies before rendering anything.</p>
-     *
-     * <p>Starting a thread re-enters TeaVM's own scheduler, which is what makes the loaders legal.
-     * It is a green thread on the browser's event loop, not parallelism — nothing here runs at the
-     * same time as anything else.</p>
+     * @return the navigation, or null before the first
      */
-    private static void renderInCoroutine(String fullPath) {
-        new Thread(() -> render(fullPath)).start();
+    public static Navigation latestNavigation() {
+        return latest;
     }
 
-    private static void render(String fullPath) {
-        String path = stripQuery(fullPath);
-        RouteRegistry.RouteMatch match = RouteRegistry.match(path);
+    // ---------------------------------------------------------------- the navigation lifecycle
 
-        if (match == null) {
-            if (notFoundPath != null && !notFoundPath.equals(path)) {
-                replace(notFoundPath);
-            } else {
-                fail(path, new IllegalStateException("No route matches '" + path
-                        + "'. Declare one with @Route(\"" + path + "\"), or set a not-found route."));
+    /**
+     * Starts a navigation: supersedes whatever was still loading, announces it, and runs it where
+     * its loaders may suspend.
+     */
+    private static Navigation begin(String route, Navigation.Trigger trigger) {
+        Navigation navigation = open(route, trigger, null);
+        host.runNavigation(() -> run(navigation));
+        return navigation;
+    }
+
+    private static Navigation open(String route, Navigation.Trigger trigger, Navigation redirectedFrom) {
+        Navigation previous = latest;
+        long superseded = 0;
+        if (previous != null && previous.outcome() == Navigation.Outcome.PENDING) {
+            previous.markSuperseded();
+            superseded = previous.id();
+        }
+        Navigation navigation = new Navigation(++sequence, route, trigger, redirectedFrom, superseded);
+        latest = navigation;
+        deliver(() -> {
+            for (LifecycleListener listener : new ArrayList<>(lifecycleListeners)) {
+                try {
+                    listener.onNavigationStarted(navigation);
+                } catch (RuntimeException ex) {
+                    listenerFailed("onNavigationStarted", ex);
+                }
             }
+        });
+        return navigation;
+    }
+
+    /** Whether a navigation is still the one whose result counts. */
+    private static boolean isLatest(Navigation navigation) {
+        return navigation == latest && navigation.outcome() == Navigation.Outcome.PENDING;
+    }
+
+    private static void run(Navigation navigation) {
+        if (!isLatest(navigation)) {
             return;
         }
+        String fullPath = navigation.path();
+        String path = stripQuery(fullPath);
+        try {
+            RouteRegistry.RouteMatch match = RouteRegistry.match(path);
 
-        List<RouteDefinition> chain = layoutChain(match.definition());
-
-        for (RouteDefinition definition : chain) {
-            if (!isPermitted(definition)) {
-                if (forbiddenPath != null && !forbiddenPath.equals(path)) {
-                    replace(forbiddenPath);
+            if (match == null) {
+                if (notFoundPath != null && !notFoundPath.equals(path)) {
+                    redirect(navigation, notFoundPath);
                 } else {
-                    fail(path, new SecurityException("'" + path + "' requires one of "
-                            + definition.requiredRoles() + "; this user has "
-                            + RmiSecurityContext.getRoles() + "."));
+                    fail(navigation, new RouteNotFoundException(path));
                 }
                 return;
             }
-        }
 
-        RouteParams params = new RouteParams(path, match.pathParams(), queryParams(fullPath));
+            List<RouteDefinition> chain = layoutChain(match.definition());
 
-        try {
+            for (RouteDefinition definition : chain) {
+                if (!isPermitted(definition)) {
+                    if (forbiddenPath != null && !forbiddenPath.equals(path)) {
+                        redirect(navigation, forbiddenPath);
+                    } else {
+                        fail(navigation, new RouteForbiddenException(path, "'" + path
+                                + "' requires one of " + definition.requiredRoles()
+                                + "; this user has " + RmiSecurityContext.getRoles() + "."));
+                    }
+                    return;
+                }
+            }
+
+            RouteParams params = new RouteParams(path, match.pathParams(), queryParams(fullPath));
+
             // Outermost first, so a nested route can rely on what its layout fetched. Everything is
             // loaded before anything is built -- the whole point of putting the fetch on the route.
             List<Object> instances = new ArrayList<>(chain.size());
@@ -262,6 +510,11 @@ public final class Router {
                 Object instance = definition.newInstance();
                 instances.add(instance);
                 data.add(load(instance, params));
+                // A loader is where a navigation waits, so it is where a newer one can have started.
+                // Stop here rather than running the remaining loaders for a page nobody will see.
+                if (!isLatest(navigation)) {
+                    return;
+                }
             }
 
             // Then build inward-out: the matched view first, each layout wrapping what it contains.
@@ -272,18 +525,134 @@ public final class Router {
                 rendered = renderLayout(instances.get(i), data.get(i), params, rendered,
                         chain.get(i));
             }
-
-            RouterBrowser.mount(containerId, rendered);
-            currentPath = path;
-            for (NavigationListener listener : listeners) {
-                listener.onNavigated(params);
+            if (!isLatest(navigation)) {
+                return;
             }
-        } catch (RuntimeException ex) {
+
+            host.mount(containerId, rendered);
+            finish(navigation, params);
+        } catch (Throwable ex) {
             // The page is left as it was: replacing a working view with a blank one because a fetch
-            // failed loses whatever the user was doing.
-            fail(path, ex);
+            // failed loses whatever the user was doing. Throwable rather than RuntimeException,
+            // because a navigation that ended by throwing something else would otherwise never end
+            // at all, and a busy indicator waiting for it would wait for ever.
+            fail(navigation, ex);
         }
     }
+
+    /**
+     * Sends a navigation somewhere else. The redirect is a navigation of its own that supersedes the
+     * one it came from, runs on the same green thread, and replaces the history entry so Back does
+     * not walk into the address that was refused.
+     */
+    private static void redirect(Navigation from, String target) {
+        String route = host.toRoute(target);
+        host.replaceState(host.toLocation(route));
+        Navigation redirect = open(route, Navigation.Trigger.REDIRECT, from);
+        run(redirect);
+    }
+
+    private static void finish(Navigation navigation, RouteParams params) {
+        if (!isLatest(navigation)) {
+            return;
+        }
+        navigation.markFinished();
+        currentPath = params.path();
+        deliver(() -> {
+            for (LifecycleListener listener : new ArrayList<>(lifecycleListeners)) {
+                try {
+                    listener.onNavigationFinished(navigation, params);
+                } catch (RuntimeException ex) {
+                    listenerFailed("onNavigationFinished", ex);
+                }
+            }
+            for (NavigationListener listener : new ArrayList<>(listeners)) {
+                try {
+                    listener.onNavigated(params);
+                } catch (RuntimeException ex) {
+                    listenerFailed("onNavigated", ex);
+                }
+            }
+        });
+    }
+
+    private static void fail(Navigation navigation, Throwable reason) {
+        if (!isLatest(navigation)) {
+            // Overtaken while it was loading. Its failure is about a page nobody is waiting for any
+            // more, and reporting it would put an error message over the page they did ask for.
+            return;
+        }
+        navigation.markFailed(reason);
+        String path = stripQuery(navigation.path());
+        deliver(() -> {
+            for (LifecycleListener listener : new ArrayList<>(lifecycleListeners)) {
+                try {
+                    listener.onNavigationFailed(navigation, reason);
+                } catch (RuntimeException ex) {
+                    listenerFailed("onNavigationFailed", ex);
+                }
+            }
+            if (errorHandlers.isEmpty()) {
+                // Without a handler this would vanish, and a navigation that silently does nothing
+                // is the hardest kind of bug to notice.
+                host.warn("[zeroz4j] Navigation to '" + path + "' failed: " + reason.getMessage());
+                return;
+            }
+            for (ErrorHandler handler : new ArrayList<>(errorHandlers)) {
+                try {
+                    handler.onError(path, reason);
+                } catch (RuntimeException ex) {
+                    listenerFailed("onError", ex);
+                }
+            }
+        });
+    }
+
+    /**
+     * Delivers events one at a time, in the order they were raised. An event raised while another
+     * is being delivered - a listener that navigates, say - waits until every listener has had the
+     * one before it.
+     */
+    private static void deliver(Runnable event) {
+        events.add(event);
+        if (delivering) {
+            return;
+        }
+        delivering = true;
+        try {
+            Runnable next;
+            while ((next = events.poll()) != null) {
+                next.run();
+            }
+        } finally {
+            delivering = false;
+        }
+    }
+
+    private static void listenerFailed(String callback, RuntimeException ex) {
+        // One listener throwing must not stop the others hearing about the navigation, or a busy
+        // indicator registered after it would never be told to hide.
+        host.warn("[zeroz4j] A router listener threw from " + callback + ": " + ex);
+    }
+
+    /** Test support only: forgets every listener, every navigation and every setting. */
+    static void resetForTesting(RouterHost testHost) {
+        host = testHost;
+        containerId = null;
+        errorHandlers.clear();
+        listeners.clear();
+        lifecycleListeners.clear();
+        notFoundPath = null;
+        forbiddenPath = null;
+        currentPath = null;
+        listening = false;
+        sequence = 0;
+        latest = null;
+        events.clear();
+        delivering = false;
+    }
+
+    // ---------------------------------------------------------------- rendering
 
     @SuppressWarnings("unchecked")
     private static Object load(Object instance, RouteParams params) {
@@ -345,16 +714,6 @@ public final class Router {
         }
         return RmiSecurityContext.hasAnyRole(
                 definition.requiredRoles().toArray(new String[0]));
-    }
-
-    private static void fail(String path, Throwable reason) {
-        if (errorHandler != null) {
-            errorHandler.onError(path, reason);
-            return;
-        }
-        // Without a handler this would vanish, and a navigation that silently does nothing is the
-        // hardest kind of bug to notice.
-        RouterBrowser.warn("[zeroz4j] Navigation to '" + path + "' failed: " + reason.getMessage());
     }
 
     private static String stripQuery(String fullPath) {
