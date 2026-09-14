@@ -8,6 +8,168 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
+## [Unreleased]
+
+This release is about the seconds between clicking a link and seeing the page. The router now says
+when a navigation starts, finishes and fails, for every way one can begin, and two calls put that on
+the screen: `Router.showBusyIndicator(true)` for a bar, a spinner and a wait cursor once a page takes
+longer than 300 milliseconds, and `Router.showFailureMessage(true)` for a plain message with a Retry
+button when it cannot be opened. Underneath, two faults that made a slow page look broken are gone:
+an older navigation that finished last could put its page over the one clicked since, and a call on
+a network that had died without closing the socket waited for minutes with nothing to end it.
+
+**Two things in the Breaking section can catch an application.** `Router.onError` now adds a
+handler instead of replacing the last one, so an application that registers it from a callback that
+runs again after every reconnect collects one more handler per reconnect. And the client now closes a
+connection whose keepalive ping goes unanswered for ten seconds, which matters only on a network
+that routinely stalls for longer, or behind a server that has raised its own ping limit.
+
+### Breaking
+
+- **`Router.onError(handler)` adds a handler; it no longer replaces the previous one.** Through
+  0.9.0 only the handler registered last was ever called, which is how one application's busy
+  indicator silently switched off its own error logging: both registered, and the second won.
+  Every handler is now called, in the order added, and the console warning still appears when there
+  is none. `Router.addErrorListener(handler)` is the same call and returns a `Disposable`.
+
+  If you call `Router.onError` from `RmiSecurityContext.onAuthenticated` or `onResolved`, those run
+  again after every reconnect, so you now collect one handler per reconnect. Register once:
+
+  ```java
+  private static boolean started;
+
+  RmiSecurityContext.onAuthenticated(() -> {
+      if (started) { return; }
+      started = true;
+      Router.onError((path, reason) -> log(path, reason));
+      Router.start("app-root");
+  });
+  ```
+
+  If you relied on the replacement to swap one handler for another, keep what
+  `Router.addErrorListener` returns and call `dispose()` on the old one before adding the new one.
+
+- **A connection that stops answering is now closed after ten seconds.** When a call has waited five
+  seconds with nothing at all arriving from the server, the client sends a keepalive ping, and an
+  idle connection's ordinary 25-second ping now expects an answer too. If nothing arrives within ten
+  seconds, the socket is closed, calls on it fail with `DisconnectedException`, and the usual
+  reconnect runs. The server answers pings ahead of everything else on the connection, so a slow
+  call on a working connection is not affected - in the routing tour's browser test, a call the
+  server held past a 20-second timeout failed as a timeout, with its connection never given up on.
+
+  If your users are on a network that stalls for longer than ten seconds at a time, raise it with
+  `Keepalive.configureLiveness(30)` before `Zeroz4jClient.connect`; `Keepalive.configureLiveness(0)`
+  restores the old behavior of leaving it to the browser. If your server sets
+  `zeroz.ws.keepaliveMinIntervalMillis` above 5000, it ignores some of these pings: lower that
+  setting, or turn the check off.
+
+### Added
+
+- **A busy indicator for every navigation, with one call.** `Router.showBusyIndicator(true)` shows a
+  3-pixel bar sweeping along the top, a 48-pixel spinner on a small card in the middle of the window,
+  and a wait cursor over the whole page - once a navigation has taken 300 milliseconds, so a fast
+  page shows nothing. It hides the moment the latest navigation finishes or fails, and it has no
+  timeout of its own: it never goes away while the work is still running. It follows links,
+  `navigate`, `replace`, Back and Forward with no listener or wrapper in the application. A screen
+  reader hears "Loading"; under `prefers-reduced-motion` it pulses instead of moving; it covers
+  nothing and takes no clicks. Color, bar height, spinner size, card background and an offset for
+  centering beside a side menu are CSS custom properties (`--zeroz4j-busy-color`,
+  `--zeroz4j-busy-offset-x` and the rest, listed in `docs/ROUTING.md`), with DaisyUI tokens as
+  defaults, so it is right in light and dark themes unconfigured.
+
+  If you have your own - a `BusyIndicator` class watching clicks and popstate, wrappers around
+  `Router.navigate` and `Router.replace`, an error handler passed through to hide it - delete them
+  and call `Router.showBusyIndicator(true)`. To keep your look, set the custom properties; to keep a
+  side-menu offset, set `--zeroz4j-busy-offset-x` in the same media query you use today.
+
+- **A failure message with a Retry button, with one call.** `Router.showFailureMessage(true)` puts a
+  short message at the bottom of the window when the latest navigation fails. For a dropped or
+  silent connection, or a call the server did not answer in time: "We could not open this page.
+  Check your connection and try again." For a loader the server refused: "We could not open this
+  page. Something went wrong while loading it." Both offer Retry and Dismiss, which are real buttons,
+  first in the Tab order. While the connection is still down it adds "Reconnecting. Retry will work
+  once the connection is back." and Retry waits; the framework reconnects by itself but never opens
+  the page again by itself, because that would repeat calls. It goes when the next navigation starts.
+  A slow page overtaken by another click never shows it. The words are in the framework's catalog,
+  in English and German.
+
+  If you ship your own translation of the framework's words (`i18n/zeroz4j_<language>.properties`),
+  add the eight new keys - `ui.loading`, `ui.retry`, `ui.dismiss` and the five `ui.navigation.*` keys.
+  A key left out shows in English.
+
+- **Navigation events.** `Router.addLifecycleListener` is told when each navigation starts, finishes
+  and fails, with a `Navigation` saying what started it (a link, `navigate`, `replace`, Back or
+  Forward, the first render, a redirect, a retry), its sequence number, and what became of it. The
+  navigation started last always ends in exactly one "finished" or "failed". A redirect to the
+  not-found or forbidden route is a navigation of its own, which supersedes the one that caused it.
+  The busy indicator and the failure message are built on this and nothing else.
+- **`Router.retry()`** runs the last navigation again if it failed, and returns whether it did.
+  **`Router.latestNavigation()`** is the navigation started last.
+- **`RequestTimeoutException`** in `com.zeroz4j.api`, for a call the server did not answer before the
+  request timeout. It is a `RuntimeException`, as the timeout was before, so existing catches still
+  work, and it can now be told apart from a refusal.
+- **`RouteNotFoundException` and `RouteForbiddenException`**, the reasons a navigation fails when no
+  not-found or forbidden route is set. They extend `IllegalStateException` and `SecurityException`,
+  which is what the router reported before, with the same messages.
+- **The routing tour has a slow page and a stalled one**, and a browser test, `tools/navigation-proof`,
+  that drives both through a proxy able to cut, refuse or silence the connection - 60 checks, run
+  against the ordinary build and against a minified one. The routing tour's client now takes
+  `-Pproduction`, the first example in this repository that can be built the way users receive it.
+
+### Changed
+
+- **The request timeout runs on a timer of its own.** It used to be checked only when another call
+  was made or another frame arrived, so on a connection that had gone completely quiet a call never
+  timed out at all. It is now checked every second, and a call fails between one and two seconds
+  after its deadline. The message changed from "RMI request 7 timed out after 30000 ms" to name the
+  call: "RMI call com.example.TaskService#load (request 7) timed out: no answer within 30000 ms". If
+  you match on that text, match on `RequestTimeoutException` instead.
+- **A link to the page already showing, with a query string, does nothing.** The router compared an
+  address with its query string against the path of the page on screen without one, so clicking
+  `/projects?sort=name` while on `/projects?sort=name` loaded the page again. It is now ignored,
+  like any other link to the page already showing.
+- **Calling `Router.start` again no longer adds a second set of click and Back/Forward listeners.** It
+  still renders the current address again.
+
+### Fixed
+
+- **An older navigation that finished last put its page over the one clicked since.** Every
+  navigation ran on its own and nothing told them apart, so clicking a slow page and then a fast one
+  showed the fast page, and then the slow page on top of it when its answer arrived - with the
+  address bar still saying where the person had actually gone. Seen as the address `/tasks` over the
+  Home screen. Each navigation now carries a sequence number, and anything but the latest is thrown
+  away when it comes back, successful or not: nothing is mounted, the current path does not move,
+  and no listener hears about it.
+- **Clicking the link for the page still showing, while another page loaded, did nothing - and then
+  the other page arrived.** The router compared the click with the page on screen, found them the
+  same, and returned, leaving the earlier navigation to finish. It now compares with the navigation
+  started last, so the click wins.
+- **A call on a network that died without closing the socket waited for minutes.** Nothing noticed
+  until the browser did. The keepalive now notices (see Breaking), so such a call fails with
+  `DisconnectedException` about fifteen seconds after it was made.
+- **A dropped connection failed only one of the calls waiting on it.** The list of waiting calls was
+  walked while calls were being removed from it, which the browser's implementation refuses with a
+  `ConcurrentModificationException` as soon as more than one call is waiting. The exception escaped
+  into the browser callback that reported the drop, and every call after the first went on waiting
+  until its timeout. The request timeout's own sweep had the same fault. Both now walk a copy.
+- **A navigation listener that threw made a successful navigation report as failed.** The exception
+  was caught by the same handler as a failing loader, after the new page was already on screen. A
+  throwing listener is now written to the console and the other listeners are still called.
+- **A layout chain that could not be built - a layout naming a class with no `@Route`, or a cycle -
+  never reached the error handler.** It threw outside the part of the router that reports failures,
+  so the navigation simply stopped. It is now reported like any other failed navigation.
+- **An exception in a keepalive tick vanished.** The timer swallowed it to stay alive; it now writes
+  it to the console and still stays alive. That is how the fault with waiting calls above was found.
+
+### Documentation
+
+- `docs/ROUTING.md` has new sections on showing that a page is loading, on what happens when a page
+  cannot be opened and how long a lost connection takes to show, and on navigation events, with every
+  custom property and element named. It also warns that `onAuthenticated` and `onResolved` run again
+  after every reconnect.
+- The keepalive's answer requirement is in `docs/PROTOCOL.md`; `docs/guides/troubleshooting.md` and
+  `docs/reference/limitations.md` cover the timer and the new exception.
+
 ## [0.9.0] — 2026-09-02
 
 This release teaches the framework to speak more than one language, end to end. A connection is

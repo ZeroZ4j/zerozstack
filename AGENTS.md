@@ -52,10 +52,12 @@ optimization and minification. That is the split an assistant working in a gener
 has to understand: the quick check does not compile the user interface at all, a full
 `mvn install` does, and only `-Pproduction` produces the shape a user receives.
 
-This repository's own examples do not have that split. They compile at `process-classes` with
-`minifying=false` hardcoded, and that is deliberate: the browser proof page and the release gate
-read names out of the generated JavaScript. It does mean **no example in this repository can ever
-reproduce a minification bug**, which is exactly how the connection bar below shipped broken twice.
+This repository's own examples do not have that split. They compile at `process-classes`
+unminified, and that is deliberate: the browser proof page and the release gate read names out of
+the generated JavaScript. It does mean **an ordinary build here never reproduces a minification
+bug**, which is exactly how the connection bar below shipped broken twice. The one way to see the
+shape users receive is `routing-tour`'s client, which alone takes `-Pproduction`, and
+`tools/navigation-proof` runs its browser test against that build as well as the ordinary one.
 
 ## Module map
 
@@ -318,7 +320,22 @@ public class TaskDetailView implements RouteView<Task> {
 - Real URLs via the history API. Deep links work because `StaticContentResource` serves the shell for
   any path with no file behind it.
 - `Router.start("app-root")` once; `Router.navigate(path)`, or an `<a data-route href="...">`.
+  `RmiSecurityContext.onAuthenticated` and `onResolved` run again after every reconnect, so starting
+  the router or registering router listeners there needs a once-only guard.
 - Guard with `@RequiresRole`; it decides what to *show*, the server still decides what is allowed.
+- **Do not generate a loading spinner, a navigation wrapper, or click and popstate listeners to
+  drive one.** `Router.showBusyIndicator(true)` shows a bar, a centered spinner and a wait cursor once
+  any navigation has run 300 ms, and hides it when the latest navigation finishes or fails - it has
+  no timeout of its own. `Router.showFailureMessage(true)` shows "We could not open this page..."
+  with a Retry button when the latest navigation fails. Style both with the `--zeroz4j-busy-*` and
+  `--zeroz4j-failure-*` custom properties listed in docs/ROUTING.md.
+- For a custom indicator, `Router.addLifecycleListener` raises started, finished and failed for every
+  way a navigation begins. The navigation started last always ends in exactly one finished or failed;
+  an older one it overtook is superseded and raises nothing more, even when its loader answers later.
+  A redirect is a navigation of its own that supersedes the one that caused it.
+- `Router.onError` **adds** a handler; up to and including 0.9.0 it replaced the previous one.
+  `Router.addErrorListener` is the same and returns a `Disposable`. A failed navigation is never run
+  again by itself after a reconnect; `Router.retry()` runs it again.
 
 See [docs/ROUTING.md](docs/ROUTING.md).
 
@@ -382,6 +399,14 @@ out), shared signals re-subscribed, live objects re-synced in place, offline sig
 (ids change on reconnect; observe `SessionClosedEvent` server-side to clean up), reacting to a lost
 `LiveMutex` (`setLostListener`), and re-fetching live objects after a full **server restart**, which
 empties the handle registry that re-sync restores from.
+
+**A connection that dies silently is noticed, not waited out.** When a call has waited five seconds
+with nothing arriving from the server, the client pings; a ping with no answer within ten seconds
+closes the socket, so calls on it fail with `DisconnectedException` and the reconnect starts
+(`Keepalive.configureLiveness(seconds)`, zero turns it off). The request timeout (30 s,
+`WasmRmiClient.setRequestTimeout`) runs on a timer of its own and fails an unanswered call with
+`RequestTimeoutException`, which a caller can tell apart from a refusal. Do not generate
+application-level heartbeats or watchdog timers for either.
 
 **Only a `@LiveSync` model and the objects inside one carry a handle (0.8.0+),** and the registry
 holds them weakly on both tiers. Everything else on the wire is a value with a name good for its own
@@ -580,7 +605,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |
 | `components-showcase` | The component library gallery |
-| `routing-tour` | `@Route`, nested `RouteLayout`, path and query parameters, `@RequiresRole` guards, colocated loaders |
+| `routing-tour` | `@Route`, nested `RouteLayout`, path and query parameters, `@RequiresRole` guards, colocated loaders, the router's busy indicator and failure message on a deliberately slow route |
 | `scoped-signals` | `Signals.scoped` with `Scope.CLIENT` and `Scope.USER` beside a global `Signals.shared` |
 | `oidc-login` | `OidcClient` PKCE login against Keycloak, and `@Secured`/`@RolesAllowed` enforced from its claims |
 | `pwa-install` | `Pwa.install()`, `Pwa.installable()`, `PwaManifest` per request, push subscription, and the offline page |
@@ -662,9 +687,10 @@ version with no such marker is read as a claim about the current release.
   `JsBodyNamingContractTest` reads every Java file in the checkout on every build and fails it
   otherwise.
 
-  **Nothing in this repository builds minified**, and a generated application only does so under
+  **No ordinary build in this repository is minified** - only `routing-tour`'s client under
+  `-Pproduction`, which `tools/navigation-proof` drives - and a generated application only is under
   `-Pproduction`, so this class of bug is invisible in every ordinary build on both sides. The
-  contract test is the whole defense. Do not weaken it, and do not assume a working example proves
+  contract test is the main defense. Do not weaken it, and do not assume a working example proves
   a `@JSBody` script is safe.
 - Apache 2.0 license header on every new `.java` file; copy an existing one.
 - Javadoc on public API, including the wire opcode where a method sends a frame.
