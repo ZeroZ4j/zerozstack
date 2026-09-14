@@ -109,4 +109,31 @@ public class TourServiceImpl implements TourService {
                 "Every new project starts with one.", false));
         return id;
     }
+
+    /** How long {@code /slow} takes. Long enough to see the busy indicator, short enough to wait for. */
+    static final long SLOW_MILLIS = 2_000;
+
+    /** How long {@code /stalled} is held: past the client's 30-second request timeout. */
+    static final long STALLED_MILLIS = 45_000;
+
+    @Override
+    public String slowSummary() {
+        pause(SLOW_MILLIS);
+        return "This page took " + (SLOW_MILLIS / 1000) + " seconds to load, on purpose.";
+    }
+
+    @Override
+    public String stalledSummary() {
+        pause(STALLED_MILLIS);
+        return "The server answered after " + (STALLED_MILLIS / 1000) + " seconds. With the default "
+                + "30-second request timeout nobody was still waiting for this.";
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }

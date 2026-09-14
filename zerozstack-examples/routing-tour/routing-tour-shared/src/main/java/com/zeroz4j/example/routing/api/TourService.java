@@ -50,4 +50,13 @@ public interface TourService {
 
     /** Called by {@code /projects/new}; returns the id to navigate to. */
     long createProject(String name);
+
+    /** Loaded by {@code /slow}. Takes about two seconds, so the busy indicator has time to show. */
+    String slowSummary();
+
+    /**
+     * Loaded by {@code /stalled}. Held for 45 seconds, longer than the client's request timeout, so
+     * the navigation fails with a timeout rather than finishing.
+     */
+    String stalledSummary();
 }

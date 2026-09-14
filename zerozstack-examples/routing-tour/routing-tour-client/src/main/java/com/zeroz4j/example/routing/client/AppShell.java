@@ -56,6 +56,7 @@ public class AppShell implements RouteLayout<Account> {
                 Ui.routerLink("/", "Home"),
                 Ui.routerLink("/projects", "Projects"),
                 Ui.routerLink("/projects/new", "New project"),
+                Ui.routerLink("/slow", "Slow page"),
                 Ui.routerLink("/admin", "Admin"),
                 Ui.routerLink("/nowhere", "A broken link"));
 

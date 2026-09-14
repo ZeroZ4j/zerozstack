@@ -15,6 +15,10 @@
             wrong one for an application you ship, where you install Tailwind and build one finished
             stylesheet so that visitors download CSS instead of a compiler. See "Where the styles
             come from" in docs/UI_COMPONENTS.md.
+
+            The one exception on this page is the router's busy indicator and failure message,
+            switched on in RoutingTourApp. They put a small stylesheet of their own at the start of
+            <head> when they are switched on, with DaisyUI's colors as defaults; see docs/ROUTING.md.
         -->
         <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.16"></script>
         <link href="https://cdn.jsdelivr.net/npm/daisyui@5.6.14/daisyui.css" rel="stylesheet" type="text/css" />
