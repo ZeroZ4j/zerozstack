@@ -252,10 +252,50 @@ final class SessionFrameQueue {
     }
 
     /**
-     * The connection has gone: throws away what has not started, stops what has, and releases a
-     * read thread waiting for room.
+     * Whether the frame running on this thread belongs to a connection that has since closed.
+     *
+     * <p>False anywhere but inside a frame. Read by the engine after a call returns, to drop a
+     * reply that has nowhere to go instead of trying to send it.</p>
+     *
+     * @return true when this thread is running a frame whose queue has been closed
+     */
+    static boolean currentFrameAbandoned() {
+        Turn turn = TURN.get();
+        if (turn == null) {
+            return false;
+        }
+        SessionFrameQueue queue = turn.queue;
+        queue.lock.lock();
+        try {
+            return queue.closed;
+        } finally {
+            queue.lock.unlock();
+        }
+    }
+
+    /**
+     * The connection has gone: throws away what has not started and releases a read thread
+     * waiting for room. A frame already running is left to finish (0.9.1+).
+     *
+     * <p>Until 0.9.1 this interrupted the running frame. The interrupt landed in whatever the call
+     * was doing at that moment - most often waiting for a pooled database connection - and turned
+     * every closed browser tab into a burst of database errors in the application's log. The call
+     * now runs to the end and the engine drops its reply; see
+     * {@link #currentFrameAbandoned()}.</p>
      */
     void close() {
+        close(false);
+    }
+
+    /**
+     * The server is shutting down: the same as {@link #close()}, and the running frame is
+     * interrupted as well, so an undeploy is not held up by a slow call.
+     */
+    void closeNow() {
+        close(true);
+    }
+
+    private void close(boolean interruptRunning) {
         lock.lock();
         try {
             closed = true;
@@ -268,7 +308,11 @@ final class SessionFrameQueue {
         } finally {
             lock.unlock();
         }
-        threads.shutdownNow();
+        if (interruptRunning) {
+            threads.shutdownNow();
+        } else {
+            threads.shutdown();
+        }
     }
 
     /** Test support: how many frames are waiting or running for this connection. */

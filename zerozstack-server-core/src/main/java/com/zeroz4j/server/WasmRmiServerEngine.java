@@ -43,8 +43,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.websocket.CloseReason;
 import jakarta.websocket.EndpointConfig;
 import jakarta.websocket.OnClose;
+import jakarta.websocket.OnError;
 import jakarta.websocket.OnMessage;
 import jakarta.websocket.OnOpen;
 import jakarta.websocket.Session;
@@ -425,12 +427,15 @@ public class WasmRmiServerEngine implements EventPublisher {
      * Shuts down all virtual thread executors gracefully upon bean destruction.
      *
      * <p><b>Under the hood:</b> Executed via {@code @PreDestroy}. Closes every connection's frame
-     * queue, which throws away what has not started and interrupts what has.</p>
+     * queue, which throws away what has not started and interrupts what has. Interrupting is right
+     * here and only here: the container is going away, and a call still running would otherwise
+     * hold the undeploy up. A connection that merely closes lets its running call finish; see
+     * {@link #onClose(Session, CloseReason)}.</p>
      */
     @PreDestroy
     public void shutdown() {
         for (SessionFrameQueue frames : sessionQueues.values()) {
-            frames.close();
+            frames.closeNow();
         }
         sessionQueues.clear();
         // The runtime goes down with the engine, so anything that keeps driving this server
@@ -477,6 +482,7 @@ public class WasmRmiServerEngine implements EventPublisher {
         // This connection's frames, handled one at a time in the order they arrived, and bounded so
         // a connection that outruns the server queues no more than it is allowed to.
         sessionQueues.put(session.getId(), new SessionFrameQueue(maxQueuedFrames()));
+        ConnectionDiagnostics.markOpened(session);
 
         // Propagate principal and roles from handshake
         Principal principal = (Principal) config.getUserProperties().get(RmiEndpointConfigurator.PRINCIPAL_KEY);
@@ -520,26 +526,58 @@ public class WasmRmiServerEngine implements EventPublisher {
         String username = authenticated ? principal.getName() : ANONYMOUS_USER;
         sendAuthFrame(session, username, roles, authenticated);
 
+        // The session id is on the line so the close line for the same connection can be found,
+        // and the client's own account of how its previous connection ended is on it too: a
+        // connection the browser drops early may never reach onClose, so this is sometimes the
+        // only place its close code appears. A client before 0.9.1 sends nothing and the line
+        // ends where it always did.
+        String previousClose = ConnectionDiagnostics.previousClose(session.getRequestParameterMap());
         LOG.info("[zeroz4j] Client connected: " + username + " roles=" + roles
-                + (authenticated ? "" : " (not authenticated)"));
+                + (authenticated ? "" : " (not authenticated)")
+                + " session=" + session.getId()
+                + (previousClose != null ? "; " + previousClose : ""));
 
         // LiveSync: add session to SyncEngine
         syncEngine.addSession(session);
     }
 
     /**
-     * Handles WebSocket connection closure lifecycle events.
+     * Handles a connection closing when no close reason is known. The same as
+     * {@link #onClose(Session, CloseReason)} with {@code null}; kept for callers that close a
+     * connection themselves, such as the test server.
      *
      * @param session the closing WebSocket session
+     */
+    public void onClose(Session session) {
+        onClose(session, null);
+    }
+
+    /**
+     * Handles WebSocket connection closure lifecycle events.
+     *
+     * <p>Logs one INFO line naming the connection, the user, the close code and reason, and how long
+     * the connection was open (0.9.1+).</p>
+     *
+     * <p>A call that is still running for this connection is <b>not</b> interrupted (0.9.1+). It
+     * runs to the end, its reply is dropped, and one INFO line says so. Interrupting it used to land
+     * in the middle of whatever it was doing - most often waiting for a database connection - and
+     * turned an ordinary closed tab into a burst of database errors and a SEVERE log entry. Messages
+     * that had not started yet are thrown away without running.</p>
+     *
+     * @param session the closing WebSocket session
+     * @param reason  the close code and reason the container reported; null when unknown
      *
      * <p><b>Under the hood:</b> Gives the connection up in {@link ServerRuntime}, closes the session's frame queue,
      * releases all live mutex locks owned by the session via {@link LiveMutexManager#releaseAll}, and unregisters session from {@code syncEngine}.</p>
      */
     @OnClose
-    public void onClose(Session session) {
+    public void onClose(Session session, CloseReason reason) {
+        LOG.info("[zeroz4j] " + ConnectionDiagnostics.closeLine(session, reason));
+
         ServerRuntime runtime = runtimeOf(session);
 
-        // Drop everything this connection had queued, and interrupt the frame it was handling.
+        // Drop everything this connection had queued. The frame it is handling now, if any, runs
+        // to the end on its own thread; its reply has nowhere to go and is dropped.
         SessionFrameQueue frames = sessionQueues.remove(session.getId());
         if (frames != null) {
             frames.close();
@@ -579,6 +617,29 @@ public class WasmRmiServerEngine implements EventPublisher {
             // An observer threw, or the CDI container is already shutting down. Either way the
             // close itself must complete; the observer's problem is logged, not propagated.
             LOG.warning("[zeroz4j] SessionClosedEvent observer failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Logs a transport error on one connection as one WARN line (0.9.1+).
+     *
+     * <p>A peer that has gone away - a broken pipe, a reset, a closed channel - is the ordinary way a
+     * phone leaves, so it gets no stack trace. Anything else keeps its stack trace. The container
+     * closes the connection afterwards and {@link #onClose(Session, CloseReason)} logs that.</p>
+     *
+     * @param session the connection
+     * @param failure what went wrong
+     */
+    @OnError
+    public void onError(Session session, Throwable failure) {
+        String line = "[zeroz4j] Connection error: session "
+                + (session != null ? session.getId() : "?")
+                + ", user " + (session != null ? ConnectionDiagnostics.userOf(session) : "?")
+                + ": " + failure;
+        if (ConnectionDiagnostics.isPeerGone(failure)) {
+            LOG.warning(line);
+        } else {
+            LOG.log(Level.WARNING, line, failure);
         }
     }
 
@@ -1640,9 +1701,15 @@ public class WasmRmiServerEngine implements EventPublisher {
                 // Nothing leaves a frame's thread. What escapes here is not a failed call - those
                 // are answered on 0x0F further in - but a failure of the machinery around one, and
                 // an uncaught exception on a thread named "zeroz-rmi-24" is a bare stack trace on
-                // stderr belonging to no connection and no request.
-                LOG.log(Level.SEVERE, "[zeroz4j] A frame on connection " + session.getId()
-                        + " could not be handled: " + escaped, escaped);
+                // stderr belonging to no connection and no request. A connection that has already
+                // gone, or a frame stopped by an interrupt, is not a failure of anything: one line.
+                if (connectionGone(session) || ConnectionDiagnostics.wasInterrupted(escaped)) {
+                    LOG.info("[zeroz4j] A frame on connection " + session.getId()
+                            + " ended after the connection closed or was interrupted: " + escaped);
+                } else {
+                    LOG.log(Level.SEVERE, "[zeroz4j] A frame on connection " + session.getId()
+                            + " could not be handled: " + escaped, escaped);
+                }
             }
         });
     }
@@ -1686,6 +1753,8 @@ public class WasmRmiServerEngine implements EventPublisher {
 
                 ByteBuffer buffer = ByteBuffer.wrap(data);
                 int messageId = buffer.getInt();
+                // What this frame was, for the one line logged if its answer cannot be delivered.
+                String callName = "call " + messageId;
 
                 // The caller's identity is bound to this thread BEFORE anything in the frame is
                 // decoded. Decoding runs application code - a lazy adapter, a custom validator - and
@@ -1705,6 +1774,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                     String interfaceName = BinarySerializer.readString(buffer);
                     String methodName = BinarySerializer.readString(buffer);
                     int argumentCount = buffer.getInt();
+                    callName = simpleName(interfaceName) + "." + methodName;
 
                     // Framework-internal frames: shared signal subscriptions and client writes
                     if (SyncFrameTypes.SIGNALS_SERVICE.equals(interfaceName)) {
@@ -1817,6 +1887,15 @@ public class WasmRmiServerEngine implements EventPublisher {
 
                     Object executionResult = targetMethod.invoke(beanInstance, extractedArguments);
 
+                    // The connection closed while the call ran. The call was allowed to finish -
+                    // interrupting it is what used to turn a closed tab into database errors - and
+                    // its answer has nowhere to go.
+                    if (connectionGone(session)) {
+                        LOG.info("[zeroz4j] Reply to " + callName + " dropped: connection "
+                                + session.getId() + " closed");
+                        return;
+                    }
+
                     GrowableBuffer responseBuffer = new GrowableBuffer();
                     responseBuffer.putInt(messageId);
                     responseBuffer.put(SyncFrameTypes.RPC_RESPONSE);
@@ -1831,7 +1910,7 @@ public class WasmRmiServerEngine implements EventPublisher {
                     if (ex instanceof InvocationTargetException) {
                         actual = ex.getCause();
                     }
-                    sendError(session, messageId, actual);
+                    sendError(session, messageId, actual, callName);
                 } finally {
                     RmiRequestContext.clear();
                 }
@@ -1847,9 +1926,40 @@ public class WasmRmiServerEngine implements EventPublisher {
      * @param failure   what went wrong
      */
     private static void sendError(Session session, int messageId, Throwable failure) {
+        sendError(session, messageId, failure, "call " + messageId);
+    }
+
+    /**
+     * Answers a failed call, or - when there is nobody left to answer - says so in one line.
+     *
+     * <p>Two failures are not errors of the application and are not logged as SEVERE (0.9.1+). One
+     * is a call whose connection has closed: the answer cannot be delivered, and the failure is
+     * usually the call noticing that. The other is a call stopped by an interrupt, which only the
+     * server shutting down does now. Both get one INFO line with no stack trace. An interrupted
+     * call on a connection that is still open is still answered, so the caller is not left
+     * waiting.</p>
+     *
+     * @param session   the caller
+     * @param messageId the correlation id to answer on
+     * @param failure   what went wrong
+     * @param callName  what the call was, for the log line
+     */
+    private static void sendError(Session session, int messageId, Throwable failure,
+                                  String callName) {
         String reference = newErrorReference();
-        LOG.log(Level.SEVERE, "[zeroz4j] RMI error [ref " + reference + "]: "
-                + failure.getMessage(), failure);
+        boolean gone = connectionGone(session);
+        if (gone) {
+            LOG.info("[zeroz4j] Reply to " + callName + " dropped: connection " + session.getId()
+                    + " closed (the call ended with " + failure + ")");
+            return;
+        }
+        if (ConnectionDiagnostics.wasInterrupted(failure)) {
+            LOG.info("[zeroz4j] " + callName + " on connection " + session.getId()
+                    + " was interrupted [ref " + reference + "]: " + failure);
+        } else {
+            LOG.log(Level.SEVERE, "[zeroz4j] RMI error [ref " + reference + "]: "
+                    + failure.getMessage(), failure);
+        }
         try {
             GrowableBuffer errorBuffer = new GrowableBuffer(512);
             errorBuffer.putInt(messageId);
@@ -1935,6 +2045,25 @@ public class WasmRmiServerEngine implements EventPublisher {
             return LocaleResolution.localeOf((String) tag);
         }
         return RmiRequestContext.getLocale();
+    }
+
+    /**
+     * Whether the connection a frame belongs to has closed. True when the container says the
+     * session is no longer open, or when the frame's own queue was closed by
+     * {@link #onClose(Session, CloseReason)} - which a test's stand-in session, and some containers
+     * for a moment, do not reflect in {@link Session#isOpen()}.
+     */
+    private static boolean connectionGone(Session session) {
+        return session == null || !session.isOpen() || SessionFrameQueue.currentFrameAbandoned();
+    }
+
+    /** The part of a class name after the last dot or dollar sign, for a readable log line. */
+    private static String simpleName(String className) {
+        if (className == null) {
+            return "?";
+        }
+        int cut = Math.max(className.lastIndexOf('.'), className.lastIndexOf('$'));
+        return cut >= 0 ? className.substring(cut + 1) : className;
     }
 
     /** A short code, unique enough to find one log line among a day of them. */

@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,17 +97,29 @@ public class FrameOrderingTest {
         /** Held open so a test can keep a connection busy for as long as it likes. */
         public static volatile CountDownLatch gate = new CountDownLatch(0);
 
+        /**
+         * Slow calls still running. Since 0.9.1 closing a connection lets its running call finish
+         * instead of interrupting it, so a test waits for this to reach zero before the next one
+         * starts - otherwise the call finishes during the next test and lands in its effects.
+         */
+        public static final AtomicInteger running = new AtomicInteger();
+
         @Override
         public String slow(String mark) {
-            slowStartedAt.compareAndSet(0L, System.nanoTime());
+            running.incrementAndGet();
             try {
-                Thread.sleep(SLOW_MILLIS);
-                gate.await(10, TimeUnit.SECONDS);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
+                slowStartedAt.compareAndSet(0L, System.nanoTime());
+                try {
+                    Thread.sleep(SLOW_MILLIS);
+                    gate.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                effects.add(mark);
+                return mark;
+            } finally {
+                running.decrementAndGet();
             }
-            effects.add(mark);
-            return mark;
         }
 
         @Override
@@ -145,9 +158,13 @@ public class FrameOrderingTest {
     }
 
     @AfterEach
-    public void teardown() {
+    public void teardown() throws InterruptedException {
         OrderedServiceImpl.gate.countDown();
         engine.onClose(session);
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (OrderedServiceImpl.running.get() > 0 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
         System.clearProperty(WasmRmiServerEngine.MAX_QUEUED_FRAMES_PROPERTY);
         System.clearProperty(WasmRmiServerEngine.MAX_CONCURRENT_FRAMES_PROPERTY);
         System.clearProperty(WasmRmiServerEngine.PING_MIN_INTERVAL_PROPERTY);
