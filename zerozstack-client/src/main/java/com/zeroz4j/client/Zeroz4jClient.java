@@ -19,6 +19,7 @@ package com.zeroz4j.client;
 
 import com.zeroz4j.api.BinaryRegistry;
 import com.zeroz4j.api.i18n.FrameworkText;
+import com.zeroz4j.api.i18n.ReadsMessagesOnce;
 
 /**
  * Entry point utility for bootstrapping and connecting the zeroz4j WebAssembly client runtime to a backend WebSocket server.
@@ -139,12 +140,20 @@ public final class Zeroz4jClient {
             } else if (state == WasmRmiClientChannel.State.CONNECTED) {
                 ConnectionBanner.hide();
             } else if (state == WasmRmiClientChannel.State.CLOSED && channel.hasGivenUp()) {
-                // The client has stopped trying by itself (0.9.1+). Waiting will not help, and
-                // reloading the page will, so the bar says that and offers the button.
-                ConnectionBanner.showWithReload(FrameworkText.uiConnectionGaveUp().text(),
-                        FrameworkText.uiReload().text());
+                showGaveUpBanner();
             }
         });
+    }
+
+    /**
+     * The client has stopped trying by itself (0.9.1+). Waiting will not help, and reloading the
+     * page will, so the bar says that and offers the button.
+     */
+    @ReadsMessagesOnce("shown once the connection is gone for good; the language cannot change "
+            + "without a connection, and Reload replaces the page")
+    private static void showGaveUpBanner() {
+        ConnectionBanner.showWithReload(FrameworkText.uiConnectionGaveUp().text(),
+                FrameworkText.uiReload().text());
     }
 
     /**
