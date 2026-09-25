@@ -41,18 +41,10 @@ import org.teavm.jso.JSBody;
  */
 public class WasmRmiClientChannel implements WasmWebSocketChannel {
 
-    /** First delay before a reconnect attempt, in milliseconds. Doubles up to {@link #MAX_BACKOFF_MS}. */
-    private static final int BASE_BACKOFF_MS = 500;
-
-    /**
-     * Ceiling for the backoff, in milliseconds.
-     *
-     * <p>Capped rather than unbounded, and retried indefinitely rather than a fixed number of
-     * times: someone who leaves a tab open across a network outage should find a working page when
-     * they return, whereas a client that gave up after five attempts leaves them looking at a page
-     * that appears fine and does nothing.
-     */
-    private static final int MAX_BACKOFF_MS = 15000;
+    // When to try again after a drop is decided by ReconnectPolicy (0.9.1+): a backoff that only
+    // starts again from the beginning once a connection has stayed open for 30 seconds, nothing
+    // attempted while the page is hidden, an attempt at once when it is shown again or the network
+    // comes back, and no more automatic attempts after ten failures in a row.
 
     /** Where the connection is, for anything that wants to tell a user about it. */
     public enum State {
@@ -62,7 +54,11 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
         CONNECTED,
         /** Dropped; an attempt to restore it is scheduled or in flight. */
         RECONNECTING,
-        /** Closed by the application. Nothing further will be attempted. */
+        /**
+         * Closed by the application, or given up after too many failed attempts in a row (0.9.1+;
+         * {@link WasmRmiClientChannel#hasGivenUp()} tells the two apart). Nothing further will be
+         * attempted until {@link WasmRmiClientChannel#reconnect()}.
+         */
         CLOSED
     }
 
@@ -115,9 +111,33 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     private ConnectionListener connectionListener;
     private final java.util.List<StateListener> stateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private State state = State.CONNECTING;
-    private int attempt;
     private boolean opened;
     private boolean closedByApplication;
+    /** When the current socket opened, for the console line written when it closes. */
+    private long socketOpenedAt = -1L;
+    private final ReconnectPolicy policy = new ReconnectPolicy(new ReconnectPolicy.Host() {
+        @Override
+        public long now() {
+            return System.currentTimeMillis();
+        }
+
+        @Override
+        public boolean pageHidden() {
+            return isPageHidden();
+        }
+
+        @Override
+        public void schedule(int delayMillis, Runnable task) {
+            WasmRmiClientChannel.schedule(delayMillis, task::run);
+        }
+
+        @Override
+        public void openSocket() {
+            if (!closedByApplication) {
+                connect();
+            }
+        }
+    });
 
     /**
      * Constructs and connects a new {@code WasmRmiClientChannel} for the specified WebSocket URL.
@@ -130,6 +150,9 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
     public WasmRmiClientChannel(String url, Runnable onOpen) {
         this.url = url;
         this.onOpen = onOpen;
+        // Waits for a hidden page to be shown, and for the network to come back, before trying
+        // again - rather than reconnecting on a timer that a background tab throttles anyway.
+        listenForPageShownAndOnline(policy::pageShown, policy::networkBack);
         connect();
     }
 
@@ -208,6 +231,7 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
      */
     public void close() {
         closedByApplication = true;
+        policy.stop();
         setState(State.CLOSED);
         if (ws != null) {
             ws.close();
@@ -252,8 +276,22 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
         this.urlProvider = provider;
     }
 
+    /**
+     * Whether automatic reconnecting stopped after too many failed attempts in a row (0.9.1+). The
+     * state is then {@link State#CLOSED}, and the built-in connection bar asks the person to reload
+     * the page. {@link #reconnect()} starts again.
+     *
+     * @return true once the channel has given up
+     */
+    public boolean hasGivenUp() {
+        return policy.hasGivenUp() && !closedByApplication;
+    }
+
     private void connect() {
-        this.ws = new WasmWebSocket(urlProvider != null ? urlProvider.get() : url,
+        // How the previous connection ended rides on the handshake as query parameters, so the
+        // server log says why this browser keeps coming back. A server before 0.9.1 ignores them.
+        String target = policy.withPreviousClose(urlProvider != null ? urlProvider.get() : url);
+        this.ws = new WasmWebSocket(target,
             data -> {
                 int len = data.getLength();
                 byte[] bytes = new byte[len];
@@ -265,7 +303,8 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
                 }
             },
             () -> {
-                attempt = 0;
+                socketOpenedAt = System.currentTimeMillis();
+                policy.opened();
                 setState(State.CONNECTED);
                 // onOpen is the application's bootstrap: it builds the UI. It must run once, on the
                 // first connection only. Running it again after a reconnect would rebuild the page
@@ -283,9 +322,13 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
                 if (connectionListener != null) connectionListener.onError(errorMsg);
             },
             (code, reason) -> {
-                System.err.println("[zeroz4j] WebSocket closed: code=" + code + " reason=" + reason);
+                long openFor = socketOpenedAt >= 0 ? System.currentTimeMillis() - socketOpenedAt : -1L;
+                socketOpenedAt = -1L;
+                System.err.println("[zeroz4j] WebSocket closed: code=" + code + " reason=" + reason
+                        + (openFor >= 0 ? " after " + openFor + " ms" : " before it opened")
+                        + (isPageHidden() ? " (page hidden)" : ""));
                 if (connectionListener != null) connectionListener.onClose(code, reason);
-                scheduleReconnect();
+                scheduleReconnect(code, reason);
             }
         );
     }
@@ -301,42 +344,59 @@ public class WasmRmiClientChannel implements WasmWebSocketChannel {
      * {@link WasmWebSocket}.</p>
      */
     public void reconnect() {
-        attempt = 0;
+        policy.reset();
         closedByApplication = false;
         setState(State.RECONNECTING);
         connect();
     }
 
     /**
-     * Queues the next attempt with exponential backoff.
+     * Decides, through {@link ReconnectPolicy}, what follows a close that the application did not
+     * ask for.
      *
-     * <p>The browser offers no event for "the network came back", so the only way to find out is to
-     * try. Backoff stops that becoming a busy loop against a server that is down; the cap keeps the
-     * wait short enough that somebody watching the page sees it recover rather than concluding it
-     * is broken.
+     * <p>The browser offers no reliable event for "the server is reachable again", so the only way
+     * to find out is to try. Backoff stops that becoming a busy loop against a server that is down;
+     * the cap on the delay keeps the wait short enough that somebody watching the page sees it
+     * recover; and the cap on attempts stops a page nobody can fix by waiting from trying forever.
      */
-    private void scheduleReconnect() {
+    private void scheduleReconnect(int code, String reason) {
         if (closedByApplication) {
             return;
         }
-        setState(State.RECONNECTING);
-
-        int delay = BASE_BACKOFF_MS;
-        for (int i = 0; i < attempt && delay < MAX_BACKOFF_MS; i++) {
-            delay *= 2;
+        switch (policy.closed(code, reason)) {
+            case RETRY_SCHEDULED:
+                setState(State.RECONNECTING);
+                System.out.println("[zeroz4j] Reconnecting in " + policy.lastDelay()
+                        + "ms (attempt " + (policy.failures() + 1) + ")");
+                break;
+            case WAITING_FOR_VISIBLE:
+                setState(State.RECONNECTING);
+                System.out.println("[zeroz4j] The page is hidden; reconnecting when it is shown again.");
+                break;
+            case GAVE_UP:
+                System.err.println("[zeroz4j] Stopped reconnecting after "
+                        + ReconnectPolicy.MAX_CONSECUTIVE_FAILURES + " failed attempts in a row.");
+                setState(State.CLOSED);
+                break;
+            default:
+                break;
         }
-        if (delay > MAX_BACKOFF_MS) {
-            delay = MAX_BACKOFF_MS;
-        }
-        attempt++;
-
-        System.out.println("[zeroz4j] Reconnecting in " + delay + "ms (attempt " + attempt + ")");
-        schedule(delay, () -> {
-            if (!closedByApplication) {
-                connect();
-            }
-        });
     }
+
+    @JSBody(params = {}, script = "return document.visibilityState === 'hidden';")
+    private static native boolean isPageHidden();
+
+    /**
+     * Calls back when the page becomes visible and when the browser reports the network is back.
+     * Registered once per channel.
+     */
+    @JSBody(params = { "onShown", "onOnline" }, script =
+        "document.addEventListener('visibilitychange', function () {" +
+        "  if (document.visibilityState === 'visible') { onShown(); }" +
+        "});" +
+        "window.addEventListener('online', function () { onOnline(); });")
+    private static native void listenForPageShownAndOnline(WasmWebSocket.ConnectionHandler onShown,
+                                                           WasmWebSocket.ConnectionHandler onOnline);
 
     @JSBody(params = { "delayMs", "callback" },
             script = "window.setTimeout(function () { callback(); }, delayMs);")

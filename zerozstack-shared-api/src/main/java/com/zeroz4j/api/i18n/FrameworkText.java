@@ -88,7 +88,9 @@ public final class FrameworkText {
             FrameworkKeys.LIVE_REQUIRES_ROLE,
             FrameworkKeys.LIVE_NESTED_NOT_WRITABLE,
             FrameworkKeys.LIVE_NESTED_REQUIRES_ROLE,
-            FrameworkKeys.UI_LANGUAGE
+            FrameworkKeys.UI_LANGUAGE,
+            FrameworkKeys.UI_CONNECTION_GAVE_UP,
+            FrameworkKeys.UI_RELOAD
         };
     }
 
@@ -134,6 +136,10 @@ public final class FrameworkText {
                         + " Nothing was changed.";
             case FrameworkKeys.UI_LANGUAGE:
                 return "Language";
+            case FrameworkKeys.UI_CONNECTION_GAVE_UP:
+                return "We could not reconnect to the server. Reload the page to try again.";
+            case FrameworkKeys.UI_RELOAD:
+                return "Reload";
             default:
                 return null;
         }
@@ -264,5 +270,25 @@ public final class FrameworkText {
      */
     public static Message uiLanguage() {
         return new Message(CATALOG, FrameworkKeys.UI_LANGUAGE);
+    }
+
+    /**
+     * What the connection bar says once the client has stopped reconnecting by itself.
+     *
+     * @return the message
+     * @since 0.9.1
+     */
+    public static Message uiConnectionGaveUp() {
+        return new Message(CATALOG, FrameworkKeys.UI_CONNECTION_GAVE_UP);
+    }
+
+    /**
+     * The words on the connection bar's button that reloads the page.
+     *
+     * @return the message
+     * @since 0.9.1
+     */
+    public static Message uiReload() {
+        return new Message(CATALOG, FrameworkKeys.UI_RELOAD);
     }
 }

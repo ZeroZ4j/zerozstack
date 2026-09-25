@@ -67,10 +67,38 @@ final class ConnectionBanner {
         showNative(text);
     }
 
+    /**
+     * Shows the bar with a message and a button that reloads the page (0.9.1+). Used once the
+     * client has stopped reconnecting by itself, when reloading is the one thing that helps.
+     *
+     * @param text        the message
+     * @param buttonLabel the words on the button
+     */
+    static void showWithReload(String text, String buttonLabel) {
+        showNative(text);
+        addReloadButton(buttonLabel);
+    }
+
     /** Hides the bar. A no-op when it was never shown. */
     static void hide() {
         hideNative();
     }
+
+    // Appended after showNative has set the text, which clears whatever was in the bar before, so
+    // the button is never added twice. A real button, so it is reached with Tab and pressed with
+    // Enter; the popover is manual and does not take the keyboard by itself.
+    @JSBody(params = { "label" }, script =
+        "var bar = document.getElementById('zeroz4j-connection-banner');" +
+        "if (bar) {" +
+        "  var button = document.createElement('button');" +
+        "  button.type = 'button';" +
+        "  button.textContent = label;" +
+        "  button.style.cssText = 'margin-left:12px;padding:2px 12px;border:1px solid #ffffff;" +
+        "border-radius:4px;background:#ffffff;color:#b91c1c;font:inherit;cursor:pointer;';" +
+        "  button.addEventListener('click', function () { window.location.reload(); });" +
+        "  bar.appendChild(button);" +
+        "}")
+    private static native void addReloadButton(String label);
 
     // The inline style overrides the browser's own popover styling as well as doing the paint:
     // a popover is centred and boxed by default, and this is a full-width strip at the top edge.

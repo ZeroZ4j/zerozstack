@@ -74,6 +74,20 @@ public final class FrameworkKeys {
     /** The name a language selector announces itself by. */
     public static final String UI_LANGUAGE = "ui.language";
 
+    /**
+     * The connection bar's message once the client has stopped reconnecting by itself.
+     *
+     * @since 0.9.1
+     */
+    public static final String UI_CONNECTION_GAVE_UP = "ui.connection.gaveUp";
+
+    /**
+     * The button on the connection bar that reloads the page.
+     *
+     * @since 0.9.1
+     */
+    public static final String UI_RELOAD = "ui.reload";
+
     private FrameworkKeys() {
     }
 }

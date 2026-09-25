@@ -18,6 +18,7 @@
 package com.zeroz4j.client;
 
 import com.zeroz4j.api.BinaryRegistry;
+import com.zeroz4j.api.i18n.FrameworkText;
 
 /**
  * Entry point utility for bootstrapping and connecting the zeroz4j WebAssembly client runtime to a backend WebSocket server.
@@ -41,7 +42,10 @@ public final class Zeroz4jClient {
 
     /**
      * Turns the built-in "Connection lost — reconnecting…" bar on or off. On by default, so a
-     * dropped connection is never invisible in an application that configured nothing. Turn it
+     * dropped connection is never invisible in an application that configured nothing. Once the
+     * client stops reconnecting by itself after ten failed attempts in a row (0.9.1+), the same bar
+     * says "We could not reconnect to the server. Reload the page to try again." and has a Reload
+     * button. Turn it
      * off when the application renders its own indicator from
      * {@link WasmRmiClient#connectionState()} — two banners saying the same thing is worse
      * than either.
@@ -134,6 +138,11 @@ public final class Zeroz4jClient {
                 ConnectionBanner.show("Connection lost — reconnecting…");
             } else if (state == WasmRmiClientChannel.State.CONNECTED) {
                 ConnectionBanner.hide();
+            } else if (state == WasmRmiClientChannel.State.CLOSED && channel.hasGivenUp()) {
+                // The client has stopped trying by itself (0.9.1+). Waiting will not help, and
+                // reloading the page will, so the bar says that and offers the button.
+                ConnectionBanner.showWithReload(FrameworkText.uiConnectionGaveUp().text(),
+                        FrameworkText.uiReload().text());
             }
         });
     }
