@@ -25,6 +25,17 @@ edits and writes made while offline are sent on reconnect, and RMI calls fail im
 `DisconnectedException` instead of hanging. Since 0.6.1 an idle connection also sends a keepalive
 every 25 seconds, so a proxy in front of the application does not close it for silence.
 
+Since 0.9.1 the client does not reconnect while the page is hidden, and connects at once when it is
+shown again. The backoff only starts again from 500 ms after a connection that stayed open for 30
+seconds.
+
+- **Reconnecting stops after 10 failures in a row** (0.9.1+). That waits out a server restart of
+  about a minute, not a longer outage. The built-in bar then says "We could not reconnect to the
+  server. Reload the page to try again." with a Reload button, and
+  `WasmRmiClientChannel.hasGivenUp()` is true. An application that draws its own indicator should
+  treat `CLOSED` together with `hasGivenUp()` the same way, or call
+  `WasmRmiClientChannel.reconnect()` itself.
+
 What automatic recovery deliberately does **not** cover:
 
 - **RMI calls are never replayed.** A call that failed to a drop is the application's to retry — the
@@ -568,16 +579,16 @@ cannot. That is a floor, not a guarantee of a usable screen.
   Build those with `AppBase.location(...)` / `AppBase.url(...)`.
 - **The `<base href>` is skipped when the shell already declares one**, and when it has no `<head>`.
   Both are deliberate, and both mean an application that does either owns the problem itself.
-- **Closing a connection does not wait for the message it interrupted.** Everything the connection
-  had queued is thrown away and the message being handled is interrupted, but the close returns
-  straight away rather than waiting for that thread to stop. So a service method can still be
-  running for a moment after the connection it belongs to is gone, and a shutdown that closes
-  connections can reach the end of the container's own teardown while one is still finishing. The
-  framework no longer lets that thread die noisily, and a call that fails is still answered on its
-  own; what an application must not assume is that nothing of a connection's is running once it has
-  been told the connection closed. Waiting instead is not an option: a message may legitimately be
-  waiting up to thirty seconds for a lock, and the close runs on the thread the container reads
-  every connection with.
+- **Closing a connection lets the running call finish** (0.9.1+). Everything the connection had
+  queued is thrown away without running, but the call being handled is not interrupted: it runs to
+  the end, its reply is dropped, and the server logs one INFO line, `Reply to TaskService.list
+  dropped: connection 7f3a closed`. So a service method can still be running after the connection it
+  belongs to is gone, and an application must not assume that nothing of a connection's is running
+  once it has been told the connection closed. The close itself returns straight away rather than
+  waiting for the call. Before 0.9.1 the call was interrupted, which landed wherever it was - most
+  often waiting for a pooled database connection - and turned every closed tab into database errors
+  in the log. The server shutting down still interrupts running calls, so an undeploy is not held
+  up.
 
 ## Multi-tenancy
 

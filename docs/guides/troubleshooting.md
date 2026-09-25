@@ -209,11 +209,35 @@ shows the symptom, the jar order in its `app/<name>.cfg` is the same suspect.
 ### The page says "Connection lost — reconnecting…"
 
 That is the built-in banner doing its job: the WebSocket dropped and the client is retrying with
-backoff, indefinitely. When the server is reachable again the banner disappears, shared signals
-snap to their current values, and live objects are re-synced automatically. Nothing to do unless
-it never disappears — then the server is down or unreachable, and the browser console shows the
-retry attempts. An application that draws its own indicator turns the banner off with
-`Zeroz4jClient.showConnectionBanner(false)`.
+backoff. When the server is reachable again the banner disappears, shared signals snap to their
+current values, and live objects are re-synced automatically. While the page is hidden the client
+does not retry at all (0.9.1+); it connects at once when the page is shown again. An application
+that draws its own indicator turns the banner off with `Zeroz4jClient.showConnectionBanner(false)`.
+
+### The page says "We could not reconnect to the server. Reload the page to try again."
+
+Since 0.9.1 the client stops after 10 failed attempts in a row, about 75 seconds of retrying. The
+server was down or unreachable for all of that time. Reloading the page is the fix, and the bar's
+Reload button does it. `WasmRmiClientChannel.hasGivenUp()` is true in this state, and
+`WasmRmiClientChannel.reconnect()` starts again from code.
+
+### A browser keeps reconnecting, and you want to know why
+
+Since 0.9.1 the server log has one INFO line per closed connection, and the next connection from the
+same browser reports how the one before it ended:
+
+```
+Connection closed: session 7f3a, user alice, code 1006 CLOSED_ABNORMALLY, no reason given, open 830 ms
+Client connected: alice roles=[user] session=8b21; previous connection closed with code 1006 after 830 ms, page hidden, reconnect attempt 3
+```
+
+The second line comes from the `zerozClose*` query parameters the client puts on its next handshake,
+so it appears even when the first connection never reached the server's close handler. Code 1001
+means the browser left the page, 1006 means the connection ended with no close frame (a proxy
+timeout, a network change, a phone freezing a background tab), 1008 and 1013 mean the server closed
+it. `page hidden` on a short-lived connection points at the browser, not the server. A transport
+error on a connection is one WARN line, `Connection error: session …`, with a stack trace only when
+it is something other than the other end going away.
 
 ### Data is stale after the server restarted
 

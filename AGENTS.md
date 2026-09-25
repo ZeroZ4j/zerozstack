@@ -377,7 +377,11 @@ backoff, a built-in "Connection lost" banner (`Zeroz4jClient.showConnectionBanne
 out), shared signals re-subscribed, live objects re-synced in place, offline signal writes and
 `@ClientWritable` edits queued and flushed. Connection state is a signal:
 `WasmRmiClient.connectionState()` — read it in an `Effect` to disable controls while not
-`CONNECTED`. What remains application work: retrying an RMI call that failed with
+`CONNECTED`. Since 0.9.1 nothing is attempted while the page is hidden (it connects at once when
+shown), the backoff only resets after a connection stayed open 30 seconds, and after 10 failures in a
+row the client stops: state `CLOSED`, `WasmRmiClientChannel.hasGivenUp()` true, and the bar asks the
+person to reload. Closing a connection no longer interrupts the call it was running; the reply is
+dropped. What remains application work: retrying an RMI call that failed with
 `DisconnectedException` (never replayed automatically), re-registering anything keyed by session id
 (ids change on reconnect; observe `SessionClosedEvent` server-side to clean up), reacting to a lost
 `LiveMutex` (`setLostListener`), and re-fetching live objects after a full **server restart**, which

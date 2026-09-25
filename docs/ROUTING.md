@@ -167,6 +167,11 @@ Zeroz4jClient.connect(Zeroz4jClient.defaultWebSocketUrl(), () -> Router.start("a
 anchor.setAttribute("href", AppBase.location("/tasks/42"));   // /coachapp/tasks/42
 ```
 
+`Router.start` may be called more than once (0.9.1+). An application that starts it from
+`RmiSecurityContext.onAuthenticated` or `onResolved` starts it again after every reconnect; the
+click and Back/Forward listeners are added only the first time, and each start loads the current
+page once more. When starts overlap, only the last one reaches the screen.
+
 An `href` has to carry the context path, because middle-click and "open in new tab" go to the server
 rather than through the router. The router accepts either form on the way back in, so a click on such
 an anchor still resolves to the route `/tasks/42`.
