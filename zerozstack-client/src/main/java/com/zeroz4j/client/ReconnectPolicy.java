@@ -300,30 +300,38 @@ final class ReconnectPolicy {
         if (failures > 0) {
             out.append('&').append(PARAM_ATTEMPT).append('=').append(failures);
         }
-        if (lastReason != null && !lastReason.isEmpty()) {
-            String reason = lastReason.length() > MAX_REASON_CHARS
-                    ? lastReason.substring(0, MAX_REASON_CHARS) : lastReason;
-            out.append('&').append(PARAM_CLOSE_REASON).append('=').append(encode(reason));
+        String reason = lastReason == null ? "" : encode(lastReason.length() > MAX_REASON_CHARS
+                ? lastReason.substring(0, MAX_REASON_CHARS) : lastReason);
+        if (!reason.isEmpty()) {
+            out.append('&').append(PARAM_CLOSE_REASON).append('=').append(reason);
         }
         return out.toString();
     }
 
-    /** Percent-encodes everything but letters, digits and {@code -._~}, as UTF-8. */
+    /**
+     * Keeps letters, digits and {@code -.~}, and turns every run of anything else into one
+     * {@code _}, which the server reads back as a space.
+     *
+     * <p>Never percent-encoded. Helidon's WebSocket upgrade decodes the query and builds a URI from
+     * the result, so a reason that decodes to a space, a quote or a percent sign fails the handshake
+     * with a 500 - and every browser close reason has a space in it, which left a page unable to
+     * reconnect at all. Nothing here can decode to a character a URI refuses.</p>
+     */
     static String encode(String text) {
         StringBuilder out = new StringBuilder();
-        byte[] bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        for (byte raw : bytes) {
-            int value = raw & 0xFF;
-            if ((value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
-                    || (value >= '0' && value <= '9')
-                    || value == '-' || value == '.' || value == '_' || value == '~') {
-                out.append((char) value);
-            } else {
-                out.append('%');
-                out.append(Character.toUpperCase(Character.forDigit(value >> 4, 16)));
-                out.append(Character.toUpperCase(Character.forDigit(value & 0xF, 16)));
+        for (int idx = 0; idx < text.length(); idx++) {
+            char ch = text.charAt(idx);
+            if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')
+                    || ch == '-' || ch == '.' || ch == '~') {
+                out.append(ch);
+            } else if (out.length() > 0 && out.charAt(out.length() - 1) != '_') {
+                out.append('_');
             }
         }
-        return out.toString();
+        int end = out.length();
+        while (end > 0 && out.charAt(end - 1) == '_') {
+            end--;
+        }
+        return out.substring(0, end);
     }
 }

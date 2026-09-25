@@ -161,7 +161,8 @@ final class ConnectionDiagnostics {
                     .append(" after ").append(afterMillis).append(" ms");
         }
         if (reason != null && !reason.isEmpty()) {
-            phrase.append(", reason \"").append(clean(reason)).append('"');
+            // The client sends "_" for a space: a real space breaks Helidon's handshake.
+            phrase.append(", reason \"").append(clean(reason.replace('_', ' '))).append('"');
         }
         phrase.append(hidden ? ", page hidden" : ", page visible");
         if (attempt != null && attempt > 0) {

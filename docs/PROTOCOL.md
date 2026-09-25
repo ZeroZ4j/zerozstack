@@ -499,8 +499,11 @@ A dropped socket reconnects automatically. Since 0.9.1 the client decides when a
 Each new handshake carries how the previous connection ended, as query parameters on the WebSocket
 URL, so the server can log it: `zerozCloseCode` (the close code), `zerozCloseAfterMs` (how long it
 had been open; absent when it never opened), `zerozCloseHidden` (`1` when the page was hidden at that
-moment), `zerozAttempt` (failures in a row so far) and `zerozCloseReason` (the reason, percent-encoded,
-at most 60 characters). A server before 0.9.1 ignores them; an application's own
+moment), `zerozAttempt` (failures in a row so far) and `zerozCloseReason` (the reason, cut to
+60 characters, with letters, digits and `-.~` kept and every run of anything else sent as one `_`,
+which the server logs as a space). The reason is never percent-encoded: Helidon's WebSocket upgrade
+decodes the query and builds a URI from the result, so a value that decodes to a space, a quote or
+a `%` answers the handshake with a 500. A server before 0.9.1 ignores these parameters; an application's own
 `AuthenticationProvider` sees them in the handshake parameters and should ignore them too.
 
 Reconnecting produces a **new session**: the handshake and the `0x03` AUTH

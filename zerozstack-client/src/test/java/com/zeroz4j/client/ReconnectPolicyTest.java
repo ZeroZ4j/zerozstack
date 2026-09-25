@@ -229,7 +229,7 @@ class ReconnectPolicyTest {
         policy.closed(1006, "going away & gone");
 
         assertEquals("wss://example.com/wasm-rmi?user=demo&zerozCloseCode=1006&zerozCloseAfterMs=830"
-                        + "&zerozCloseHidden=0&zerozAttempt=1&zerozCloseReason=going%20away%20%26%20gone",
+                        + "&zerozCloseHidden=0&zerozAttempt=1&zerozCloseReason=going_away_gone",
                 policy.withPreviousClose("wss://example.com/wasm-rmi?user=demo"));
 
         host.hidden = true;
@@ -237,5 +237,15 @@ class ReconnectPolicyTest {
         assertEquals("ws://h/wasm-rmi?zerozCloseCode=1001&zerozCloseHidden=1&zerozAttempt=1",
                 policy.withPreviousClose("ws://h/wasm-rmi"),
                 "an attempt that never opened has no open time; a hidden page is said so");
+    }
+
+    @Test
+    void theReasonNeverCarriesACharacterThatBreaksTheHandshake() {
+        // Helidon decodes the query and builds a URI from it, so %20, +, %22 or %25 answer the
+        // handshake with a 500 and the page can never reconnect. Only unreserved characters go up.
+        String sent = ReconnectPolicy.encode(" Connection closed: \"50%\" + <gone> é ");
+        assertEquals("Connection_closed_50_gone", sent);
+        assertTrue(sent.matches("[A-Za-z0-9._~-]*"), sent);
+        assertEquals("", ReconnectPolicy.encode(" %+ "));
     }
 }
