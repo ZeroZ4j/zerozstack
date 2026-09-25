@@ -96,7 +96,9 @@ public final class FrameworkText {
             FrameworkKeys.UI_NAVIGATION_FORBIDDEN,
             FrameworkKeys.UI_NAVIGATION_WAITING_FOR_CONNECTION,
             FrameworkKeys.UI_RETRY,
-            FrameworkKeys.UI_DISMISS
+            FrameworkKeys.UI_DISMISS,
+            FrameworkKeys.UI_CONNECTION_GAVE_UP,
+            FrameworkKeys.UI_RELOAD
         };
     }
 
@@ -158,6 +160,10 @@ public final class FrameworkText {
                 return "Retry";
             case FrameworkKeys.UI_DISMISS:
                 return "Dismiss";
+            case FrameworkKeys.UI_CONNECTION_GAVE_UP:
+                return "We could not reconnect to the server. Reload the page to try again.";
+            case FrameworkKeys.UI_RELOAD:
+                return "Reload";
             default:
                 return null;
         }
@@ -345,5 +351,25 @@ public final class FrameworkText {
      */
     public static Message uiDismiss() {
         return new Message(CATALOG, FrameworkKeys.UI_DISMISS);
+    }
+
+    /**
+     * What the connection bar says once the client has stopped reconnecting by itself.
+     *
+     * @return the message
+     * @since 0.9.1
+     */
+    public static Message uiConnectionGaveUp() {
+        return new Message(CATALOG, FrameworkKeys.UI_CONNECTION_GAVE_UP);
+    }
+
+    /**
+     * The words on the connection bar's button that reloads the page.
+     *
+     * @return the message
+     * @since 0.9.1
+     */
+    public static Message uiReload() {
+        return new Message(CATALOG, FrameworkKeys.UI_RELOAD);
     }
 }

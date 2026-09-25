@@ -184,6 +184,78 @@ behind a server that has raised its own ping limit.
 - The keepalive's answer requirement is in `docs/PROTOCOL.md`; `docs/guides/troubleshooting.md` and
   `docs/reference/limitations.md` cover the timer and the new exception.
 
+## [0.9.1] — 2026-09-25
+
+This release stops a browser tab from reconnecting forever. A phone kept a page open in the
+background; the browser closed its connection between 0.1 and 2.3 seconds after every open, and the
+page opened a new one every 16 to 35 seconds for hours - about 6,100 connections in 27 hours. Each
+one signed in again, loaded the page's data again, and on the server interrupted the call the page
+had just made, which the application logged as a burst of database errors. Nothing in any log said
+why the connections were closing.
+
+**Nothing in this release breaks an application.** The wire protocol is unchanged, and a 0.9.1
+client and a 0.9.0 server work together in both directions. The one change you may notice: a page
+that fails to reconnect ten times in a row now stops trying and asks the person to reload it.
+
+### Added
+
+- **The server logs why every connection closed.** One INFO line per close, with the connection,
+  the user, the close code and reason, and how long it was open:
+  `Connection closed: session 7f3a, user alice, code 1006 CLOSED_ABNORMALLY, no reason given, open 830 ms`.
+  A transport error is one WARN line, `Connection error: session 7f3a, user alice: java.io.IOException: Broken pipe`,
+  with no stack trace when the other end has simply gone; anything else keeps its stack trace.
+
+- **The browser reports how its previous connection ended.** A connection a phone drops early may
+  never reach the server's close handler, so the client remembers the close code, the reason, how
+  long the connection had been open and whether the page was hidden, and sends them as query
+  parameters on the next connection. The server puts them on its "Client connected" line:
+  `Client connected: alice roles=[user] session=8b21; previous connection closed with code 1006 after 830 ms, page hidden, reconnect attempt 3`.
+  A 0.9.0 server ignores the parameters, and a 0.9.0 client does not send them. The "Client
+  connected" line also names the session now, so it can be matched to its close line.
+
+- **`WasmRmiClientChannel.hasGivenUp()`** says whether the client stopped reconnecting by itself.
+
+### Changed
+
+- **A hidden page does not reconnect.** While the page is hidden nothing is attempted. When it is
+  shown again, or the browser reports that the network is back, the client connects at once
+  instead of waiting out a delay.
+
+- **The reconnect delay only starts again from the beginning after a connection that lasted.** It
+  used to reset the moment a connection opened, so a connection that opened and dropped a second
+  later was retried after the shortest delay, every time. A connection now has to stay open for 30
+  seconds before the delay starts again at 500 ms; one that drops sooner counts as a failure and the
+  next delay doubles, up to 15 seconds.
+
+- **After ten failed attempts in a row the client stops.** That is 75.5 seconds of waiting between
+  attempts, enough for a server restart of about a minute. The state becomes `CLOSED`, `hasGivenUp()`
+  is true, and the built-in connection bar says "We could not reconnect to the server. Reload the
+  page to try again." with a Reload button. The words come from the framework's catalog
+  (`ui.connection.gaveUp` and `ui.reload`), in English and German. If your application draws its
+  own indicator from `WasmRmiClient.connectionState()`, treat `CLOSED` with `hasGivenUp()` the same
+  way. `WasmRmiClientChannel.reconnect()` starts again.
+
+- **Closing a connection no longer interrupts the call it was running.** The call runs to the end,
+  its reply is dropped, and one INFO line says so:
+  `Reply to TaskService.list dropped: connection 7f3a closed`. Messages that had not started yet are
+  thrown away without running, as before. The interrupt used to land wherever the call was -
+  usually waiting for a pooled database connection (`IJ031013 Interrupted attempting lock` on
+  WildFly) - and turned every closed tab into database errors in the application's log. The server
+  shutting down still interrupts running calls, so an undeploy is not held up.
+
+- **A call that fails because its connection closed, or because it was interrupted, is not logged
+  as SEVERE.** It is one INFO line with no stack trace. An interrupted call on a connection that is
+  still open is still answered, so the caller is not left waiting.
+
+### Fixed
+
+- **`Router.start` can be called again without adding listeners again.** An application that starts
+  the router from `RmiSecurityContext.onAuthenticated` or `onResolved` starts it again after every
+  reconnect, and each start used to add another click listener and another Back/Forward listener,
+  so after a morning of reconnects one click loaded the page once per reconnect. Now the listeners
+  are added once. Each start still loads the current page once more, and when several starts
+  overlap only the last one reaches the screen.
+
 ## [0.9.0] — 2026-09-02
 
 This release teaches the framework to speak more than one language, end to end. A connection is
@@ -2706,7 +2778,8 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.6.2...v0.7.0

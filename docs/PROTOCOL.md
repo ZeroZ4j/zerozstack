@@ -497,8 +497,28 @@ and answers with an ordinary `0x01` response carrying the loaded value.
 
 ## Reconnection and re-sync
 
-A dropped socket reconnects automatically with exponential backoff (500 ms doubling to a 15 s cap,
-retried indefinitely). Reconnecting produces a **new session**: the handshake and the `0x03` AUTH
+A dropped socket reconnects automatically. Since 0.9.1 the client decides when as follows:
+
+- **Nothing is attempted while the page is hidden.** When the page is shown again, or the browser
+  fires `online`, the client connects at once.
+- **The delay is 500 ms, doubling to a 15 s cap.** It only starts again at 500 ms after a connection
+  that stayed open for 30 seconds. A connection that drops sooner counts as a failure, so a
+  connection that opens and drops a second later is not retried at the shortest delay for ever.
+- **After 10 failures in a row the client stops** (75.5 seconds of waiting in total). The state
+  becomes `CLOSED`, `WasmRmiClientChannel.hasGivenUp()` is true, and the built-in bar asks the
+  person to reload the page. `WasmRmiClientChannel.reconnect()` starts again.
+
+Each new handshake carries how the previous connection ended, as query parameters on the WebSocket
+URL, so the server can log it: `zerozCloseCode` (the close code), `zerozCloseAfterMs` (how long it
+had been open; absent when it never opened), `zerozCloseHidden` (`1` when the page was hidden at that
+moment), `zerozAttempt` (failures in a row so far) and `zerozCloseReason` (the reason, cut to
+60 characters, with letters, digits and `-.~` kept and every run of anything else sent as one `_`,
+which the server logs as a space). The reason is never percent-encoded: Helidon's WebSocket upgrade
+decodes the query and builds a URI from the result, so a value that decodes to a space, a quote or
+a `%` answers the handshake with a 500. A server before 0.9.1 ignores these parameters; an application's own
+`AuthenticationProvider` sees them in the handshake parameters and should ignore them too.
+
+Reconnecting produces a **new session**: the handshake and the `0x03` AUTH
 frame run again, and the previous session's server-side registrations are gone. The client restores
 itself in this order, all as fire-and-forget frames:
 

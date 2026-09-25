@@ -89,7 +89,9 @@ application's decision, because only it knows whether repeating the call is safe
 : `CONNECTING`, `CONNECTED`, `RECONNECTING` or `CLOSED`, exposed as a signal by
 `WasmRmiClient.connectionState()`. The built-in "Connection lost — reconnecting…" banner renders
 from it; applications with their own indicator disable the banner via
-`Zeroz4jClient.showConnectionBanner(false)`.
+`Zeroz4jClient.showConnectionBanner(false)`. `CLOSED` is also the state after the client stops
+reconnecting by itself (0.9.1+), which `WasmRmiClientChannel.hasGivenUp()` tells apart from a
+deliberate close.
 
 **Effect**
 : A side-effect runner, usually rendering, that re-runs when any signal it read changes. Created with
