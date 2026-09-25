@@ -18,7 +18,6 @@
 package com.zeroz4j.client.router;
 
 import com.zeroz4j.api.RmiSecurityContext;
-import com.zeroz4j.client.AppBase;
 import com.zeroz4j.ui.component.Component;
 
 import java.util.ArrayList;
@@ -90,6 +89,8 @@ public final class Router {
         void onError(String path, Throwable reason);
     }
 
+    static RouterHost host = new RouterBrowser();
+
     private static String containerId;
     private static ErrorHandler errorHandler;
     private static final List<NavigationListener> listeners = new ArrayList<>();
@@ -97,11 +98,28 @@ public final class Router {
     private static String forbiddenPath;
     private static String currentPath;
 
+    /** Whether the click and Back/Forward listeners are installed. They are installed once. */
+    private static boolean listening;
+
+    /**
+     * The number of the navigation started last. A navigation whose number is no longer this one
+     * has been overtaken, and whatever it produces - a view or a failure - is thrown away.
+     */
+    private static long sequence;
+
     private Router() {}
 
     /**
      * Loads the route table, renders whatever the current URL points at, and starts listening for
      * navigation.
+     *
+     * <p>Calling it again renders the current URL into the given container again; it does not add a
+     * second set of click and Back/Forward listeners (0.9.1+). That matters because
+     * {@code RmiSecurityContext.onAuthenticated} and {@code onResolved} run again after every
+     * reconnect, and an application that starts the router there used to gain another pair of
+     * listeners each time - so one click or one press of Back then loaded the page once per
+     * reconnect. A render still loading when another starts is overtaken and never reaches the
+     * screen, so a burst of reconnects ends in one render, not one per reconnect.</p>
      *
      * @param containerElementId id of the element the router owns; its contents are replaced on
      *                           every navigation
@@ -109,12 +127,16 @@ public final class Router {
     public static void start(String containerElementId) {
         containerId = containerElementId;
         RouteRegistry.init();
-        // Route paths are what the route table is written in and what @Route declares; browser
-        // locations carry the deployment's context path in front of them. Every crossing between the
-        // two goes through AppBase, so a route table never has to know where it was deployed.
-        RouterBrowser.onPopState(path -> renderInCoroutine(AppBase.route(path)));
-        RouterBrowser.interceptRouteLinks(Router::navigate);
-        renderInCoroutine(AppBase.route(RouterBrowser.currentPath()));
+        if (!listening) {
+            listening = true;
+            // Route paths are what the route table is written in and what @Route declares; browser
+            // locations carry the deployment's context path in front of them. Every crossing between
+            // the two goes through the host, so a route table never has to know where it was
+            // deployed.
+            host.onPopState(location -> renderInCoroutine(host.toRoute(location)));
+            host.interceptRouteLinks(Router::navigate);
+        }
+        renderInCoroutine(host.toRoute(host.currentLocation()));
     }
 
     /**
@@ -129,11 +151,11 @@ public final class Router {
         if (path == null) {
             return;
         }
-        String route = AppBase.route(path);
+        String route = host.toRoute(path);
         if (route.equals(currentPath)) {
             return;
         }
-        RouterBrowser.pushState(AppBase.location(route));
+        host.pushState(host.toLocation(route));
         renderInCoroutine(route);
     }
 
@@ -146,8 +168,8 @@ public final class Router {
      * @param path the path
      */
     public static void replace(String path) {
-        String route = AppBase.route(path);
-        RouterBrowser.replaceState(AppBase.location(route));
+        String route = host.toRoute(path);
+        host.replaceState(host.toLocation(route));
         renderInCoroutine(route);
     }
 
@@ -203,26 +225,38 @@ public final class Router {
         return currentPath;
     }
 
+    /** Test support only: forgets every listener, every navigation and every setting. */
+    static void resetForTesting(RouterHost testHost) {
+        host = testHost;
+        containerId = null;
+        errorHandler = null;
+        listeners.clear();
+        notFoundPath = null;
+        forbiddenPath = null;
+        currentPath = null;
+        listening = false;
+        sequence = 0;
+    }
+
     // ---------------------------------------------------------------- rendering
 
     /**
-     * Runs a navigation where its loaders are allowed to suspend.
+     * Runs a navigation where its loaders are allowed to suspend - on a green thread in the
+     * browser; see {@link RouterBrowser#runNavigation(Runnable)}.
      *
-     * <p>Navigation is triggered from browser callbacks — a click, a popstate, the frame that
-     * reports authentication — and TeaVM cannot suspend a coroutine on a stack that started in
-     * native JavaScript. A loader making an RMI call is exactly such a suspension, so calling it
-     * directly from those callbacks fails with "suspension point reached from non-threading
-     * context" and the navigation dies before rendering anything.</p>
-     *
-     * <p>Starting a thread re-enters TeaVM's own scheduler, which is what makes the loaders legal.
-     * It is a green thread on the browser's event loop, not parallelism — nothing here runs at the
-     * same time as anything else.</p>
+     * <p>Numbers the navigation first. Only the navigation started last may put a view on the
+     * screen or report a failure; one that is overtaken while its loaders run is thrown away.</p>
      */
     private static void renderInCoroutine(String fullPath) {
-        new Thread(() -> render(fullPath)).start();
+        final long number = ++sequence;
+        host.runNavigation(() -> render(fullPath, number));
     }
 
-    private static void render(String fullPath) {
+    private static boolean overtaken(long number) {
+        return number != sequence;
+    }
+
+    private static void render(String fullPath, long number) {
         String path = stripQuery(fullPath);
         RouteRegistry.RouteMatch match = RouteRegistry.match(path);
 
@@ -273,15 +307,24 @@ public final class Router {
                         chain.get(i));
             }
 
-            RouterBrowser.mount(containerId, rendered);
+            if (overtaken(number)) {
+                // A newer navigation started while this one was loading - another click, or the
+                // router started again after a reconnect. Its view would be replaced a moment
+                // later, or would land on top of the page the person asked for since.
+                return;
+            }
+            host.mount(containerId, rendered);
             currentPath = path;
             for (NavigationListener listener : listeners) {
                 listener.onNavigated(params);
             }
         } catch (RuntimeException ex) {
             // The page is left as it was: replacing a working view with a blank one because a fetch
-            // failed loses whatever the user was doing.
-            fail(path, ex);
+            // failed loses whatever the user was doing. An overtaken navigation reports nothing:
+            // its failure is about a page nobody is waiting for any more.
+            if (!overtaken(number)) {
+                fail(path, ex);
+            }
         }
     }
 
@@ -354,7 +397,7 @@ public final class Router {
         }
         // Without a handler this would vanish, and a navigation that silently does nothing is the
         // hardest kind of bug to notice.
-        RouterBrowser.warn("[zeroz4j] Navigation to '" + path + "' failed: " + reason.getMessage());
+        host.warn("[zeroz4j] Navigation to '" + path + "' failed: " + reason.getMessage());
     }
 
     private static String stripQuery(String fullPath) {
