@@ -73,6 +73,7 @@ shape users receive is `routing-tour`'s client, which alone takes `-Pproduction`
 | `zerozstack-server-jaxrs` | The JAX-RS catch-all at `/` serving the client bundle and the shell. A standalone server wants it; a WAR with its own servlets must be able to leave it out, which is why it is separate. |
 | `zerozstack-server-jakarta` | Servlet-container binding: WebSocket registration, serializer bootstrap, the container `ManagedThreadFactory`, and an optional shell servlet. Take this instead of `-helidon` for a WAR. |
 | `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. Depends on `-jaxrs`. |
+| `zerozstack-server-vidocq` | Experimental, Java 25, built only under `-Pvidocq`: runs the server on Vidocq (Chappe HTTP/WebSocket, Vauban CDI) instead of Helidon. `Zeroz4jVidocqServer` mirrors `Zeroz4jServer`; limits and upload are enforced by its adapter. See docs/guides/vidocq-server.md. |
 | `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |

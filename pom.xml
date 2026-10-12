@@ -82,8 +82,6 @@
         <module>zerozstack-store-eclipsestore</module>
         <module>zerozstack-bom</module>
         <module>zerozstack-archetype</module>
-        <!-- SPIKE, throwaway: see zerozstack-server-vidocq-spike/pom.xml. Needs JDK 25. -->
-        <module>zerozstack-server-vidocq-spike</module>
     </modules>
 
     <properties>
@@ -340,6 +338,20 @@
     </build>
 
     <profiles>
+        <!--
+            The Vidocq server binding (experimental, Java 25). Off by default so a build on JDK 21
+            is exactly what it was; turn it on with -Pvidocq on JDK 25. Adds the binding module and
+            two launcher modules that run the chat-events and chat-livesync examples on it. See
+            docs/guides/vidocq-server.md.
+        -->
+        <profile>
+            <id>vidocq</id>
+            <modules>
+                <module>zerozstack-server-vidocq</module>
+                <module>zerozstack-examples/chat-events/chat-events-vidocq</module>
+                <module>zerozstack-examples/chat-livesync/chat-livesync-vidocq</module>
+            </modules>
+        </profile>
         <!--
             Release to Maven Central. The account setup, namespace verification and signing key
             are documented once for the family in ZeroZ DB's RELEASING.md; the com.zeroz4j
