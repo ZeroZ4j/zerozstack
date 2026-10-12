@@ -97,7 +97,7 @@ mvn clean deploy -Prelease,vidocq -DskipTests
 ```
 
 `zerozstack-server-vidocq` is part of the release and is in the reactor only under `-Pvidocq`,
-because it compiles for Java 25 and Vidocq 0.3.0 will not run on anything older. Without the profile
+because it compiles for Java 25 and Vidocq will not run on anything older. Without the profile
 the upload would leave it out and publish fourteen modules, not fifteen. JDK 25 builds everything
 else for Java 21 as usual, so one build on one JDK produces the whole set. Tests are skipped here
 because they already ran, on JDK 21, where the rest of the repository is meant to be tested; the

@@ -4,7 +4,7 @@ This page is for a developer who wants to try a ZeroZ Stack application on the V
 
 `zerozstack-server-vidocq` is a supported second server binding, alongside Helidon, which stays the default.
 It runs on Vidocq 0.3.0 (Vidocq's version, not ZeroZ Stack's) <!-- version-check: Vidocq's own version, not ours -->
-and needs **Java 25**. Vidocq 0.3.0 is listed as a compatible implementation of Jakarta EE Core Profile 11.
+and needs **Java 25**. Vidocq 0.3.0 is listed as a compatible implementation of Jakarta EE Core Profile 11. <!-- version-check: Vidocq's own version, not ours -->
 Eleven examples are known to run on it: `chat-events`, `chat-livesync`, `pwa-install`, `todo-signals`,
 `job-monitor`, `form-signup`, `inventory-crud`, `components-showcase`, `routing-tour`, `scoped-signals`
 and `payments-datamodels`. `oidc-login` has not been tried. It is not part of a default build.
@@ -107,7 +107,7 @@ public class ClientLogResource {
   `@Context HttpHeaders` and `UriInfo`). Filters, exception mappers, JSON bodies, `@Context`
   `SecurityContext` and streaming (Server-Sent Events) have not been tried here. The claim check uses
   two of Cassini's internal classes (`RouteRegistry` and `UriRouter`), which is safe only at the pinned
-  Vidocq version, 0.3.0.
+  Vidocq version, 0.3.0. <!-- version-check: Vidocq's own version, not ours -->
 
 ## Run the examples
 
