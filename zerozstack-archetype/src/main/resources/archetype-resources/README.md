@@ -55,7 +55,9 @@ This project runs on **Helidon** by default, on **Java 21** or later.
 #end
 
 `ServerApp` never names the container. It calls `Zeroz4jServer.start`, and that uses whichever
-binding module is on the classpath, so switching is a build option and not a code change:
+binding module is on the classpath, so switching is a build option and not a code change (the main class,
+the port and `--dev-login` are explained in
+[Starting the server](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/starting-the-server.md)):
 
 | Command | Container | Java |
 |---|---|---|

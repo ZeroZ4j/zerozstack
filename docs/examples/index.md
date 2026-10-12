@@ -83,6 +83,22 @@ setup commands.
 
 See [Quickstart](../start/quickstart.md) for prerequisites and why `clean` matters.
 
+## Running one on Vidocq
+
+Ten examples also have a launcher module named `<example>-vidocq` that runs the same application on
+the experimental Vidocq server instead of Helidon: all but `todo-signals` and `oidc-login`. It needs
+Java 25 and the `vidocq` profile:
+
+```bash
+mvn clean package -Pvidocq -DskipTests -pl zerozstack-examples/chat-events/chat-events-vidocq -am
+cd zerozstack-examples/chat-events/chat-events-vidocq
+java -cp "target/libs/*" com.zeroz4j.server.vidocq.VidocqLauncher --port 8195 --dev-login
+```
+
+The launcher is a main class that needs none of the example's own. How a main class starts either
+server is in [Starting the server](../guides/starting-the-server.md); the rest is in
+[Running on Vidocq](../guides/vidocq-server.md).
+
 ## What each one demonstrates
 
 | Example | Mechanism | Why that one |

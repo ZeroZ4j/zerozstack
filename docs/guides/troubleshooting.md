@@ -157,6 +157,19 @@ The class was not registered. Registrars are discovered through `META-INF/servic
 module — so this usually means the module containing the model was not rebuilt, or the model is
 missing `@DataModel`.
 
+### `IllegalStateException: No server binding is on the classpath`
+
+The server module has neither `zerozstack-server-helidon` nor `zerozstack-server-vidocq`, so
+`Zeroz4jServer.start` has nothing to start. Add one (a generated project: build with `-Phelidon` or
+`-Pvidocq`). A WAR never calls `start`; it takes `zerozstack-server-jakarta`. See
+[Starting the server](starting-the-server.md#when-nothing-is-on-the-classpath).
+
+### `IllegalStateException: More than one server binding is on the classpath: helidon, vidocq`
+
+Both binding jars are in `target/libs`, usually left over from a build with the other container.
+Run `mvn clean install` with one profile, or pick one with `-Dzeroz.server.binding=helidon` (or
+`vidocq`). See [Starting the server](starting-the-server.md#when-more-than-one-is-on-the-classpath).
+
 ## Connection problems
 
 ### The page loads but the app never starts

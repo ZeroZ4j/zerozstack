@@ -114,6 +114,7 @@ Key things to know before generating ZeroZ Stack code:
 - [Saving data](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/persistence.md): Persisting the object graph, the one-call-one-save rule that prevents the most common data-loss bug, reading, deferring part of the graph, and saving after a client edit.
 - [Logging in with OpenID Connect](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/oidc-auth.md): How a browser gets an identity from a provider such as Keycloak, what the server checks, expiry and reconnection, and what this does not protect.
 - [Packaging and running](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/packaging.md): The four shapes a server ships in, and every zeroz.* setting with its default.
+- [How do I write the server's main class and start the server?](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/starting-the-server.md): The server's main class and Zeroz4jServer.start call: a complete main method, what start returns, how the port and the --dev-login flag are chosen, how Helidon or Vidocq is picked, and why a WAR calls nothing.
 - [Running on Vidocq instead of Helidon](https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/vidocq-server.md): The one start call that names no container, the experimental Vidocq binding (Java 25, serves the application's own JAX-RS resources), and switching with -Pvidocq or the archetype's container question.
 
 ## For coding agents

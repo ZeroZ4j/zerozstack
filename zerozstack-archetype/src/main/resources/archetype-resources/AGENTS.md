@@ -73,6 +73,8 @@ The default is `<zeroz4j.container>` in `${rootArtifactId}-server/pom.xml`.
 - `ServerApp` calls `com.zeroz4j.server.Zeroz4jServer.start(port, name)` and must never name a
   container. That call uses whichever binding module is on the classpath:
   `zerozstack-server-helidon` or `zerozstack-server-vidocq`.
+- How to write `ServerApp`, choose the port and turn on `--dev-login`:
+  <https://github.com/ZeroZ4j/zerozstack/blob/main/docs/guides/starting-the-server.md>.
 - Switch with a profile, never by editing a dependency or `ServerApp`:
   `mvn clean install -Phelidon` (Java 21 or later) or `mvn clean install -Pvidocq` (Java 25). Use
   `clean`, so `target/libs` does not hold both; with both, start-up fails and names them.

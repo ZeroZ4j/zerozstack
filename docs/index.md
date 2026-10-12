@@ -217,7 +217,8 @@ sendButton.addClickListener(e -> chat.sendMessage(new ChatMessage(author, text))
 
 - **Deployment into an application server**
 
-    Take `zerozstack-server-jakarta` instead of the Helidon binding and a WAR runs on WildFly,
+    Take `zerozstack-server-jakarta` instead of a server binding (`zerozstack-server-helidon`, or the
+    experimental `zerozstack-server-vidocq`) and a WAR runs on WildFly,
     Payara, Open Liberty or TomEE — with RMI calls on container threads, so `java:comp` lookups
     work inside a service.
 

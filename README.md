@@ -60,7 +60,8 @@ ZeroZ Stack is fully modular, allowing developers to pick exactly what they need
 *   **`zerozstack-client`**: The TeaVM bridging logic for the browser (WebSocket client, coroutines).
 *   **`zerozstack-ui-components`**: A Vaadin-inspired, DOM-less Java UI component library built on Tailwind/DaisyUI.
 *   **`zerozstack-server-core`**: The agnostic CDI engine, RMI dispatcher, `LiveSync` logic and file-upload handling.
-*   **`zerozstack-server-helidon`**: The Helidon-specific HTTP and WebSocket bindings.
+*   **`zerozstack-server-helidon`**: The default server binding: Helidon's HTTP and WebSocket server. A server's main class calls `Zeroz4jServer.start(port, appName)` from `zerozstack-server-core`, which uses whichever binding is on the classpath — see [Starting the server](docs/guides/starting-the-server.md).
+*   **`zerozstack-server-vidocq`**: An experimental second binding that runs the same server on Vidocq (Java 25, built only with `-Pvidocq`). See [Running on Vidocq](docs/guides/vidocq-server.md).
 *   **`zerozstack-server-jaxrs`**: The HTTP addresses for a standalone server — the application shell, static files and the upload address.
 *   **`zerozstack-server-jakarta`**: The same, as servlets, for deploying a WAR to WildFly, Payara, Open Liberty or TomEE.
 *   **`zerozstack-auth-oidc`**: Verifies OpenID Connect tokens at the handshake and turns their claims into roles and a tenant.

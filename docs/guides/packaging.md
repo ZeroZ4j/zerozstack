@@ -50,7 +50,9 @@ Two consequences worth planning around:
 ## Shape 1: the development layout (what the archetype builds)
 
 `mvn package` produces the server jar plus every dependency in `target/libs/`. Launch with a
-classpath:
+classpath. `ServerApp` is the server's main class, one `Zeroz4jServer.start` call; see
+[Starting the server](starting-the-server.md). Which container runs is a build choice, not a code
+choice: `mvn clean install -Pvidocq` or `-Phelidon` in a generated project.
 
 ```bash
 cd myapp-server
@@ -260,7 +262,9 @@ Storage has its own settings under a different prefix, `zeroz4j.store.*` — see
 
 Everything above assumes ZeroZ Stack brings its own server. It does not have to. To deploy into an
 application server — WildFly, Payara, Open Liberty, TomEE — take `zerozstack-server-jakarta` instead
-of `zerozstack-server-helidon`:
+of a standalone server binding (`zerozstack-server-helidon` or `zerozstack-server-vidocq`). A WAR has
+no main class and never calls `Zeroz4jServer.start`; see
+[Starting the server](starting-the-server.md#a-war-calls-nothing):
 
 ```xml
 <dependency>

@@ -235,7 +235,7 @@ is the fast test, not the whole story.
   runs it. A test proves the server sent the right bytes, not that the screen showed the right
   thing.
 - **No HTTP.** Only the live connection. The pages, the client bundle and the file-upload address
-  are served by whichever binding you deploy — Helidon or a servlet container — and are not started
+  are served by whichever binding you deploy — Helidon, Vidocq or a servlet container — and are not started
   here.
 - **No real network.** Nothing is timed out, dropped or reconnected unless you make it happen.
 - **A frame is bytes.** Reading what is inside one means decoding it with `BinarySerializer`, the

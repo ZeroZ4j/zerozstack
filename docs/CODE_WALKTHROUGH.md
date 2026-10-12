@@ -82,6 +82,22 @@ public class UserServiceImpl implements UserService {
 }
 ```
 
+### Step 3b: Start the Server
+The server's main class is one call. It names no container; the binding module on the classpath
+(`zerozstack-server-helidon` by default) is what starts:
+
+```java
+import com.zeroz4j.server.Zeroz4jServer;
+
+public final class Main {
+    public static void main(String[] args) {
+        Zeroz4jServer.start(8080, "My application").join();
+    }
+}
+```
+
+See [Starting the server](guides/starting-the-server.md) for the port, `--dev-login` and the choice of container.
+
 ### Step 4: Implement the Client-Side Application (TeaVM/Wasm)
 Initialize the WebSocket connection and call the generated RMI stub. The method execution will suspend processing cooperatively until response packet returns, keeping the UI fully responsive:
 

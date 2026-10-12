@@ -67,7 +67,8 @@ somewhere else, add `--port 9000` to the command, or pass the number to `run.bat
     0.6.0 — `routing-tour`, `oidc-login`, `scoped-signals` and `pwa-install` — do build one, so
     `java -jar …-server.jar` works for those.
 
-**What you should see.** Weld and Helidon start up, and the last lines report the server listening.
+**What you should see.** The server binding on the classpath starts (Helidon with Weld, for the examples), and the last lines report the server listening.
+The main class behind that command is one call; see [Starting the server](../guides/starting-the-server.md).
 The console stays open; stop it with `Ctrl+C`.
 
 ## 3. Open it
@@ -143,7 +144,8 @@ differences between the three propagation examples are the point.
 ## Starting your own project
 
 Use the Maven archetype. It scaffolds the three-module layout with TeaVM, the annotation processor and
-Helidon already wired up.
+Helidon already wired up. Helidon is the default server; `-Pvidocq` on the generated project switches to the
+experimental Vidocq binding ([Starting the server](../guides/starting-the-server.md#how-the-container-is-chosen)).
 
 ```bash
 mvn archetype:generate \

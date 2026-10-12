@@ -28,33 +28,13 @@ server answers: `/wasm-rmi` (the live connection), `/zeroz4j-upload` (file uploa
 else as static content, with the shell as the fallback for client routes. It also serves the
 application's own JAX-RS resources, described in the next section.
 
-## One start call, whichever container
+## The start call and the switch
 
-Application code does not name the container. It calls the same class under Helidon and Vidocq:
-
-```java
-import com.zeroz4j.server.Zeroz4jServer;
-
-public final class Main {
-    public static void main(String[] args) {
-        Zeroz4jServer.start(8080, "My application").join();
-    }
-}
-```
-
-`Zeroz4jServer` is in `zerozstack-server-core`. It starts the server binding it finds on the
-classpath. A binding is the module that starts one runtime: `zerozstack-server-helidon` registers
-`helidon`, and `zerozstack-server-vidocq` registers `vidocq`.
-
-| On the classpath | What `start` does |
-|---|---|
-| One binding | Uses it, and logs which. |
-| None | Fails, naming the two artifacts. A WAR does not call `start`. |
-| Both | Fails, naming them, unless `-Dzeroz.server.binding=helidon` or `=vidocq` picks one. |
-
-`start(int port, String appName)`, `port()`, `join()` and `close()` behave the same on both. Port `0`
-picks a free port on Vidocq. `Zeroz4jVidocqServer` is still there and does the work, but an
-application has no reason to call it.
+Application code does not name the container: its main class calls `Zeroz4jServer.start(port, appName)`
+under Helidon and Vidocq alike. How that call picks a binding, what it does with none or two, and the
+`-Dzeroz.server.binding=vidocq` property are in
+[Starting the server](starting-the-server.md#how-the-container-is-chosen). Port `0` picks a free
+port on Vidocq. `Zeroz4jVidocqServer` does the work, and an application has no reason to call it.
 
 ## Build the binding
 
@@ -68,18 +48,12 @@ mvn clean install -Pvidocq -DskipTests
 
 ## Switch an application
 
-**A project generated from the archetype** switches with a profile and no source edit:
-
-```bash
-mvn clean install -Pvidocq     # Vidocq, JDK 25
-mvn clean install -Phelidon    # Helidon, JDK 21 or later
-```
-
-Use `clean` when switching, so `target/libs` holds one container's jars. The run command does not
-change. The archetype asks `container` when it generates a project (`helidon` if you do not answer,
-or `-Dcontainer=vidocq`); the answer only sets which of the two is the default. `mvn verify
--Ppackage` works for both. The generated `Dockerfile` takes its Java version from that default, so
-pass `--build-arg JAVA_VERSION=25` when you built with `-Pvidocq` in a Helidon project.
+**A project generated from the archetype** switches with `mvn clean install -Pvidocq` (JDK 25) and back
+with `-Phelidon`, with no source edit. The profiles, the `container` question and the `clean` advice
+are in [Starting the server](starting-the-server.md#how-the-container-is-chosen). `mvn verify
+-Ppackage` works for both. The generated `Dockerfile` takes its Java version from the project's
+default container, so pass `--build-arg JAVA_VERSION=25` when you built with `-Pvidocq` in a Helidon
+project.
 
 **In a project you wrote by hand**, depend on the binding and leave Helidon out:
 
@@ -149,7 +123,7 @@ java -cp "target/libs/*" com.zeroz4j.server.vidocq.VidocqLauncher --port 8195 --
 Every other example in the list above is the same with its own `<example>-vidocq` module (except
 `todo-signals`, which has none) and a port of your choice. Start `routing-tour` and `scoped-signals`
 with their own main classes (`RoutingTourServer`, `ScopedSignalsServer`) so their set-up runs;
-the rest work with either. `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq; `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq. Open
+the rest work with either. `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq. Open
 `http://localhost:<port>/` and sign in as `demo` / `demo`. The examples' own `ExampleServer` classes
 are not needed here, and how the examples run on Helidon is unchanged. `VidocqLauncher` calls
 `Zeroz4jServer.start` too, and asks for the `vidocq` binding by name unless
