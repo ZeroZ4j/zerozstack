@@ -58,6 +58,24 @@
             <artifactId>vauban-core</artifactId>
             <version>${vidocq.version}</version>
         </dependency>
+        <!-- Cassini: Vidocq's JAX-RS 4.0 implementation. Serves the application's own @Path
+             resources; finds them at runtime among the Vauban beans, so the application's build
+             needs no annotation processor or plugin. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
         <!-- MicroProfile Config for Vauban: beans that inject @ConfigProperty need it. -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>

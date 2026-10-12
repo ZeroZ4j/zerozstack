@@ -66,8 +66,8 @@ Use `clean` when you switch, so `target/libs` holds one container's jars. The ru
 same for both. To change the default for good, edit `<zeroz4j.container>` and
 `<zeroz4j.server.java>` at the top of `${rootArtifactId}-server/pom.xml`.
 
-Vidocq serves the page, the live connection and file uploads. It does **not** serve JAX-RS
-resources you write yourself; an application that has any stays on Helidon. On Vidocq,
+Vidocq serves the page, the live connection, file uploads and any JAX-RS resources you write
+yourself (`@Path` classes, found at runtime; no extra build step). On Vidocq,
 `mvn verify -Ppackage` works the same, and the `Dockerfile` needs
 `--build-arg JAVA_VERSION=25` unless Vidocq is this project's default.
 

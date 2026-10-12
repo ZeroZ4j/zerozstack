@@ -4,7 +4,7 @@ This page is for a developer who wants to try a ZeroZ Stack application on the V
 
 !!! warning "Experimental"
     `zerozstack-server-vidocq` runs on Vidocq 0.3.0 (Vidocq's version, not ZeroZ Stack's) <!-- version-check: Vidocq's own version, not ours -->
-    and needs **Java 25**. Two examples are known to run on it, `chat-events` and `chat-livesync`.
+    and needs **Java 25**. Three examples are known to run on it, `chat-events`, `chat-livesync` and `pwa-install`.
     Nothing else has been tried, and it is not part of a default build.
 
 ## When to use this
@@ -24,7 +24,8 @@ Vidocq is a set of Java libraries. This module uses two of them:
 `zerozstack-server-core` runs unchanged. The module's job is the gap between Chappe's WebSocket and the
 Jakarta WebSocket `Session` the engine is written against, plus the three addresses a standalone
 server answers: `/wasm-rmi` (the live connection), `/zeroz4j-upload` (file upload) and everything
-else as static content, with the shell as the fallback for client routes.
+else as static content, with the shell as the fallback for client routes. It also serves the
+application's own JAX-RS resources, described in the next section.
 
 ## One start call, whichever container
 
@@ -90,7 +91,48 @@ pass `--build-arg JAVA_VERSION=25` when you built with `-Pvidocq` in a Helidon p
 
 `zerozstack-bom` manages the version. The binding does not need `zerozstack-server-jaxrs`.
 
-## Run the two examples
+## Your own JAX-RS resources
+
+A class annotated `@Path` in your server module is served, with CDI injection, written the same as
+under Helidon:
+
+```java
+@Path("/client-log")
+public class ClientLogResource {
+    @Inject LogSink sink;                      // any bean works
+
+    @POST
+    @Consumes(MediaType.TEXT_PLAIN)
+    public Response log(@QueryParam("level") String level, String message) {
+        sink.add(level, message);
+        return Response.noContent().build();
+    }
+}
+```
+
+- **Found at runtime.** The binding looks through the beans for classes with `@Path` or `@Provider`.
+  Nothing is generated at build time, so the application's build needs no annotation processor and no
+  plugin. The class must sit in a jar or folder with `META-INF/beans.xml` (the same as for any bean
+  here). `Cassini` is Vidocq's JAX-RS 4.0 implementation; the binding depends on it, so an application
+  adds nothing.
+- **Order.** `/wasm-rmi` and `/zeroz4j-upload` are always the framework's. Next, a request goes to a
+  resource if one has a method whose path matches (any HTTP verb; a wrong verb gets 405). Anything
+  else is static content, and a path nothing claims gets the shell page. A resource that answers 404
+  itself keeps its own 404. An application with no `@Path` class behaves exactly as before.
+- **`Application`.** An `Application` subclass among the beans is used: its `@ApplicationPath` becomes
+  a prefix (resources answer under it and nowhere else), and its `getClasses()` are added. With
+  several, the first by class name is used and a warning is logged. Not yet covered by a test.
+- **Resource scope.** A `@Path` class with no scope annotation is request scoped, as JAX-RS says.
+- **Dependency clash.** A server that depends on `jakarta.jakartaee-api` (JAX-RS 3.1 classes) should
+  exclude it when switching to Vidocq, as the `pwa-install-vidocq` module does; the Vidocq jars bring
+  the individual Jakarta APIs they need.
+- **Not verified.** Only plain resources were tried: the shapes in this module's tests
+  (`@GET`/`@POST`, `@PathParam`, `@QueryParam`, a `String` body, `Response`, `@Inject`,
+  `@Context HttpHeaders` and `UriInfo`). Filters, exception mappers, JSON bodies, `@Context`
+  `SecurityContext` and streaming (Server-Sent Events) have not been tried here. The claim check uses
+  Cassini's router class from an internal package, which is safe only at the pinned version.
+
+## Run the examples
 
 `VidocqLauncher` is a main class that needs no code from the application: `--port <n>` sets the port
 (else `-Dzeroz.port`, else 8080) and `--dev-login` turns on the built-in development accounts.
@@ -103,7 +145,8 @@ cd zerozstack-examples/chat-events/chat-events-vidocq
 java -cp "target/libs/*" com.zeroz4j.server.vidocq.VidocqLauncher --port 8195 --dev-login
 ```
 
-`chat-livesync` is the same with `chat-livesync-vidocq` and a port of your choice. Open
+`chat-livesync` and `pwa-install` are the same with `chat-livesync-vidocq` and `pwa-install-vidocq`
+and a port of your choice; `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq. Open
 `http://localhost:<port>/` and sign in as `demo` / `demo`. The examples' own `ExampleServer` classes
 are not needed here, and how the examples run on Helidon is unchanged. `VidocqLauncher` calls
 `Zeroz4jServer.start` too, and asks for the `vidocq` binding by name unless
@@ -134,10 +177,8 @@ ceiling stops the work, not the memory for that one message.
 
 ## Limits
 
-- Experimental: it has been run against `chat-events`, `chat-livesync` and the module's own tests.
+- Experimental: it has been run against `chat-events`, `chat-livesync`, `pwa-install` and the module's own tests.
 - Java 25 only. The profile fails on an earlier JDK.
-- Application-defined JAX-RS resources (for example the `pwa-install` example's manifest resource)
-  are not served; only the three addresses above are.
 - `zerozstack-server-test` starts a Weld container, so tests for an application on this binding
   drive a real socket instead, as this module's own tests do.
 - JaCoCo 0.8.12 cannot read Java 25 class files, so the module is built with coverage off.

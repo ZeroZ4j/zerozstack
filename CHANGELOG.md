@@ -89,8 +89,14 @@ behind a server that has raised its own ping limit.
 - **The archetype asks which container.** A new `container` question, `helidon` by default or
   `vidocq`, sets the generated project's default. Either way the server module has both profiles,
   so `mvn clean install -Pvidocq` or `-Phelidon` switches with no source edit. A project generated
-  without an answer builds and runs as before. Vidocq does not serve an application's own JAX-RS
-  resources. See `docs/guides/vidocq-server.md`.
+  without an answer builds and runs as before. See `docs/guides/vidocq-server.md`.
+
+- **The Vidocq binding serves the application's own JAX-RS resources.** `@Path` classes and
+  `Application` subclasses among the beans are found at runtime and served through Cassini, Vidocq's
+  JAX-RS implementation, with CDI injection. `/wasm-rmi` and `/zeroz4j-upload` stay the framework's,
+  a matching resource wins over static files, and a path no resource claims still gets the shell. An
+  application with no resource is unchanged. The `pwa-install` example now runs on Vidocq too
+  (`pwa-install-vidocq`). See `docs/guides/vidocq-server.md`.
 
 - **A busy indicator for every navigation, on by default.** A bar sweeping along the top (3 pixels),
   a spinner on a small card in the middle of the window (48 pixels), and a wait cursor over the whole
