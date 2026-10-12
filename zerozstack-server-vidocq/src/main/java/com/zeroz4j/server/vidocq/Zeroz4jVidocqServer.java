@@ -30,11 +30,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Entry point for running a ZeroZ Stack application on the Vidocq runtime instead of Helidon.
+ * Runs a ZeroZ Stack application on the Vidocq runtime instead of Helidon.
  *
- * <p>The same four methods as {@code com.zeroz4j.server.Zeroz4jServer} in
- * {@code zerozstack-server-helidon}; the class has a name of its own so both bindings can be on one
- * classpath. <b>Experimental, and Java 25 only</b> (Vidocq 0.3.0 needs it). See
+ * <p>Application code does not call this class: it calls
+ * {@code com.zeroz4j.server.Zeroz4jServer.start}, which finds {@link VidocqServerBinding} when this
+ * module is on the classpath, and that binding starts this. Calling it directly still works.
+ * <b>Experimental, and Java 25 only</b> (Vidocq 0.3.0 needs it). See
  * {@code docs/guides/vidocq-server.md}.</p>
  *
  * <p>Vidocq is a set of libraries. This binding uses two: <i>Vauban</i>, its CDI container, finds

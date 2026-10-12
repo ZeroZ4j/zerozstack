@@ -18,6 +18,7 @@
 package com.zeroz4j.server.vidocq;
 
 import com.zeroz4j.server.DevAuth;
+import com.zeroz4j.server.Zeroz4jServer;
 
 /**
  * A main class that runs any ZeroZ Stack application on the Vidocq runtime, so an application
@@ -48,7 +49,11 @@ public final class VidocqLauncher {
         if ("dev".equals(System.getProperty("zeroz.security.mode"))) {
             System.out.println(DevAuth.WARNING_BANNER);
         }
-        Zeroz4jVidocqServer.start(port(args), "zeroz4j Vidocq Server").join();
+        // This launcher means Vidocq, so it says so when another binding is on the classpath too.
+        if (System.getProperty(Zeroz4jServer.BINDING_PROPERTY) == null) {
+            System.setProperty(Zeroz4jServer.BINDING_PROPERTY, VidocqServerBinding.NAME);
+        }
+        Zeroz4jServer.start(port(args), "zeroz4j Vidocq Server").join();
     }
 
     private static boolean hasFlag(String[] args, String flag) {

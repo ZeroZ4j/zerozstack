@@ -5,7 +5,7 @@
   Every second-level heading below is wrapped in #[[ ... ]]#, Velocity's literal block, which emits
   its contents untouched. This comment is itself Velocity syntax and is not generated.
 
-  ${zeroz4jVersion}, ${rootArtifactId} and ${package} are substituted; see archetype-metadata.xml.
+  ${zeroz4jVersion}, ${rootArtifactId}, ${package} and ${container} are substituted; see archetype-metadata.xml.
 *###
 # AGENTS.md — this is a ZeroZ Stack application
 
@@ -60,6 +60,26 @@ java -cp "target/classes;target/libs/*" ${package}.server.ServerApp
 
 Use `:` instead of `;` in that classpath on Linux and macOS. There is no `mvn exec:java` here and
 adding one will not work. Then open <http://localhost:8080>.
+
+#[[## The server container]]#
+
+#if( $container == 'vidocq' )
+**This project runs on Vidocq by default: experimental, Java 25 to build and to run.**
+#else
+**This project runs on Helidon by default, on Java 21 or later.**
+#end
+The default is `<zeroz4j.container>` in `${rootArtifactId}-server/pom.xml`.
+
+- `ServerApp` calls `com.zeroz4j.server.Zeroz4jServer.start(port, name)` and must never name a
+  container. That call uses whichever binding module is on the classpath:
+  `zerozstack-server-helidon` or `zerozstack-server-vidocq`.
+- Switch with a profile, never by editing a dependency or `ServerApp`:
+  `mvn clean install -Phelidon` (Java 21 or later) or `mvn clean install -Pvidocq` (Java 25). Use
+  `clean`, so `target/libs` does not hold both; with both, start-up fails and names them.
+- Vidocq is experimental. It serves the page, the live connection and file uploads, and **does not
+  serve JAX-RS resources the application defines**. Do not add one to a project on Vidocq.
+- On Vidocq the `Dockerfile` needs Java 25: `--build-arg JAVA_VERSION=25` unless Vidocq is the
+  default here.
 
 #[[## Choosing a build command — read this before you compile anything]]#
 
