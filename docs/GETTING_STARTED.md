@@ -7,7 +7,7 @@
 > corrected. One known error remains: `java -jar …-server.jar` cannot work, because no shade or
 > assembly plugin is configured — launch with `java -cp "target/classes:target/libs/*"` instead.
 
-The easiest way to scaffold a new `zeroz4j` project is to use the provided Maven Archetype. This will automatically generate a complete, multi-module project (client, shared, server) with all TeaVM, annotation processors, and Helidon dependencies correctly configured.
+The easiest way to scaffold a new `zeroz4j` project is to use the provided Maven Archetype. This will automatically generate a complete, multi-module project (client, shared, server) with all TeaVM, annotation processors, and Helidon (the default server) dependencies correctly configured.
 
 ## 1. Generate the Project
 
@@ -28,7 +28,7 @@ mvn archetype:generate \
 The generated project will contain:
 *   `myapp-shared`: Contains your API interfaces and Domain Models.
 *   `myapp-client`: Contains the Java UI code that compiles to WebAssembly.
-*   `myapp-server`: Contains the Helidon-based backend that persists your data.
+*   `myapp-server`: Contains the backend that persists your data. It runs on Helidon by default, or on the experimental Vidocq with `mvn clean install -Pvidocq`. Its `ServerApp` main class is one `Zeroz4jServer.start` call; see [Starting the server](guides/starting-the-server.md).
 
 ## 3. Build and Run
 

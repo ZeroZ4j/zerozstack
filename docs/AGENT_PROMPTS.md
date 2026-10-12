@@ -21,7 +21,7 @@ Prompts are ordered roughly by difficulty. Each is independent.
 ```text
 You are implementing a new example application for ZeroZ Stack, a zero-impedance Java
 web framework: one language (Java 21) end-to-end — the client UI compiles to Wasm/JS
-via TeaVM, the server runs on Helidon with CDI, and the SAME POJOs travel from
+via TeaVM, the server runs on Helidon (the default; Vidocq is experimental) with CDI, and the SAME POJOs travel from
 EclipseStore persistence through RMI to the browser. No REST, no JSON, no DTOs,
 no JavaScript, no SQL.
 

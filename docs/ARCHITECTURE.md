@@ -5,7 +5,7 @@
 > `new MyService_Stub()`); the frame-type names differ from the code (`SyncFrameTypes` uses
 > `RPC_RESPONSE`, `RPC_PUSH`, `RPC_ERROR`); the downstream LiveSync frame is `0x10`, not a
 > server-sent `SUBSCRIBE`; and `zeroz4j-server-backend` is not a module — the modules are
-> `zerozstack-server-core` and `zerozstack-server-helidon`. For the wire format use
+> `zerozstack-server-core` and a server binding such as `zerozstack-server-helidon`. For the wire format use
 > [PROTOCOL.md](PROTOCOL.md); for current limits see [Limitations](reference/limitations.md).
 
 This document provides a deep dive into the architecture of the **ZeroZ Stack** framework. It is intended for developers, AI agents (like context7), and architects seeking to understand the internal mechanics of a pure Java, zero-impedance stack.
@@ -62,8 +62,9 @@ When an RMI stub is called, it packs the request into a contiguous `ByteBuffer`:
 ### Server-to-Client Response Frame
 
 The backend is modularized into `zerozstack-server-core` (the agnostic CDI engine and RMI dispatcher)
-and a specific HTTP/WebSocket binding — `zerozstack-server-helidon` for a standalone server, or
-`zerozstack-server-jakarta` to deploy as a WAR into WildFly, Payara, Open Liberty or TomEE. The core
+and a specific HTTP/WebSocket binding — `zerozstack-server-helidon` for a standalone server (or the
+experimental `zerozstack-server-vidocq`; `Zeroz4jServer.start` uses whichever is on the classpath, see
+[Starting the server](guides/starting-the-server.md)), or `zerozstack-server-jakarta` to deploy as a WAR into WildFly, Payara, Open Liberty or TomEE. The core
 carries no JAX-RS or servlet type at all, which is what makes "agnostic" true rather than
 aspirational: it can sit inside somebody else's WAR without claiming a URL. The backend unpacks the
 frame, routes it to the CDI bean implementing the interface, invokes the method on a thread from the

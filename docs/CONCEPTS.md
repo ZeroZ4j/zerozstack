@@ -18,7 +18,7 @@ Used to annotate your service interfaces. Any interface annotated with `@RmiServ
 The bootstrap mechanism for your Wasm client application. By calling `Zeroz4jClient.connect(url, callback)`, you establish the binary WebSocket connection to the backend and initialize the RMI subsystem.
 
 ## 4. `Zeroz4jServer`
-The bootstrap mechanism for your backend. It names no container: it starts whichever server binding is on the classpath, Helidon by default (see [Running on Vidocq](guides/vidocq-server.md) for the other). Calling `Zeroz4jServer.start(port, name)` spins up the HTTP/WebSocket server, initializes the CDI environment (Weld under Helidon), and binds the `zerozstack-server-core` RMI dispatcher to incoming connections.
+The bootstrap mechanism for your backend. It names no container: it starts whichever server binding is on the classpath, Helidon by default (see [Starting the server](guides/starting-the-server.md) for the main class and the choice, and [Running on Vidocq](guides/vidocq-server.md) for the other). Calling `Zeroz4jServer.start(port, name)` spins up the HTTP/WebSocket server, initializes the CDI environment (Weld under Helidon), and binds the `zerozstack-server-core` RMI dispatcher to incoming connections.
 
 ## 5. Access control: `@Secured` and `@RolesAllowed`
 ZeroZ Stack decides per method, on the server, who may call what. Annotating an `@RmiService` method with `@Secured` allows only signed-in users to call it. Adding `@RolesAllowed("admin")` narrows that to specific roles.
