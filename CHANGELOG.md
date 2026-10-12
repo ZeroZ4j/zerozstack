@@ -8,7 +8,7 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.10.0] — 2026-10-12
 
 This release is about the seconds between clicking a link and seeing the page. The router now says
 when a navigation starts, finishes and fails, for every way one can begin, and puts that on the
@@ -18,6 +18,12 @@ milliseconds, and a plain message with a Retry button when a page cannot be open
 faults that made a slow page look broken are gone: an older navigation that finished last could put
 its page over the one clicked since, and a call on a network that had died without closing the
 socket waited for minutes with nothing to end it.
+
+The other half of the release is the server's container. A second binding, `zerozstack-server-vidocq`,
+runs the same application on Vidocq instead of Helidon (Java 25), and the main class no longer
+names either: `Zeroz4jServer.start(port, name)` starts whichever binding is on the classpath, and a
+project generated from the archetype switches container with `-Pvidocq` or `-Phelidon`. Helidon
+remains the default, and an existing application needs no change to keep running on it.
 
 **Three things in the Breaking section can catch an application.** The busy indicator and the
 failure message are now on by default, so an application that already built its own of either now
@@ -79,24 +85,31 @@ behind a server that has raised its own ping limit.
 
 ### Added
 
+- **A second server binding: `zerozstack-server-vidocq`.** It runs the same application on Vidocq
+  instead of Helidon, and needs Java 25 to build and to run. It is published to Maven Central like
+  the other bindings, but it is built only under `-Pvidocq`, because the rest of the repository still
+  compiles for Java 21. Helidon stays the default. Ten examples have a launcher module named
+  `<example>-vidocq` that runs them on it; `todo-signals` and `oidc-login` do not. The differences
+  from Helidon are few and listed in `docs/guides/vidocq-server.md`: the browser-id cookie is set when
+  the page is served and not at the WebSocket handshake, and the message-size and idle limits are
+  applied by the binding's adapter. `zerozstack-server-test` still starts a Weld container, so a
+  test for an application on this binding drives a real socket instead.
 - **One start call for every container, and a switch between them.** `Zeroz4jServer.start(port,
   name)` now lives in `zerozstack-server-core` and names no container: it starts whichever binding
-  module is on the classpath, `zerozstack-server-helidon` or the new, experimental
-  `zerozstack-server-vidocq` (Java 25). Its name and four methods are unchanged, so existing
-  applications compile and run as they did. With no binding it fails naming the two artifacts; with
-  both it fails naming them unless `-Dzeroz.server.binding=helidon` or `=vidocq` picks one. A
-  binding is a `com.zeroz4j.server.spi.ServerBinding` registered in `META-INF/services`.
+  module is on the classpath, `zerozstack-server-helidon` or `zerozstack-server-vidocq`. Its name and
+  four methods are unchanged, so existing applications compile and run as they did. With no binding
+  it fails naming the two artifacts; with both it fails naming them unless
+  `-Dzeroz.server.binding=helidon` or `=vidocq` picks one. A binding is a
+  `com.zeroz4j.server.spi.ServerBinding` registered in `META-INF/services`.
 - **The archetype asks which container.** A new `container` question, `helidon` by default or
   `vidocq`, sets the generated project's default. Either way the server module has both profiles,
   so `mvn clean install -Pvidocq` or `-Phelidon` switches with no source edit. A project generated
   without an answer builds and runs as before. See `docs/guides/vidocq-server.md`.
-
 - **The Vidocq binding serves the application's own JAX-RS resources.** `@Path` classes and
   `Application` subclasses among the beans are found at runtime and served through Cassini, Vidocq's
   JAX-RS implementation, with CDI injection. `/wasm-rmi` and `/zeroz4j-upload` stay the framework's,
   a matching resource wins over static files, and a path no resource claims still gets the shell. An
-  application with no resource is unchanged. The `pwa-install` example now runs on Vidocq too
-  (`pwa-install-vidocq`). See `docs/guides/vidocq-server.md`.
+  application with no resource is unchanged. The `pwa-install` example shows one, its manifest.
 
 - **A busy indicator for every navigation, on by default.** A bar sweeping along the top (3 pixels),
   a spinner on a small card in the middle of the window (48 pixels), and a wait cursor over the whole
@@ -151,6 +164,14 @@ behind a server that has raised its own ping limit.
 
 ### Changed
 
+- **`Zeroz4jServer` moved from `zerozstack-server-helidon` to `zerozstack-server-core`.** The class
+  has the same package, name and four methods (`start`, `port`, `join`, `close`), so source and
+  compiled code that call it keep working, and `zerozstack-server-helidon` depends on
+  `zerozstack-server-core`, so the class is still on an application's classpath. Nothing to change
+  unless you listed `zerozstack-server-core` with its dependencies excluded. What differs is that
+  `start` now throws `IllegalStateException` in two cases that did not exist before: no binding on the
+  classpath, and more than one. A Helidon-only server is never in either. If you added
+  `zerozstack-server-vidocq` next to Helidon to try it, remove one or pass `-Dzeroz.server.binding`.
 - **The request timeout runs on a timer of its own.** It used to be checked only when another call
   was made or another frame arrived, so on a connection that had gone completely quiet a call never
   timed out at all. It is now checked every second, and a call fails between one and two seconds
@@ -200,6 +221,9 @@ behind a server that has raised its own ping limit.
   cannot be opened and how long a lost connection takes to show, and on navigation events, with every
   custom property and element named. It also warns that `onAuthenticated` and `onResolved` run again
   after every reconnect.
+- `docs/guides/starting-the-server.md` is new: the main class, the start call, how the container is
+  chosen and what each failure message means. `docs/guides/vidocq-server.md` covers the Vidocq
+  binding, and several pages that presented Helidon as the only container now say otherwise.
 - The keepalive's answer requirement is in `docs/PROTOCOL.md`; `docs/guides/troubleshooting.md` and
   `docs/reference/limitations.md` cover the timer and the new exception.
 
@@ -2797,7 +2821,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.1...HEAD
+[0.10.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.7.0...v0.8.0

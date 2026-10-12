@@ -90,7 +90,7 @@ nav:
       - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
       - Writing the server's main class and starting it: guides/starting-the-server.md
-      - Running the server on Vidocq (experimental): guides/vidocq-server.md
+      - Running the server on Vidocq: guides/vidocq-server.md
       - Packaging and running: guides/packaging.md
       - Answering in the reader's language: guides/language.md
       - Testing an application: guides/testing.md

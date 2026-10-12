@@ -9,7 +9,7 @@
       <defaultValue>@project.version@</defaultValue>
     </requiredProperty>
     <!-- Which container the generated server starts on by default: helidon, or vidocq
-         (experimental, Java 25). It only sets the default; the generated server module has a
+         (Java 25). It only sets the default; the generated server module has a
          profile for each, so the other is one -P away. Anything else is refused. -->
     <requiredProperty key="container">
       <defaultValue>helidon</defaultValue>

@@ -86,7 +86,7 @@ See [Quickstart](../start/quickstart.md) for prerequisites and why `clean` matte
 ## Running one on Vidocq
 
 Ten examples also have a launcher module named `<example>-vidocq` that runs the same application on
-the experimental Vidocq server instead of Helidon: all but `todo-signals` and `oidc-login`. It needs
+the Vidocq server instead of Helidon: all but `todo-signals` and `oidc-login`. It needs
 Java 25 and the `vidocq` profile:
 
 ```bash

@@ -28,7 +28,7 @@ mvn archetype:generate \
 The generated project will contain:
 *   `myapp-shared`: Contains your API interfaces and Domain Models.
 *   `myapp-client`: Contains the Java UI code that compiles to WebAssembly.
-*   `myapp-server`: Contains the backend that persists your data. It runs on Helidon by default, or on the experimental Vidocq with `mvn clean install -Pvidocq`. Its `ServerApp` main class is one `Zeroz4jServer.start` call; see [Starting the server](guides/starting-the-server.md).
+*   `myapp-server`: Contains the backend that persists your data. It runs on Helidon by default, or on Vidocq with `mvn clean install -Pvidocq`. Its `ServerApp` main class is one `Zeroz4jServer.start` call; see [Starting the server](guides/starting-the-server.md).
 
 ## 3. Build and Run
 

@@ -85,7 +85,7 @@
     </modules>
 
     <properties>
-        <revision>0.10.0-SNAPSHOT</revision>
+        <revision>0.10.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Everything the build writes is UTF-8 too, javadoc included. Without this the
              javadoc tool falls back through a chain of defaults to the platform encoding,
@@ -339,7 +339,7 @@
 
     <profiles>
         <!--
-            The Vidocq server binding (experimental, Java 25). Off by default so a build on JDK 21
+            The Vidocq server binding (Java 25). Off by default so a build on JDK 21
             is exactly what it was; turn it on with -Pvidocq on JDK 25. Adds the binding module and
             two launcher modules that run the chat-events and chat-livesync examples on it. See
             docs/guides/vidocq-server.md.

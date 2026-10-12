@@ -89,24 +89,34 @@ the signing key — are documented once for the whole family in
 **[ZeroZ DB's RELEASING.md](https://github.com/ZeroZ4j/zerozdb/blob/main/RELEASING.md)**, and the
 verified `com.zeroz4j` namespace covers this repository too, so none of that is repeated here.
 
+Run the tests on JDK 21 first, as in step 1. Then build and upload on **JDK 25**, with the `vidocq`
+profile switched on next to `release`:
+
 ```bash
-mvn clean deploy -Prelease
+mvn clean deploy -Prelease,vidocq -DskipTests
 ```
+
+`zerozstack-server-vidocq` is part of the release and is in the reactor only under `-Pvidocq`,
+because it compiles for Java 25 and Vidocq will not run on anything older. Without the profile
+the upload would leave it out and publish fourteen modules, not fifteen. JDK 25 builds everything
+else for Java 21 as usual, so one build on one JDK produces the whole set. Tests are skipped here
+because they already ran, on JDK 21, where the rest of the repository is meant to be tested; the
+Vidocq module's own tests (`VidocqServerTest`) run on JDK 25 with `-Pvidocq`.
 
 The `release` profile attaches source and javadoc jars, signs everything, and uploads to the
 portal. `autoPublish` is false, so the deployment waits for your approval at
 [central.sonatype.com/publishing/deployments](https://central.sonatype.com/publishing/deployments)
 rather than going straight out — a published version can never be changed or removed.
 
-**Fourteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
-`-server-jaxrs`, `-server-jakarta`, `-server-helidon`, `-auth-oidc`, `-ui-components`,
-`-store-eclipsestore`, `-server-test` (new in 0.8.0), `-bom` and `-archetype`.
+**Fifteen modules publish:** `zerozstack-parent`, `-shared-api`, `-apt`, `-client`, `-server-core`,
+`-server-jaxrs`, `-server-jakarta`, `-server-helidon`, `-server-vidocq` (new in 0.10.0), `-auth-oidc`,
+`-ui-components`, `-store-eclipsestore`, `-server-test` (new in 0.8.0), `-bom` and `-archetype`.
 
 **This sentence has now been wrong twice.** It said nine until 0.7.0, when somebody checked
 `target/central-staging` instead of believing it — the three server bindings and the OIDC provider
 had been publishing for some time. It then said thirteen until 0.8.0, when `-server-test` was added
-and the sentence was not. **Read `target/central-staging` after `mvn clean verify -Prelease` and
-count what is actually there.** A sentence in a document is not a manifest, and this one has a
+and the sentence was not. **Read `target/central-staging` after `mvn clean verify -Prelease,vidocq
+-DskipTests` and count what is actually there.** A sentence in a document is not a manifest, and this one has a
 record.
 
 **The examples do not.** They are demonstrations rather than libraries, and
@@ -118,8 +128,10 @@ signing artifacts nobody consumes only slows the build.
 Verify before deploying, which signs everything without uploading:
 
 ```bash
-mvn clean verify -Prelease -DskipTests
+mvn clean verify -Prelease,vidocq -DskipTests
 ```
+
+On JDK 25, like the deploy.
 
 ## Tagging
 
