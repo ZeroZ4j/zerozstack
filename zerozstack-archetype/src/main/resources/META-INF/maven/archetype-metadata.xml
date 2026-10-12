@@ -8,9 +8,16 @@
     <requiredProperty key="zeroz4jVersion">
       <defaultValue>@project.version@</defaultValue>
     </requiredProperty>
+    <!-- Which container the generated server starts on by default: helidon, or vidocq
+         (experimental, Java 25). It only sets the default; the generated server module has a
+         profile for each, so the other is one -P away. Anything else is refused. -->
+    <requiredProperty key="container">
+      <defaultValue>helidon</defaultValue>
+      <validationRegex>^(helidon|vidocq)$</validationRegex>
+    </requiredProperty>
   </requiredProperties>
   <fileSets>
-    <!-- Filtered so ${package}, ${rootArtifactId} and ${zeroz4jVersion} resolve. AGENTS.md is
+    <!-- Filtered so ${package}, ${rootArtifactId}, ${zeroz4jVersion} and ${container} resolve. AGENTS.md is
          filtered for the version above all: a generated project's instructions to an AI coding
          assistant are worth little unless they name the framework version that project actually
          resolves, since the published documentation runs ahead of released versions. README.md is

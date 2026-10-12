@@ -4,7 +4,7 @@
   wrapped in #[[ ... ]]#, Velocity's literal block, which emits its contents untouched. An
   unescaped heading disappears from the generated file with no error and no warning.
 
-  ${rootArtifactId} and ${package} are substituted; see archetype-metadata.xml.
+  ${rootArtifactId}, ${package} and ${container} are substituted; see archetype-metadata.xml.
 *###
 # ${rootArtifactId}
 
@@ -44,6 +44,32 @@ java -cp "target/classes;target/libs/*" ${package}.server.ServerApp
 
 Use `:` instead of `;` in that classpath on Linux and macOS. There is no `mvn exec:java` here.
 Then open <http://localhost:8080>.
+
+#[[## The server container]]#
+
+#if( $container == 'vidocq' )
+This project runs on **Vidocq** by default, an alternative server runtime. It is **experimental**
+and needs **Java 25** to build and to run.
+#else
+This project runs on **Helidon** by default, on **Java 21** or later.
+#end
+
+`ServerApp` never names the container. It calls `Zeroz4jServer.start`, and that uses whichever
+binding module is on the classpath, so switching is a build option and not a code change:
+
+| Command | Container | Java |
+|---|---|---|
+| `mvn clean install -Phelidon` | Helidon | 21 or later |
+| `mvn clean install -Pvidocq` | Vidocq, experimental | 25 |
+
+Use `clean` when you switch, so `target/libs` holds one container's jars. The run command is the
+same for both. To change the default for good, edit `<zeroz4j.container>` and
+`<zeroz4j.server.java>` at the top of `${rootArtifactId}-server/pom.xml`.
+
+Vidocq serves the page, the live connection and file uploads. It does **not** serve JAX-RS
+resources you write yourself; an application that has any stays on Helidon. On Vidocq,
+`mvn verify -Ppackage` works the same, and the `Dockerfile` needs
+`--build-arg JAVA_VERSION=25` unless Vidocq is this project's default.
 
 #[[## Two things that will catch you out]]#
 

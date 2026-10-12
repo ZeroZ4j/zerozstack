@@ -72,7 +72,8 @@ shape users receive is `routing-tour`'s client, which alone takes `-Pproduction`
 | `zerozstack-server-test` | Test harness. `TestServer` starts an isolated server in-process, `TestConnection` stands in for a browser. Application takes it with **test scope**; it starts a bean container and must never reach a production classpath. See docs/guides/testing.md. |
 | `zerozstack-server-jaxrs` | The JAX-RS catch-all at `/` serving the client bundle and the shell. A standalone server wants it; a WAR with its own servlets must be able to leave it out, which is why it is separate. |
 | `zerozstack-server-jakarta` | Servlet-container binding: WebSocket registration, serializer bootstrap, the container `ManagedThreadFactory`, and an optional shell servlet. Take this instead of `-helidon` for a WAR. |
-| `zerozstack-server-helidon` | Helidon HTTP/WebSocket bindings. Depends on `-jaxrs`. |
+| `zerozstack-server-helidon` | The Helidon binding, and the default: registers the `helidon` `ServerBinding` that `Zeroz4jServer.start` finds. Depends on `-jaxrs`. |
+| `zerozstack-server-vidocq` | Experimental, Java 25, built only under `-Pvidocq`: the Vidocq binding (Chappe HTTP/WebSocket, Vauban CDI), registered as `vidocq`. Limits and upload are enforced by its adapter, and it serves no application JAX-RS resource. See docs/guides/vidocq-server.md. |
 | `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
@@ -138,6 +139,23 @@ implementations).
    goes wrong on a tinted notice or a dark page. Text drawn *inside* a chart has its own four names,
    `com.zeroz4j.ui.chart.PlotText` - `FIGURE`, `LABEL`, `CAPTION`, `MESSAGE` - because class names do
    not reach a drawing; a test fails the build if a chart draws text without naming a role.
+
+## Starting the server: one call, any container
+
+`com.zeroz4j.server.Zeroz4jServer.start(port, appName)` is the only start call, and it lives in
+`zerozstack-server-core`. It names no container. Each standalone binding module registers a
+`com.zeroz4j.server.spi.ServerBinding` in `META-INF/services`, found with `ServiceLoader` because
+this runs before any bean container exists:
+
+- **One binding on the classpath** is used: `zerozstack-server-helidon` (`helidon`, the default) or
+  `zerozstack-server-vidocq` (`vidocq`, experimental, Java 25).
+- **None** fails with a sentence naming those two artifacts. A WAR never calls `start`.
+- **Both** fails naming them, unless `-Dzeroz.server.binding=<name>` picks one.
+
+So the container is a build choice. A generated application has `helidon` and `vidocq` profiles in
+its server module and the archetype asks `container` (`helidon` by default) to set which is the
+default. Never generate code that calls a binding class directly, and do not move a Helidon,
+Vidocq, JAX-RS or servlet type into `zerozstack-server-core` to make the facade "smarter".
 
 ## Persistence and transactions
 

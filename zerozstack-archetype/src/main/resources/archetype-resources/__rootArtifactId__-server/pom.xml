@@ -8,7 +8,19 @@
     <version>${version}</version>
   </parent>
   <artifactId>${rootArtifactId}-server</artifactId>
-  
+
+  <!-- The container this server runs on. Application code never names it: ServerApp calls
+       Zeroz4jServer.start, and that uses whichever binding module is on the classpath. These two
+       properties are this project's default; the helidon and vidocq profiles at the bottom of
+       this file set them the other way, so `mvn install -Pvidocq` or `-Phelidon` switches with no
+       source edit. Vidocq is experimental and needs Java 25, here and to run. -->
+  <properties>
+    <zeroz4j.container>${container}</zeroz4j.container>
+    <zeroz4j.server.java>#if( $container == 'vidocq' )25#{else}21#{end}</zeroz4j.server.java>
+    <maven.compiler.source>${zeroz4j.server.java}</maven.compiler.source>
+    <maven.compiler.target>${zeroz4j.server.java}</maven.compiler.target>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>${groupId}</groupId>
@@ -19,9 +31,10 @@
       <artifactId>${rootArtifactId}-client</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- zerozstack-server-helidon or zerozstack-server-vidocq; see the properties above. -->
     <dependency>
       <groupId>com.zeroz4j</groupId>
-      <artifactId>zerozstack-server-helidon</artifactId>
+      <artifactId>zerozstack-server-${zeroz4j.container}</artifactId>
     </dependency>
     <dependency>
       <groupId>com.zeroz4j</groupId>
@@ -37,7 +50,7 @@
       <resource>
         <directory>src/main/resources</directory>
       </resource>
-      <!-- The compiled client, served by Helidon from the classpath at /js/classes.js -->
+      <!-- The compiled client, served by the server from the classpath at /js/classes.js -->
       <resource>
         <directory>${project.basedir}/../${rootArtifactId}-client/target/js</directory>
         <targetPath>META-INF/resources/js</targetPath>
@@ -114,6 +127,24 @@
   </build>
 
   <profiles>
+    <!-- mvn install -Phelidon / mvn install -Pvidocq: build this server for the other container.
+         Each only sets the two properties at the top of this file. Run `mvn clean install` when
+         switching, so target/libs holds one container's jars and not both. -->
+    <profile>
+      <id>helidon</id>
+      <properties>
+        <zeroz4j.container>helidon</zeroz4j.container>
+        <zeroz4j.server.java>21</zeroz4j.server.java>
+      </properties>
+    </profile>
+    <profile>
+      <id>vidocq</id>
+      <properties>
+        <zeroz4j.container>vidocq</zeroz4j.container>
+        <zeroz4j.server.java>25</zeroz4j.server.java>
+      </properties>
+    </profile>
+
     <!--
         mvn verify -Ppackage
 

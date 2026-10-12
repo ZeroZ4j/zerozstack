@@ -79,6 +79,19 @@ behind a server that has raised its own ping limit.
 
 ### Added
 
+- **One start call for every container, and a switch between them.** `Zeroz4jServer.start(port,
+  name)` now lives in `zerozstack-server-core` and names no container: it starts whichever binding
+  module is on the classpath, `zerozstack-server-helidon` or the new, experimental
+  `zerozstack-server-vidocq` (Java 25). Its name and four methods are unchanged, so existing
+  applications compile and run as they did. With no binding it fails naming the two artifacts; with
+  both it fails naming them unless `-Dzeroz.server.binding=helidon` or `=vidocq` picks one. A
+  binding is a `com.zeroz4j.server.spi.ServerBinding` registered in `META-INF/services`.
+- **The archetype asks which container.** A new `container` question, `helidon` by default or
+  `vidocq`, sets the generated project's default. Either way the server module has both profiles,
+  so `mvn clean install -Pvidocq` or `-Phelidon` switches with no source edit. A project generated
+  without an answer builds and runs as before. Vidocq does not serve an application's own JAX-RS
+  resources. See `docs/guides/vidocq-server.md`.
+
 - **A busy indicator for every navigation, on by default.** A bar sweeping along the top (3 pixels),
   a spinner on a small card in the middle of the window (48 pixels), and a wait cursor over the whole
   page - once a navigation has taken 300 milliseconds, so a fast page shows nothing. It hides the

@@ -6,6 +6,11 @@
 #   docker build -t ${rootArtifactId} .
 #   docker run -p 8080:8080 ${rootArtifactId}
 #
+# The image's Java version follows the container this project was generated for: 21 for Helidon,
+# 25 for Vidocq. If you built the other one with -Phelidon or -Pvidocq, say so here too:
+#
+#   docker build --build-arg JAVA_VERSION=25 -t ${rootArtifactId} .
+#
 # -Pproduction is not optional here. A plain `mvn package` builds the browser bundle readable and
 # unoptimized, which is right while you are developing and wrong in an image you hand to anyone:
 # the bundle it copies in is several times larger, and it is not the shape you will have tested by
@@ -16,7 +21,10 @@
 # them into one jar breaks CDI discovery in ways that surface far from the cause. Here every
 # jar stays intact on a plain classpath — and the dependency layer is separate from the app
 # layer, so a routine rebuild pushes kilobytes, not the framework.
-FROM eclipse-temurin:21-jre
+#set( $dollar = '$' )
+ARG JAVA_VERSION=#if( $container == 'vidocq' )25#{else}21#{end}
+
+FROM eclipse-temurin:${dollar}{JAVA_VERSION}-jre
 WORKDIR /app
 
 # Dependencies first: this layer only changes when a dependency changes.
