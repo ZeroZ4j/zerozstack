@@ -9,7 +9,7 @@ cannot be opened.
 
 ```bash
 mvn -pl zerozstack-examples/routing-tour/routing-tour-server -am install
-java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.10.0.jar --dev-login
+java -jar zerozstack-examples/routing-tour/routing-tour-server/target/routing-tour-server-0.11.0.jar --dev-login
 ```
 
 Then open <http://localhost:8091/?user=admin&password=admin>.

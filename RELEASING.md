@@ -45,7 +45,7 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    so it follows `<revision>` too. (Until 0.8.0 there was a step here saying to check it by hand.)
 
    There is also nothing temporary to remove, and **nothing in the documentation changes on release
-   day**. Prose names the three numbers only — `0.10.0`, never the same number with a `-SNAPSHOT`
+   day**. Prose names the three numbers only — `0.11.0`, never the same number with a `-SNAPSHOT`
    suffix — and `VersionStatementTest` compares on those three, so the same sentence is correct while the
    line is open, on the day the release is cut, and afterwards. Taking a suffix off sixteen pages
    and putting it back a day later served no reader and is not done. The one exception is a literal
@@ -136,8 +136,8 @@ On JDK 25, like the deploy.
 ## Tagging
 
 ```bash
-git tag -a v0.10.0 -m "ZeroZ Stack 0.10.0"
-git push origin v0.10.0
+git tag -a v0.11.0 -m "ZeroZ Stack 0.11.0"
+git push origin v0.11.0
 ```
 
 Tag after the release is published, not before — a tag that points at something never released is
