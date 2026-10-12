@@ -213,6 +213,66 @@ class VidocqServerTest {
         assertEquals(404, get("/../secret.txt").statusCode());
     }
 
+    // ------------------------------------------------------------------ application REST resources
+
+    @Test
+    @DisplayName("a POST with a query parameter and a text body reaches the resource, which answers with a status")
+    void restPost() throws Exception {
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://" + host + "/rest-test/client-log?level=warn"))
+                .header("Content-Type", "text/plain")
+                .POST(HttpRequest.BodyPublishers.ofString("boom")).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(204, response.statusCode());
+        assertTrue(RestTestResource.LOGGED.contains("warn:boom"), RestTestResource.LOGGED.toString());
+    }
+
+    @Test
+    @DisplayName("a GET with a path parameter returns the string with its declared content type")
+    void restGetPathParam() throws Exception {
+        HttpResponse<String> response = get("/rest-test/echo/anna");
+        assertEquals(200, response.statusCode());
+        assertEquals("echo anna", response.body());
+        assertTrue(response.headers().firstValue("Content-Type").orElse("").startsWith("text/plain"));
+    }
+
+    @Test
+    @DisplayName("a resource can inject an application-scoped bean")
+    void restInjection() throws Exception {
+        assertEquals("hello bob", get("/rest-test/greet/bob").body());
+        assertEquals("hello bob", get("/rest-test/greet/bob").body(), "and again on the next request");
+    }
+
+    @Test
+    @DisplayName("@Context HttpHeaders and UriInfo are filled in")
+    void restContext() throws Exception {
+        HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://" + host + "/rest-test/context?q=7"))
+                .header("X-Probe", "yes").build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("yes|rest-test/context|7", response.body());
+    }
+
+    @Test
+    @DisplayName("a resource's own 404 is returned as is; a wrong method is 405; unclaimed paths still get the shell")
+    void restFallthrough() throws Exception {
+        HttpResponse<String> own = get("/rest-test/missing");
+        assertEquals(404, own.statusCode());
+        assertEquals("resource says no", own.body(), "not the shell page");
+
+        HttpResponse<String> wrong = HTTP.send(HttpRequest.newBuilder(
+                        URI.create("http://" + host + "/rest-test/echo/anna"))
+                .POST(HttpRequest.BodyPublishers.ofString("x")).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(405, wrong.statusCode());
+
+        HttpResponse<String> unclaimed = get("/rest-test/nothing/here");
+        assertEquals(200, unclaimed.statusCode());
+        assertTrue(unclaimed.body().contains("shell"), "no resource claims it, so the shell answers");
+        assertEquals(200, get("/hello.js").statusCode(), "static files are still served");
+        try (Client client = Client.connect("/wasm-rmi", "http://" + host, null)) {
+            assertFalse(client.auth().authenticated, "the live connection is still the framework's");
+        }
+    }
+
     // ------------------------------------------------------------------ idle timeout (no sockets)
 
     @Test

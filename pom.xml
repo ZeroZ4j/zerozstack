@@ -350,6 +350,7 @@
                 <module>zerozstack-server-vidocq</module>
                 <module>zerozstack-examples/chat-events/chat-events-vidocq</module>
                 <module>zerozstack-examples/chat-livesync/chat-livesync-vidocq</module>
+                <module>zerozstack-examples/pwa-install/pwa-install-vidocq</module>
             </modules>
         </profile>
         <!--

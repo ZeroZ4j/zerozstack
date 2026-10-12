@@ -76,8 +76,10 @@ The default is `<zeroz4j.container>` in `${rootArtifactId}-server/pom.xml`.
 - Switch with a profile, never by editing a dependency or `ServerApp`:
   `mvn clean install -Phelidon` (Java 21 or later) or `mvn clean install -Pvidocq` (Java 25). Use
   `clean`, so `target/libs` does not hold both; with both, start-up fails and names them.
-- Vidocq is experimental. It serves the page, the live connection and file uploads, and **does not
-  serve JAX-RS resources the application defines**. Do not add one to a project on Vidocq.
+- Vidocq is experimental. It serves the page, the live connection, file uploads and the JAX-RS
+  resources the application defines (`@Path` classes, found at runtime among the beans; the
+  application's jar needs `META-INF/beans.xml`). A resource path wins over a static file, never over
+  `/wasm-rmi` or `/zeroz4j-upload`. A path no resource matches gets the page, as before.
 - On Vidocq the `Dockerfile` needs Java 25: `--build-arg JAVA_VERSION=25` unless Vidocq is the
   default here.
 
