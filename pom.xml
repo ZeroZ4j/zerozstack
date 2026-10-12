@@ -351,6 +351,13 @@
                 <module>zerozstack-examples/chat-events/chat-events-vidocq</module>
                 <module>zerozstack-examples/chat-livesync/chat-livesync-vidocq</module>
                 <module>zerozstack-examples/pwa-install/pwa-install-vidocq</module>
+                <module>zerozstack-examples/job-monitor/job-monitor-vidocq</module>
+                <module>zerozstack-examples/form-signup/form-signup-vidocq</module>
+                <module>zerozstack-examples/inventory-crud/inventory-crud-vidocq</module>
+                <module>zerozstack-examples/components-showcase/components-showcase-vidocq</module>
+                <module>zerozstack-examples/routing-tour/routing-tour-vidocq</module>
+                <module>zerozstack-examples/scoped-signals/scoped-signals-vidocq</module>
+                <module>zerozstack-examples/payments-datamodels/payments-datamodels-vidocq</module>
             </modules>
         </profile>
         <!--

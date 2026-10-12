@@ -4,8 +4,9 @@ This page is for a developer who wants to try a ZeroZ Stack application on the V
 
 !!! warning "Experimental"
     `zerozstack-server-vidocq` runs on Vidocq 0.3.0 (Vidocq's version, not ZeroZ Stack's) <!-- version-check: Vidocq's own version, not ours -->
-    and needs **Java 25**. Three examples are known to run on it, `chat-events`, `chat-livesync` and `pwa-install`.
-    Nothing else has been tried, and it is not part of a default build.
+    and needs **Java 25**. Eleven examples are known to run on it: `chat-events`, `chat-livesync`, `pwa-install`, `todo-signals`,
+    `job-monitor`, `form-signup`, `inventory-crud`, `components-showcase`, `routing-tour`, `scoped-signals`
+    and `payments-datamodels`. `oidc-login` has not been tried. It is not part of a default build.
 
 ## When to use this
 
@@ -145,8 +146,10 @@ cd zerozstack-examples/chat-events/chat-events-vidocq
 java -cp "target/libs/*" com.zeroz4j.server.vidocq.VidocqLauncher --port 8195 --dev-login
 ```
 
-`chat-livesync` and `pwa-install` are the same with `chat-livesync-vidocq` and `pwa-install-vidocq`
-and a port of your choice; `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq. Open
+Every other example in the list above is the same with its own `<example>-vidocq` module (except
+`todo-signals`, which has none) and a port of your choice. Start `routing-tour` and `scoped-signals`
+with their own main classes (`RoutingTourServer`, `ScopedSignalsServer`) so their set-up runs;
+the rest work with either. `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq; `pwa-install` shows a JAX-RS resource (its manifest) on Vidocq. Open
 `http://localhost:<port>/` and sign in as `demo` / `demo`. The examples' own `ExampleServer` classes
 are not needed here, and how the examples run on Helidon is unchanged. `VidocqLauncher` calls
 `Zeroz4jServer.start` too, and asks for the `vidocq` binding by name unless
@@ -177,7 +180,13 @@ ceiling stops the work, not the memory for that one message.
 
 ## Limits
 
-- Experimental: it has been run against `chat-events`, `chat-livesync`, `pwa-install` and the module's own tests.
+- Experimental: it has been run against the examples listed at the top and the module's own tests.
+  For the seven added last, one scripted exchange each over a real socket worked: shared-signal
+  pushes (`job-monitor`), per-user and per-browser signals kept apart (`scoped-signals`), server-side
+  validation (`form-signup`), create/read/update/delete (`inventory-crud`), role refusal and a file
+  upload (`components-showcase`), records and a sealed family (`payments-datamodels`), deep links and
+  the admin/standard split (`routing-tour`). No browser has driven them on Vidocq.
+- `routing-tour` has no server-side role check on its calls; its `/admin` guard is in the browser only.
 - Java 25 only. The profile fails on an earlier JDK.
 - `zerozstack-server-test` starts a Weld container, so tests for an application on this binding
   drive a real socket instead, as this module's own tests do.
