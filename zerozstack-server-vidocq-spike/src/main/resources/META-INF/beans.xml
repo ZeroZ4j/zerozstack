@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="all">
+
+    <!--
+      No <scan> exclusions. There were two, for RmiSecurityFilter and DevLoginServlet, which
+      implemented the servlet API and so failed to load on the Helidon runtime. Both classes are
+      gone; this module now references no servlet type at all, which is what makes it safe to drop
+      into somebody else's WAR.
+    -->
+</beans>

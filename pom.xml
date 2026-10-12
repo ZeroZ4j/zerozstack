@@ -82,6 +82,8 @@
         <module>zerozstack-store-eclipsestore</module>
         <module>zerozstack-bom</module>
         <module>zerozstack-archetype</module>
+        <!-- SPIKE, throwaway: see zerozstack-server-vidocq-spike/pom.xml. Needs JDK 25. -->
+        <module>zerozstack-server-vidocq-spike</module>
     </modules>
 
     <properties>

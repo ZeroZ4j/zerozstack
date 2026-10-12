@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- THROWAWAY SPIKE: can the server run on Vidocq 0.3.0 (Chappe HTTP + Vauban CDI) instead of
+     Helidon/Weld/Tyrus? Not production code. Needs JDK 25. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.zeroz4j</groupId>
+        <artifactId>zerozstack-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>zerozstack-server-vidocq-spike</artifactId>
+    <name>zeroz4j Server Vidocq Spike (throwaway)</name>
+
+    <properties>
+        <vidocq.version>0.3.0</vidocq.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-server-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>zerozstack-store-eclipsestore</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The unmodified example: its service bean, its store beans, its page and its JS bundle. -->
+        <dependency>
+            <groupId>com.zeroz4j</groupId>
+            <artifactId>todo-signals-server</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>com.zeroz4j</groupId><artifactId>zerozstack-server-helidon</artifactId></exclusion>
+                <exclusion><groupId>io.helidon.microprofile.bundles</groupId><artifactId>helidon-microprofile</artifactId></exclusion>
+                <exclusion><groupId>io.helidon.microprofile.websocket</groupId><artifactId>helidon-microprofile-websocket</artifactId></exclusion>
+                <exclusion><groupId>io.helidon.logging</groupId><artifactId>helidon-logging-jul</artifactId></exclusion>
+                <exclusion><groupId>io.helidon.logging</groupId><artifactId>helidon-logging-slf4j</artifactId></exclusion>
+                <exclusion><groupId>io.smallrye</groupId><artifactId>jandex</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
+        <!-- MicroProfile Config for Vauban: the store injects @ConfigProperty values. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${vidocq.version}</version>
+        </dependency>
+        <!-- API jar only: the types WasmRmiServerEngine is written against. No implementation. -->
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-api</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-client-api</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-libs</id>
+                        <phase>package</phase>
+                        <goals><goal>copy-dependencies</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
