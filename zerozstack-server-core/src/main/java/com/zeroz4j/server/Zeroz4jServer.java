@@ -32,8 +32,8 @@ import java.util.logging.Logger;
  * }</pre>
  *
  * <p>The container is chosen by which binding module is on the classpath, never by this call:
- * {@code zerozstack-server-helidon} (the default) or {@code zerozstack-server-vidocq} (experimental,
- * Java 25). Each registers a {@link ServerBinding}, found here with {@link ServiceLoader}.</p>
+ * {@code zerozstack-server-helidon} (the default) or {@code zerozstack-server-vidocq}
+ * (Java 25). Each registers a {@link ServerBinding}, found here with {@link ServiceLoader}.</p>
  *
  * <ul>
  *   <li><b>One binding:</b> it is used.</li>
@@ -95,7 +95,7 @@ public final class Zeroz4jServer implements AutoCloseable {
         if (bindings.isEmpty()) {
             throw new IllegalStateException("No server binding is on the classpath. Add"
                     + " com.zeroz4j:zerozstack-server-helidon, or com.zeroz4j:zerozstack-server-vidocq"
-                    + " (experimental, Java 25). A WAR does not call Zeroz4jServer.start: its servlet"
+                    + " (Java 25). A WAR does not call Zeroz4jServer.start: its servlet"
                     + " container starts it, through zerozstack-server-jakarta.");
         }
         if (bindings.size() > 1) {

@@ -27,7 +27,7 @@
     </parent>
 
     <artifactId>job-monitor-vidocq</artifactId>
-    <name>zeroz4j Example job-monitor on Vidocq (experimental)</name>
+    <name>zeroz4j Example job-monitor on Vidocq</name>
     <description>Runs the unchanged job-monitor server on the Vidocq runtime. This module has no code: it
         collects the example's jars without Helidon, plus zerozstack-server-vidocq, into target/libs.
         Built only under the vidocq profile (Java 25). See docs/guides/vidocq-server.md.</description>

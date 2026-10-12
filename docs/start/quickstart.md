@@ -145,7 +145,7 @@ differences between the three propagation examples are the point.
 
 Use the Maven archetype. It scaffolds the three-module layout with TeaVM, the annotation processor and
 Helidon already wired up. Helidon is the default server; `-Pvidocq` on the generated project switches to the
-experimental Vidocq binding ([Starting the server](../guides/starting-the-server.md#how-the-container-is-chosen)).
+Vidocq binding ([Starting the server](../guides/starting-the-server.md#how-the-container-is-chosen)).
 
 ```bash
 mvn archetype:generate \

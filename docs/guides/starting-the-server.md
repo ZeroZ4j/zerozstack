@@ -133,7 +133,7 @@ starts one runtime and registers itself in `META-INF/services` so that `ServiceL
 | Binding | Artifact | Runtime | Status |
 |---|---|---|---|
 | `helidon` | `zerozstack-server-helidon` | Helidon with Weld | The default. |
-| `vidocq` | `zerozstack-server-vidocq` | Vidocq, Java 25 | Experimental. See [Running on Vidocq](vidocq-server.md). |
+| `vidocq` | `zerozstack-server-vidocq` | Vidocq, Java 25 | Supported second binding. See [Running on Vidocq](vidocq-server.md). |
 
 You choose by what you put on the classpath:
 
@@ -153,7 +153,7 @@ You choose by what you put on the classpath:
 
 `start` throws an `IllegalStateException`:
 
-> No server binding is on the classpath. Add com.zeroz4j:zerozstack-server-helidon, or com.zeroz4j:zerozstack-server-vidocq (experimental, Java 25). A WAR does not call Zeroz4jServer.start: its servlet container starts it, through zerozstack-server-jakarta.
+> No server binding is on the classpath. Add com.zeroz4j:zerozstack-server-helidon, or com.zeroz4j:zerozstack-server-vidocq (Java 25). A WAR does not call Zeroz4jServer.start: its servlet container starts it, through zerozstack-server-jakarta.
 
 ### When more than one is on the classpath
 
@@ -185,5 +185,5 @@ the sentence for no binding above. See [Shape 4 in Packaging and running](packag
 - [Packaging and running](packaging.md) — ship the server as a folder, an image or a WAR, and every
   `zeroz.*` setting.
 - [Authentication and authorization](security-auth.md) — replace the development logins.
-- [Running on Vidocq](vidocq-server.md) — what is different on the experimental binding.
+- [Running on Vidocq](vidocq-server.md) — what is different on the Vidocq binding.
 - [Examples](../examples/index.md) — the main classes of twelve working servers.

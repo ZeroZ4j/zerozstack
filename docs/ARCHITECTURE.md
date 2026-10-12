@@ -63,7 +63,7 @@ When an RMI stub is called, it packs the request into a contiguous `ByteBuffer`:
 
 The backend is modularized into `zerozstack-server-core` (the agnostic CDI engine and RMI dispatcher)
 and a specific HTTP/WebSocket binding — `zerozstack-server-helidon` for a standalone server (or the
-experimental `zerozstack-server-vidocq`; `Zeroz4jServer.start` uses whichever is on the classpath, see
+`zerozstack-server-vidocq`; `Zeroz4jServer.start` uses whichever is on the classpath, see
 [Starting the server](guides/starting-the-server.md)), or `zerozstack-server-jakarta` to deploy as a WAR into WildFly, Payara, Open Liberty or TomEE. The core
 carries no JAX-RS or servlet type at all, which is what makes "agnostic" true rather than
 aspirational: it can sit inside somebody else's WAR without claiming a URL. The backend unpacks the

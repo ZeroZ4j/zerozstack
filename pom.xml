@@ -339,7 +339,7 @@
 
     <profiles>
         <!--
-            The Vidocq server binding (experimental, Java 25). Off by default so a build on JDK 21
+            The Vidocq server binding (Java 25). Off by default so a build on JDK 21
             is exactly what it was; turn it on with -Pvidocq on JDK 25. Adds the binding module and
             two launcher modules that run the chat-events and chat-livesync examples on it. See
             docs/guides/vidocq-server.md.

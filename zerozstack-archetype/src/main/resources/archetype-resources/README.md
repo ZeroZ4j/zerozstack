@@ -48,8 +48,8 @@ Then open <http://localhost:8080>.
 #[[## The server container]]#
 
 #if( $container == 'vidocq' )
-This project runs on **Vidocq** by default, an alternative server runtime. It is **experimental**
-and needs **Java 25** to build and to run.
+This project runs on **Vidocq** by default, an alternative server runtime.
+It needs **Java 25** to build and to run.
 #else
 This project runs on **Helidon** by default, on **Java 21** or later.
 #end
@@ -62,7 +62,7 @@ the port and `--dev-login` are explained in
 | Command | Container | Java |
 |---|---|---|
 | `mvn clean install -Phelidon` | Helidon | 21 or later |
-| `mvn clean install -Pvidocq` | Vidocq, experimental | 25 |
+| `mvn clean install -Pvidocq` | Vidocq | 25 |
 
 Use `clean` when you switch, so `target/libs` holds one container's jars. The run command is the
 same for both. To change the default for good, edit `<zeroz4j.container>` and

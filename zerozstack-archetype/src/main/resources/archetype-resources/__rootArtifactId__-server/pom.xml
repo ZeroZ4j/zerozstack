@@ -13,7 +13,7 @@
        Zeroz4jServer.start, and that uses whichever binding module is on the classpath. These two
        properties are this project's default; the helidon and vidocq profiles at the bottom of
        this file set them the other way, so `mvn install -Pvidocq` or `-Phelidon` switches with no
-       source edit. Vidocq is experimental and needs Java 25, here and to run. -->
+       source edit. Vidocq needs Java 25, here and to run. -->
   <properties>
     <zeroz4j.container>${container}</zeroz4j.container>
     <zeroz4j.server.java>#if( $container == 'vidocq' )25#{else}21#{end}</zeroz4j.server.java>

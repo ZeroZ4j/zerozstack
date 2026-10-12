@@ -35,7 +35,7 @@ import java.util.logging.Logger;
  * <p>Application code does not call this class: it calls
  * {@code com.zeroz4j.server.Zeroz4jServer.start}, which finds {@link VidocqServerBinding} when this
  * module is on the classpath, and that binding starts this. Calling it directly still works.
- * <b>Experimental, and Java 25 only</b> (Vidocq 0.3.0 needs it). See
+ * <b>Java 25 only</b> (Vidocq 0.3.0 needs it). See
  * {@code docs/guides/vidocq-server.md}.</p>
  *
  * <p>Vidocq is a set of libraries. This binding uses two: <i>Vauban</i>, its CDI container, finds

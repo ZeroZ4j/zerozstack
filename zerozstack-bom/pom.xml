@@ -59,7 +59,7 @@
                 <artifactId>zerozstack-server-jakarta</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- Experimental, Java 25: runs the server on Vidocq instead of Helidon. -->
+            <!-- Java 25: runs the server on Vidocq instead of Helidon. -->
             <dependency>
                 <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-server-vidocq</artifactId>

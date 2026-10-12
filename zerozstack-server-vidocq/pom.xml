@@ -27,9 +27,9 @@
     </parent>
 
     <artifactId>zerozstack-server-vidocq</artifactId>
-    <name>zeroz4j Server Vidocq Runtime (experimental)</name>
-    <description>Runs a ZeroZ Stack server on the Vidocq runtime instead of Helidon. Experimental;
-        needs Java 25. Built only under the vidocq profile.</description>
+    <name>zeroz4j Server Vidocq Runtime</name>
+    <description>Runs a ZeroZ Stack server on the Vidocq runtime instead of Helidon.
+        Needs Java 25. Built only under the vidocq profile.</description>
 
     <properties>
         <!-- Vidocq's own version, not ours. -->
