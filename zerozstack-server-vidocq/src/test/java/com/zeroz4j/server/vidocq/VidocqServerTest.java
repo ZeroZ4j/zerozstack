@@ -220,6 +220,76 @@ class VidocqServerTest {
         assertTrue(noPass.statusCode() >= 400, "a made-up pass is refused, got " + noPass.statusCode());
     }
 
+    // ------------------------------------------------------------------ cookie sign-in
+
+    private static HttpResponse<String> postSession(String action, String origin, String cookie,
+                                                    String form) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                        URI.create("http://" + host + "/zeroz4j-session/" + action))
+                .header("Origin", origin)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form));
+        if (cookie != null) {
+            request.header("Cookie", cookie);
+        }
+        return HTTP.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    @DisplayName("sign-in sets the cookie over HTTP, the live connection reads it, sign-out ends it")
+    void cookieSignIn() throws Exception {
+        String site = "http://" + host;
+
+        HttpResponse<String> wrong = postSession("sign-in", site, null, "username=carol&password=no");
+        assertEquals(303, wrong.statusCode());
+        assertEquals("/?signin=failed", wrong.headers().firstValue("Location").orElse(null));
+        assertTrue(wrong.headers().allValues("Set-Cookie").isEmpty());
+
+        assertEquals(403, postSession("sign-in", "http://evil.example", null,
+                "username=carol&password=right").statusCode(), "another site's page is refused");
+
+        HttpResponse<String> right = postSession("sign-in", site, null,
+                "username=carol&password=right&return=tasks%2F7");
+        assertEquals(303, right.statusCode());
+        assertEquals("/tasks/7", right.headers().firstValue("Location").orElse(null));
+        assertEquals("no-store", right.headers().firstValue("Cache-Control").orElse(null));
+        String setCookie = right.headers().firstValue("Set-Cookie").orElseThrow();
+        assertTrue(setCookie.contains("HttpOnly"), setCookie);
+        String cookie = setCookie.substring(0, setCookie.indexOf(';'));
+
+        try (Client client = Client.connect("/wasm-rmi", site, cookie)) {
+            Auth auth = client.auth();
+            assertTrue(auth.authenticated);
+            assertEquals("carol", auth.user);
+            assertEquals("carol", client.call(WhoService.class.getName(), "whoAmI"));
+
+            HttpResponse<String> out = postSession("sign-out", site, cookie, "");
+            assertEquals(303, out.statusCode());
+            assertEquals(2, out.headers().allValues("Set-Cookie").size(),
+                    "both cookies are cleared, each by a header of its own");
+            assertEquals(1008, client.closeCode(), "the live connection is closed");
+        }
+
+        try (Client replay = Client.connect("/wasm-rmi", site, cookie)) {
+            assertFalse(replay.auth().authenticated, "the old cookie is dead");
+        }
+        assertEquals(401, postSession("renew", site, cookie, "").statusCode());
+    }
+
+    @Test
+    @DisplayName("the development logins and the sign-in form work side by side")
+    void signInBesideDevLogin() throws Exception {
+        try (Client client = Client.connect("/wasm-rmi?user=demo&password=demo", "http://" + host, null)) {
+            assertEquals("demo", client.auth().user);
+        }
+    }
+
+    @Test
+    @DisplayName("a GET to a sign-in address is refused")
+    void signInIsPostOnly() throws Exception {
+        assertEquals(405, get("/zeroz4j-session/sign-out").statusCode());
+    }
+
     // ------------------------------------------------------------------ static content
 
     @Test

@@ -102,6 +102,85 @@ public final class ServerSettings {
     /** Forces the browser-id cookie's {@code Secure} flag on or off. */
     public static final String CLIENT_ID_SECURE_COOKIE = "zeroz.clientId.secureCookie";
 
+    // ------------------------------------------------------------------ cookie sign-in
+
+    /**
+     * The key session cookies are signed with, at least 32 characters. Generated at startup when
+     * unset, which signs everybody out at every restart. Keep it in the application's property file,
+     * and never reuse {@link #CLIENT_ID_SECRET}.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_SECRET = "zeroz.signin.secret";
+
+    /**
+     * The session cookie's name. Default {@code zeroz_session}. An application at the site root on
+     * HTTPS can set {@code __Host-zeroz_session}, which stops a sibling subdomain planting one.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_COOKIE_NAME = "zeroz.signin.cookieName";
+
+    /**
+     * {@code Strict}, the default, or {@code Lax}, which an application needs only when something
+     * other than the page itself must see the cookie after a cross-site link.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_SAME_SITE = "zeroz.signin.sameSite";
+
+    /**
+     * Forces the session cookie's {@code Secure} flag on or off. Unset, it is on everywhere except
+     * a page on this machine.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_SECURE_COOKIE = "zeroz.signin.secureCookie";
+
+    /**
+     * How long a cookie stays good with no renewal, in days. Default 30. Sliding: each renewal
+     * starts this again.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_DAYS = "zeroz.signin.days";
+
+    /**
+     * How long a session can be renewed for, in days from the password. Default 365.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_MAX_DAYS = "zeroz.signin.maxDays";
+
+    /**
+     * How old a cookie must be before it is renewed, in minutes. Default 60.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_RENEW_MINUTES = "zeroz.signin.renewMinutes";
+
+    /**
+     * How long a signed-in connection may stay open, in minutes, before the server closes it and
+     * the client reconnects, which checks the cookie and the roles again. Default 480.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_CONNECTION_MINUTES = "zeroz.signin.connectionMinutes";
+
+    /**
+     * Sign-in attempts allowed in a row for one name. Default 10.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_MAX_ATTEMPTS = "zeroz.signin.maxAttempts";
+
+    /**
+     * How long after the last counted attempt the count starts again, in minutes. Default 15.
+     *
+     * @since 0.11.0
+     */
+    public static final String SIGN_IN_LOCK_MINUTES = "zeroz.signin.lockMinutes";
+
     // ------------------------------------------------------------------ what was sent to whom
 
     /** Most object handles remembered per browser. Default 10,000. */

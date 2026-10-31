@@ -423,7 +423,8 @@ a literal `%` in it from turning into something else.
 - **The record lives in memory.** A restart empties it, and clients re-fetch. In a cluster each node
   remembers only what it sent, so a client that lands on a different node after a reconnect re-fetches
   as well.
-- **No session expiry.** A connection stays authenticated until it closes.
+- **No session expiry for a provider's connection.** It stays authenticated until it closes. A
+  connection on a [session cookie](cookie-sign-in.md) is closed after 8 hours and checked again.
 - **Client-side checks are cosmetic.** Hiding a menu item is not authorization; the server decides.
 - **Nothing gates HTTP.** Every page and asset is public; only RMI calls are checked. An application
   that needs the documents themselves protected uses a container `<security-constraint>`.
@@ -435,6 +436,9 @@ a literal `%` in it from turning into something else.
   [Accepting file uploads](file-uploads.md#what-the-application-must-check-itself).
 
 ## See also
+
+- [Signing in with a cookie](cookie-sign-in.md) — a password form and a session cookie, without
+  writing a provider
 
 - [Choosing how state moves](../decide/index.md) — which scope you give a push decides who receives it
 - [Accepting file uploads](file-uploads.md) — how an upload borrows the connection's identity

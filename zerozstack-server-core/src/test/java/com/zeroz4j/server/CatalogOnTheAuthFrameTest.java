@@ -69,7 +69,7 @@ class CatalogOnTheAuthFrameTest {
     void theAuthFrameCarriesTheCatalog() {
         Frame frame = openConnectionReading("de");
 
-        assertEquals(3, frame.version, "the AUTH frame's version byte says which shape it is");
+        assertEquals(4, frame.version, "the AUTH frame's version byte says which shape it is");
         assertEquals("de", frame.language, "the frame says which language its words are in");
         assertTrue(frame.offered.contains("de"),
                 "the languages on offer travel too, so a selector can never offer one the server "

@@ -18,7 +18,9 @@
 package com.zeroz4j.server;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,6 +37,7 @@ public final class AuthenticatedPrincipal {
     private final String name;
     private final Set<String> roles;
     private final String tenantId;
+    private final Map<String, Object> attributes;
 
     /**
      * @param name     the user name; must not be null or blank
@@ -50,6 +53,14 @@ public final class AuthenticatedPrincipal {
                 ? Collections.emptySet()
                 : Collections.unmodifiableSet(new LinkedHashSet<>(roles));
         this.tenantId = tenantId;
+        this.attributes = Collections.emptyMap();
+    }
+
+    private AuthenticatedPrincipal(AuthenticatedPrincipal base, Map<String, Object> attributes) {
+        this.name = base.name;
+        this.roles = base.roles;
+        this.tenantId = base.tenantId;
+        this.attributes = attributes;
     }
 
     /**
@@ -83,6 +94,37 @@ public final class AuthenticatedPrincipal {
      */
     public String tenantId() {
         return tenantId;
+    }
+
+    /**
+     * A copy carrying one more value for the connection this principal opens.
+     *
+     * <p>This is how application state gets onto a connection at the handshake, which runs before
+     * the connection exists: the caller a service would otherwise look up on its first call, say.
+     * It stays on the server, and a service reads it with
+     * {@link RmiRequestContext#getSessionAttribute(String)}. It lasts as long as the connection, so
+     * set it again on every handshake.</p>
+     *
+     * @param name  the attribute name
+     * @param value the value, not null
+     * @return the copy
+     * @since 0.11.0
+     */
+    public AuthenticatedPrincipal withAttribute(String name, Object value) {
+        if (name == null || value == null) {
+            throw new IllegalArgumentException("A connection attribute needs a name and a value");
+        }
+        Map<String, Object> copy = new LinkedHashMap<>(attributes);
+        copy.put(name, value);
+        return new AuthenticatedPrincipal(this, Collections.unmodifiableMap(copy));
+    }
+
+    /**
+     * @return what {@link #withAttribute(String, Object)} put here; never null
+     * @since 0.11.0
+     */
+    public Map<String, Object> attributes() {
+        return attributes;
     }
 
     @Override

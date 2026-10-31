@@ -563,10 +563,11 @@ Components used to present data, alerts, and content to the user.
   page rather than over it. The panel sits on `Layer.OVERLAY`.
 - **EmptyState**: A placeholder view shown when there is no data to display.
 - **Footer**: A standard page footer element.
-- **Login**: A username-and-password sign-in card. It collects the two values and hands them to a
-  `LoginListener`; how they are checked is the application's business. It disables itself when
-  submitted, and `showError("...")` reports a failed attempt, re-enables the form and speaks the
-  message to a screen reader as well as showing it.
+- **Login**: A sign-in card that is a real HTML form, so password managers fill it and browsers
+  offer to save it. `new Login()` posts to the framework's [cookie sign-in](guides/cookie-sign-in.md).
+  `new Login(listener)` hands the two values to a `LoginListener` instead, and how they are checked
+  is the application's business. It disables itself when submitted, and `showError("...")` reports a
+  failed attempt, re-enables the form and speaks the message to a screen reader as well as showing it.
 - **Hero**: A large, prominent banner often used at the top of landing pages.
 - **Icon**: A scalable vector icon component.
 - **Indicator**: A visual marker, often attached to other elements (like badges on icons).

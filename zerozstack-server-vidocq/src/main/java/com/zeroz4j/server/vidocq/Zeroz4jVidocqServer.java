@@ -44,8 +44,9 @@ import java.util.logging.Logger;
  * {@code Session} the engine is written against lives in this module, so
  * {@code zerozstack-server-core} runs here unchanged.</p>
  *
- * <p>Two addresses are the framework's, as under Helidon: {@code /wasm-rmi} (the live connection)
- * and {@code /zeroz4j-upload} (file upload). The application's own JAX-RS resources come next (see
+ * <p>Three addresses are the framework's, as under Helidon: {@code /wasm-rmi} (the live connection),
+ * {@code /zeroz4j-upload} (file upload) and {@code /zeroz4j-session/...} (cookie sign-in). The
+ * application's own JAX-RS resources come next (see
  * {@link RestResources}), then everything else as static content with the shell as fallback.</p>
  */
 public final class Zeroz4jVidocqServer implements AutoCloseable {
@@ -93,6 +94,7 @@ public final class Zeroz4jVidocqServer implements AutoCloseable {
             WebSocketBridge bridge = new WebSocketBridge(engine, reaper);
             StaticContentHandler statics = new StaticContentHandler();
             UploadHandler uploads = new UploadHandler();
+            SignInEndpoint signIn = new SignInEndpoint();
             RestResources rest = RestResources.create(container);
 
             Handler handler = request -> {
@@ -106,6 +108,9 @@ public final class Zeroz4jVidocqServer implements AutoCloseable {
                     }
                     if (UploadHandler.PATH.equals(path)) {
                         return uploads.receive(request);
+                    }
+                    if (path.startsWith(SignInEndpoint.PREFIX)) {
+                        return signIn.answer(request);
                     }
                     if (rest != null && rest.claims(request)) {
                         return rest.handle(request);

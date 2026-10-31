@@ -32,4 +32,18 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 @ApplicationPath("/")
 public class Zeroz4jApplication extends Application {
+
+    /**
+     * Keeps a relative {@code Location} header relative. Jersey otherwise rewrites it against the
+     * scheme and host it sees, which behind a proxy ending TLS is {@code http}, and a sign-in that
+     * redirects to {@code http} loses its {@code Secure} cookie. A plain string, so this class does
+     * not need Jersey on its classpath; any other JAX-RS runtime ignores it.
+     *
+     * @return the runtime properties
+     */
+    @Override
+    public java.util.Map<String, Object> getProperties() {
+        return java.util.Map.of("jersey.config.server.headers.location.relative.resolution.disabled",
+                Boolean.TRUE);
+    }
 }

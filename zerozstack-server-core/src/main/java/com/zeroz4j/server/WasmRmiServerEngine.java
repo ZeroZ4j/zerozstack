@@ -102,7 +102,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * compiled in. A 0.9.0 client meeting an older server sees a version below 3 and does not look
      * for a catalog at all, which leaves it in the same place.</p>
      */
-    static final byte AUTH_PROTOCOL_VERSION = 3;
+    static final byte AUTH_PROTOCOL_VERSION = 4;
 
     /** The name reported for a connection with no accepted identity. */
     static final String ANONYMOUS_USER = "anonymous";
@@ -511,6 +511,21 @@ public class WasmRmiServerEngine implements EventPublisher {
         if (language != null) {
             session.getUserProperties().put(RmiEndpointConfigurator.LOCALE_KEY, language);
         }
+        // A map of this connection's own, so a service can add to it during a call.
+        java.util.Map<String, Object> attributes = new ConcurrentHashMap<>();
+        Object fromHandshake = config.getUserProperties().get(RmiEndpointConfigurator.ATTRIBUTES_KEY);
+        if (fromHandshake != null) {
+            attributes.putAll((java.util.Map<String, Object>) fromHandshake);
+        }
+        session.getUserProperties().put(RmiEndpointConfigurator.ATTRIBUTES_KEY, attributes);
+        // Present only on a connection that came in on a session cookie.
+        for (String key : new String[] {SignInSessions.SESSION_KEY, SignInSessions.CLOSE_AT_KEY,
+                SignInSessions.RENEW_DUE_KEY}) {
+            Object value = config.getUserProperties().get(key);
+            if (value != null) {
+                session.getUserProperties().put(key, value);
+            }
+        }
 
         // Before the first byte is written to this connection: everything the server sends it is
         // recorded against its browser, and that record is what later decides whether it may ask for
@@ -747,6 +762,17 @@ public class WasmRmiServerEngine implements EventPublisher {
             // application it may build its first screen, so they are in hand at that exact moment
             // and no screen is ever drawn in English and then corrected.
             writeCatalogBlock(buffer, languageTagOf(session), configOf(session));
+            // Version 4. Tells the client this connection came in on a session cookie, so it knows
+            // to go back to the sign-in form if a reconnect comes back anonymous, and whether that
+            // cookie is old enough to renew. Said here because script cannot read the cookie.
+            byte signIn = 0;
+            if (session.getUserProperties().get(SignInSessions.SESSION_KEY) != null) {
+                signIn |= SyncFrameTypes.AUTH_SESSION_COOKIE;
+                if (Boolean.TRUE.equals(session.getUserProperties().get(SignInSessions.RENEW_DUE_KEY))) {
+                    signIn |= SyncFrameTypes.AUTH_RENEW_DUE;
+                }
+            }
+            buffer.put(signIn);
             WsWrites.send(session, buffer.toByteArray());
         } catch (Exception e) {
             LOG.warning("[zeroz4j] Failed to send AUTH frame: " + e.getMessage());
@@ -1051,7 +1077,7 @@ public class WasmRmiServerEngine implements EventPublisher {
      * <p>A revocation loop must reach every session even if one of them is already half-dead, so a
      * failure here is logged and counted as not-closed rather than propagated to the caller.</p>
      */
-    private static boolean closeSession(Session session, String reason) {
+    static boolean closeSession(Session session, String reason) {
         try {
             ServerRuntime owner = ServerRuntime.ofOrNull(session);
             session.close(new jakarta.websocket.CloseReason(
@@ -1769,6 +1795,8 @@ public class WasmRmiServerEngine implements EventPublisher {
                         (String) session.getUserProperties().get(RmiEndpointConfigurator.TENANT_KEY),
                         (String) session.getUserProperties().get(RmiEndpointConfigurator.CLIENT_KEY),
                         localeOf(session));
+                RmiRequestContext.setSessionAttributes((java.util.Map<String, Object>)
+                        session.getUserProperties().get(RmiEndpointConfigurator.ATTRIBUTES_KEY));
 
                 try {
                     String interfaceName = BinarySerializer.readString(buffer);

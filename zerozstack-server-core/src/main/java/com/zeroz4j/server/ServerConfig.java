@@ -32,7 +32,8 @@ import java.util.logging.Logger;
  * <p>Every setting has a name — see {@link ServerSettings} — and by default the value comes from
  * the system property of that name, exactly as it always has. A deployment that passes
  * {@code -Dzeroz.ws.maxBinaryMessageBytes=8388608} on the command line needs to know nothing about
- * this class.</p>
+ * this class. A setting with no system property is then looked up in the application's property
+ * file, {@code zeroz4j.properties}, which is where a secret belongs (0.11.0+).</p>
  *
  * <h2>Why it exists</h2>
  *
@@ -132,7 +133,11 @@ public final class ServerConfig {
         if (own != null) {
             return own.orElse(null);
         }
-        return readsSystemProperties ? System.getProperty(name) : null;
+        if (!readsSystemProperties) {
+            return null;
+        }
+        String property = System.getProperty(name);
+        return property != null ? property : SettingsFile.get(name);
     }
 
     /**

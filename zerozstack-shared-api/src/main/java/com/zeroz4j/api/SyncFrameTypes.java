@@ -63,6 +63,21 @@ public final class SyncFrameTypes {
     public static final byte AUTH         = 0x03;
 
     /**
+     * On the last byte of an AUTH frame, protocol version 4: this connection came in on a session
+     * cookie.
+     *
+     * @since 0.11.0
+     */
+    public static final byte AUTH_SESSION_COOKIE = 1;
+
+    /**
+     * On the last byte of an AUTH frame, protocol version 4: that cookie is old enough to renew.
+     *
+     * @since 0.11.0
+     */
+    public static final byte AUTH_RENEW_DUE = 2;
+
+    /**
      * Message-catalog frame byte tag (0x04), sent by the server when the language changes.
      *
      * <p>Payload: language tag string, then the same catalog block the {@link #AUTH} frame carries

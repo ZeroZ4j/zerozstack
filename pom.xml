@@ -358,6 +358,7 @@
                 <module>zerozstack-examples/routing-tour/routing-tour-vidocq</module>
                 <module>zerozstack-examples/scoped-signals/scoped-signals-vidocq</module>
                 <module>zerozstack-examples/payments-datamodels/payments-datamodels-vidocq</module>
+                <module>zerozstack-examples/sign-in/sign-in-vidocq</module>
             </modules>
         </profile>
         <!--

@@ -167,6 +167,20 @@ public final class ClientIdentity {
     }
 
     /**
+     * Builds the {@code Set-Cookie} value that removes the client id, so the next page load is
+     * issued a new one. Sent at sign-out, so the next person on a shared computer does not carry on
+     * as the same browser.
+     *
+     * @param secureOnly whether to add the {@code Secure} attribute
+     * @return the header value
+     * @since 0.11.0
+     */
+    public static String clearingCookieHeader(boolean secureOnly) {
+        return COOKIE_NAME + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
+                + (secureOnly ? "; Secure" : "");
+    }
+
+    /**
      * Whether a cookie issued for this request should carry {@code Secure}.
      *
      * <p>Derived from the request scheme, because a {@code Secure} cookie sent over plain HTTP is
@@ -178,7 +192,7 @@ public final class ClientIdentity {
      * @return true when the {@code Secure} attribute should be set
      */
     public static boolean secureFor(String scheme) {
-        String override = System.getProperty(SECURE_COOKIE_PROPERTY);
+        String override = ServerConfig.fromSystemProperties().get(SECURE_COOKIE_PROPERTY);
         if (override != null && !override.trim().isEmpty()) {
             return Boolean.parseBoolean(override.trim());
         }
@@ -223,7 +237,7 @@ public final class ClientIdentity {
         }
         synchronized (ClientIdentity.class) {
             if (secret == null) {
-                String configured = System.getProperty(SECRET_PROPERTY);
+                String configured = ServerConfig.fromSystemProperties().get(SECRET_PROPERTY);
                 if (configured != null && !configured.trim().isEmpty()) {
                     secret = configured.trim().getBytes(StandardCharsets.UTF_8);
                 } else {
@@ -243,7 +257,7 @@ public final class ClientIdentity {
 
     private static long ttlMillis() {
         long days = DEFAULT_TTL_DAYS;
-        String configured = System.getProperty(TTL_PROPERTY);
+        String configured = ServerConfig.fromSystemProperties().get(TTL_PROPERTY);
         if (configured != null && !configured.trim().isEmpty()) {
             try {
                 days = Long.parseLong(configured.trim());

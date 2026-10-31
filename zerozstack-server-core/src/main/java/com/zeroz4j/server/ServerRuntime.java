@@ -124,6 +124,12 @@ public class ServerRuntime {
 
     private final SlowCallRegistry slowCalls = new SlowCallRegistry(this);
 
+    private final SignInSessions signIn = new SignInSessions(this);
+
+    /** The application's handler, if it has one. Null on a runtime built without CDI. */
+    @jakarta.inject.Inject
+    jakarta.enterprise.inject.Instance<SignInHandler> signInHandlers;
+
     /** Roles this server's services ask about, collected from its own beans at startup. */
     private final Set<String> knownRoles = ConcurrentHashMap.newKeySet();
 
@@ -150,6 +156,15 @@ public class ServerRuntime {
      */
     public void name(String newName) {
         this.name = newName == null || newName.trim().isEmpty() ? id : newName.trim();
+    }
+
+    /**
+     * @return this server's sign-in sessions
+     * @since 0.11.0
+     */
+    public SignInSessions signIn() {
+        signIn.useHandlers(signInHandlers);
+        return signIn;
     }
 
     // ------------------------------------------------------------------ settings
@@ -212,6 +227,7 @@ public class ServerRuntime {
         if (shutDown.compareAndSet(false, true)) {
             ServerSignalTransport.uninstall(this);
             slowCalls.shutDown();
+            signIn.shutDown();
             for (Session session : activeSessions) {
                 session.getUserProperties().remove(RUNTIME_KEY);
             }

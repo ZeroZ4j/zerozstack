@@ -16,6 +16,29 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **Cookie sign-in.** Write one `@ApplicationScoped` `SignInHandler` and put `new Login()` on the
+  screen. The framework answers `POST /zeroz4j-session/sign-in`, `/sign-out` and `/renew` under
+  Helidon, in a WAR and on Vidocq, and sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie that
+  lasts 30 days and slides, up to a year from the password. It goes back to the page the person asked
+  for, refuses requests from other sites with `CrossSiteGuard`, limits attempts per name, closes a
+  connection after 8 hours so the reconnect is checked again, and takes roles from
+  `SignInHandler.resume` at every handshake. `SignInSessions.current().revokeUser(...)` and
+  `revokeSession(...)` close live connections and stop the cookies working. The cookie is read after
+  any `AuthenticationProvider`, so it sits beside OIDC and the development logins. See
+  [Signing in with a cookie](docs/guides/cookie-sign-in.md) and the `sign-in` example on port 8093.
+- **`Login` is a real HTML form.** Both fields have `name` and `autocomplete`, so password managers
+  fill it, and `new Login()` posts natively so browsers offer to save the password. A refused sign-in
+  comes back with the name still in the box. Existing `new Login(listener)` code compiles and
+  behaves as before, and reads the fields directly, so an autofilled value is no longer missed.
+- **Application state on a connection.** `AuthenticatedPrincipal.withAttribute(name, value)` leaves a
+  value on the connection at the handshake, for any `AuthenticationProvider`, and
+  `RmiRequestContext.getSessionAttribute` and `setSessionAttribute` read and change it during a call.
+  It never leaves the server.
+- **The application's property file.** A setting with no system property is read from
+  `zeroz4j.properties` in the working directory, then on the classpath, or from the file
+  `-Dzeroz.settings.file` names. `zeroz.clientId.secret` and the other settings can live there too.
+  Environment variables are not read.
+- **`TestServer.connectWithHeaders`** opens a connection through the real handshake.
 - **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
   as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
   `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
@@ -76,6 +99,10 @@ version now ships in the same jar, and the rules say which page to read before w
   generated project no longer loses `System.Logger` lines. The `troubleshooting.md` entry is updated.
 
 ### Changed
+
+- **The AUTH frame is protocol version 4.** One byte more, saying whether this connection came in on a
+  session cookie and whether that cookie is due for renewal. A client and server from the same build
+  are unaffected.
 
 - **`AGENTS.md` no longer says a query always returns values.** When a process owns the store,
   `query` returns exactly what `execute` returned, with no copy, so changing it changes the graph. The
