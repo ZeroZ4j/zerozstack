@@ -36,20 +36,24 @@ public final class Palette {
      * Categorical series colours, in assignment order. Primary first so a single-series
      * chart picks up the app's own accent without any configuration.
      *
+     * <p>An application can define its own series colors as {@code --color-chart-1} to
+     * {@code --color-chart-8} in its theme CSS, one set for light and one for dark; each entry uses
+     * that token when it exists and the DaisyUI color otherwise.</p>
+     *
      * <p>Each carries a literal fallback. An application that does not load DaisyUI leaves
      * these custom properties undefined, and an undefined {@code var()} with no fallback makes
      * the whole attribute invalid — an SVG stroke would silently disappear. The fallback keeps
      * a chart legible anywhere; define the tokens to make it match your theme.</p>
      */
     public static final String[] SERIES = {
-        "var(--color-primary, #4f46e5)",
-        "var(--color-secondary, #db2777)",
-        "var(--color-accent, #0d9488)",
-        "var(--color-info, #0284c7)",
-        "var(--color-success, #16a34a)",
-        "var(--color-warning, #d97706)",
-        "var(--color-error, #dc2626)",
-        "var(--color-neutral, #6b7280)"
+        "var(--color-chart-1, var(--color-primary, #4f46e5))",
+        "var(--color-chart-2, var(--color-secondary, #db2777))",
+        "var(--color-chart-3, var(--color-accent, #0d9488))",
+        "var(--color-chart-4, var(--color-info, #0284c7))",
+        "var(--color-chart-5, var(--color-success, #16a34a))",
+        "var(--color-chart-6, var(--color-warning, #d97706))",
+        "var(--color-chart-7, var(--color-error, #dc2626))",
+        "var(--color-chart-8, var(--color-neutral, #6b7280))"
     };
 
     public static final String BASE_CONTENT = "var(--color-base-content, currentColor)";

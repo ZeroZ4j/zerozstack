@@ -73,11 +73,24 @@ public final class Js {
         + "});")
     public static native void onPasteImage(HTMLElement element, DataCallback callback);
 
-    @JSBody(params = {"key"}, script = "return window.localStorage.getItem(key);")
-    public static native String localGet(String key);
+    /** Same as {@link com.zeroz4j.ui.Browser#storageGet(String)}: null when storage is blocked. */
+    public static String localGet(String key) {
+        return com.zeroz4j.ui.Browser.storageGet(key);
+    }
 
-    @JSBody(params = {"key", "value"}, script = "window.localStorage.setItem(key, value);")
-    public static native void localSet(String key, String value);
+    /** Same as {@link com.zeroz4j.ui.Browser#storageSet(String, String)}: ignored when storage is blocked. */
+    public static void localSet(String key, String value) {
+        com.zeroz4j.ui.Browser.storageSet(key, value);
+    }
+
+    /** Receives whether a copy to the clipboard worked. */
+    @JSFunctor
+    public interface CopyResult extends JSObject {
+        /**
+         * @param copied true when the text reached the clipboard
+         */
+        void done(boolean copied);
+    }
 
     /**
      * Copies text to the clipboard, and puts the keyboard back where it was.
@@ -89,15 +102,46 @@ public final class Js {
      * keyboard was dumped to the top of the page and had to Tab all the way back down. Both Copy
      * buttons in this library did that, and the browser proof caught it.</p>
      */
-    @JSBody(params = {"text"}, script =
+    @JSBody(params = {"text", "result"}, script =
         "var was = document.activeElement;"
-        + "var ta = document.createElement('textarea');"
-        + "ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';"
-        + "document.body.appendChild(ta); ta.select();"
-        + "try { document.execCommand('copy'); } catch (ignored) {}"
-        + "document.body.removeChild(ta);"
-        + "if (was && was.focus) { try { was.focus(); } catch (ignored) {} }")
-    public static native void copyToClipboard(String text);
+        + "var byExecCommand = function () {"
+        + " var ok = false;"
+        + " try {"
+        + "  var ta = document.createElement('textarea');"
+        + "  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';"
+        + "  document.body.appendChild(ta); ta.select();"
+        + "  ok = document.execCommand('copy');"
+        + "  document.body.removeChild(ta);"
+        + " } catch (ignored) { ok = false; }"
+        + " if (was && was.focus) { try { was.focus(); } catch (ignored) {} }"
+        + " return ok;"
+        + "};"
+        + "if (navigator.clipboard && window.isSecureContext) {"
+        + " try {"
+        + "  navigator.clipboard.writeText(text).then("
+        + "   function () { result(true); },"
+        + "   function () { result(byExecCommand()); });"
+        + "  return;"
+        + " } catch (ignored) {}"
+        + "}"
+        + "result(byExecCommand());")
+    public static native void copyToClipboard(String text, CopyResult result);
+
+    /**
+     * Copies text to the clipboard and reports whether it worked.
+     *
+     * <p>Call it from inside the click, on the same stack: the browser refuses the clipboard
+     * unless the call is made while the click is being handled. A listener added with
+     * {@link Component#addDomEventListener} runs on a new thread and is too late; use
+     * {@link Component#addGestureListener}. Copy buttons built by this library did exactly that
+     * through 0.10.0 and said "Copied" with nothing copied.</p>
+     *
+     * <p>The clipboard call may answer after this method returns, so the result comes to
+     * {@code result}, which runs on a plain JavaScript stack and must not call the server.</p>
+     */
+    public static void copyToClipboard(String text) {
+        copyToClipboard(text, copied -> { });
+    }
 
     /**
      * Sets {@code data-theme} on the {@code html} element, where DaisyUI and the application's own
@@ -293,8 +337,17 @@ public final class Js {
     @JSBody(params = {"details"}, script = "return !!details.open;")
     public static native boolean detailsIsOpen(HTMLElement details);
 
-    /** The {@code key} of a keyboard event — "Escape", "Tab", "a" — as the browser reports it. */
-    @JSBody(params = {"event"}, script = "return event.key;")
+    /**
+     * The {@code key} of a keyboard event — "Escape", "Tab", "a" — as the browser reports it, or
+     * the empty string when the event has none.
+     *
+     * <p>A synthetic event, one re-dispatched by a component, and some autofill and input-method
+     * events arrive with {@code key} undefined. TeaVM turns a JavaScript value into a Java string
+     * by testing for null only, so an undefined key becomes a String whose first use throws. The
+     * check has to be made in JavaScript, before the conversion.</p>
+     */
+    @JSBody(params = {"event"}, script =
+        "var key = event && event.key; return typeof key === 'string' ? key : '';")
     public static native String eventKey(org.teavm.jso.dom.events.Event event);
 
     /** Whether {@code event}'s target is exactly {@code element} and not something inside it. */

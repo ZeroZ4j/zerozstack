@@ -54,9 +54,10 @@ public final class PropertyGrid extends Div {
         copyButton.setClassName("btn btn-ghost btn-xs btn-circle shrink-0 opacity-40 "
             + "hover:opacity-100");
         copyButton.getElement().setAttribute("type", "button");
-        copyButton.getElement().addEventListener("click", threaded(e -> {
-            Js.copyToClipboard(value == null ? "" : value);
-            valueSpan.addClassName("text-success");
+        copyButton.addGestureListener("click", e -> Js.copyToClipboard(value == null ? "" : value, copied -> {
+            if (copied) {
+                valueSpan.addClassName("text-success");
+            }
         }));
 
         Div valueCell = new Div();

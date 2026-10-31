@@ -102,7 +102,7 @@ once:
 Button install = new Button("Install");
 Effect.create(() -> install.setVisible(Pwa.installable().get()));
 
-install.addClickListener(e -> Pwa.promptInstall(outcome -> {
+install.addGestureListener("click", e -> Pwa.promptInstall(outcome -> {
     // "accepted", "dismissed", or "unavailable" when there was no offer to show
 }));
 ```
@@ -224,3 +224,20 @@ java -jar zerozstack-examples/pwa-install/pwa-install-server/target/pwa-install-
 ```
 
 Then open <http://localhost:8083/>, install it, and stop the server and reload.
+
+## Push state and device label
+
+Before offering notifications, ask the browser what it can do:
+
+```java
+switch (Pwa.pushState()) {
+    case UNSUPPORTED -> { /* hide the option */ }
+    case IOS_NOT_INSTALLED -> { /* say to add the app to the Home Screen first */ }
+    case DENIED -> { /* only the browser's site settings can change that */ }
+    case GRANTED, ASK -> { /* offer Pwa.subscribeToPush(...) */ }
+}
+String device = Pwa.deviceLabel();   // iPhone, iPad, Android phone, Mac, Windows PC, This browser
+```
+
+On an iPhone, push exists only in the app added to the Home Screen, never in a Safari tab, so
+`IOS_NOT_INSTALLED` is a case a settings screen has to word differently from `UNSUPPORTED`.

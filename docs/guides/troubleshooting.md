@@ -179,7 +179,7 @@ appear, and lines from Helidon or a library that logs through `System.Logger` ar
 `slf4j-jdk-platform-logging`. That library hands every `System.Logger` line to SLF4J. With no SLF4J
 provider on the classpath, SLF4J drops them.
 
-A project generated from the archetype since 0.11.0 has `org.slf4j:slf4j-simple` (2.0.12, as in the
+A project generated from the archetype since 0.11.0 has `org.slf4j:slf4j-simple` (2.0.20, as in the
 example servers) in its server module, and does not show this. It also does no harm under the
 `vidocq` profile, where nothing hands it `System.Logger` lines. A project generated earlier, or one
 that removed it, needs the dependency back:
@@ -188,7 +188,7 @@ that removed it, needs the dependency back:
 <dependency>
   <groupId>org.slf4j</groupId>
   <artifactId>slf4j-simple</artifactId>
-  <version>2.0.12</version>
+  <version>2.0.20</version>
 </dependency>
 ```
 

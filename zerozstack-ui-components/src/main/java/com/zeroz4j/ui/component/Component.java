@@ -340,4 +340,33 @@ public abstract class Component {
         element.addEventListener(type, wrapped);
         return () -> element.removeEventListener(type, wrapped);
     }
+
+    /**
+     * Registers a DOM event listener that runs <b>inside the event</b>, on the browser's own stack,
+     * not on a new thread.
+     *
+     * <p>Use it for the few calls the browser allows only while it is handling a click or a key
+     * press: writing to the clipboard, starting the microphone, opening a file chooser, showing the
+     * install prompt. {@link #addDomEventListener} hands the work to a new thread, and by the time
+     * that runs the browser no longer treats it as the person's action and refuses.</p>
+     *
+     * <pre>{@code
+     * button.addGestureListener("click", e ->
+     *     Js.copyToClipboard(text, copied -> label.setText(copied ? "Copied" : "Copy failed")));
+     * }</pre>
+     *
+     * <p>The listener must not call the server: a remote call suspends, and a suspension cannot
+     * start on a browser stack. Start the call from a new thread inside the listener, after the
+     * gesture-only work is done.</p>
+     *
+     * @param <T>      the native event type
+     * @param type     the DOM event type, for example {@code "click"}
+     * @param listener runs synchronously in the event
+     * @return a handle to unregister the listener
+     */
+    public <T extends org.teavm.jso.dom.events.Event> DomListenerRegistration addGestureListener(
+            String type, org.teavm.jso.dom.events.EventListener<T> listener) {
+        element.addEventListener(type, listener);
+        return () -> element.removeEventListener(type, listener);
+    }
 }
