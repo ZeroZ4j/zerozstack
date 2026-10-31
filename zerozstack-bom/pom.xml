@@ -59,6 +59,13 @@
                 <artifactId>zerozstack-server-jakarta</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- Development only: embedded Tomcat and Weld to run a WAR application from the IDE. Take it
+                 with test or provided scope, never in a deployed WAR. -->
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-dev-tomcat</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <!-- Java 25: runs the server on Vidocq instead of Helidon. -->
             <dependency>
                 <groupId>com.zeroz4j</groupId>

@@ -16,6 +16,13 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **`zerozstack-dev-tomcat`: run a WAR application in development without a container.**
+  `Zeroz4jDevServer.builder().port(8080).contextPath("/app").beans(...).servlet(...).start()` starts
+  embedded Tomcat and Weld with no classpath scan, with the framework's listener, the WebSocket
+  endpoint and the shell servlet wired as a container would. Servlets are mapped from their own
+  `@WebServlet` and created through CDI. Development only: take it with test or provided scope, and
+  no runtime module depends on it. If you hand-built Tomcat and Weld for this, this replaces it. See
+  `docs/guides/war-dev-server.md`.
 - **Copy buttons copy.** `CodeBlock` and `PropertyGrid` said "Copied" and put nothing on the
   clipboard, because their listener ran on a new thread and the browser refuses the clipboard there.
   The copy now runs inside the click, and the label says "Copied" only when the browser accepted it

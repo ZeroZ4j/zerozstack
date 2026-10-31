@@ -90,6 +90,7 @@ nav:
       - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
       - Slow calls: guides/slow-calls.md
+      - Running a WAR in development: guides/war-dev-server.md
       - Writing the server's main class and starting it: guides/starting-the-server.md
       - Running the server on Vidocq: guides/vidocq-server.md
       - Packaging and running: guides/packaging.md
