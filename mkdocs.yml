@@ -89,6 +89,7 @@ nav:
       - Stacking overlays: guides/ui-layering.md
       - Keyboard and naming: guides/ui-keyboard-and-naming.md
       - Accepting file uploads: guides/file-uploads.md
+      - Playing media and embedding pages: guides/media.md
       - Slow calls: guides/slow-calls.md
       - Running a WAR in development: guides/war-dev-server.md
       - Writing the server's main class and starting it: guides/starting-the-server.md

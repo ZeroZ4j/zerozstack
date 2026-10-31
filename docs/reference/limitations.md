@@ -516,12 +516,14 @@ cannot. That is a floor, not a guarantee of a usable screen.
 
 ## File uploads
 
-- **One handler per application.** If more than one `FileUploadHandler` is deployed, the framework
-  uses one of them and logs a warning naming them all.
+- **One handler per kind.** An application can have several `FileUploadHandler` beans, each named by
+  `getKind()` and chosen by the page with `FileUpload.setKind`. If two share a kind, the framework
+  uses one of them and logs a warning naming both.
 - **No resume and no chunking.** A file arrives in one request. An upload that was canceled, or
   whose connection dropped, starts again from the beginning next time.
 - **No per-user, per-tenant or per-day quota, and no limit on how many files may be uploaded at
-  once.** `zeroz.upload.maxBytes` is 25 MB and applies to one file. Anything else — who may upload,
+  once.** `zeroz.upload.maxBytes` is 25 MB and applies to one file of a kind that sets no limit of its
+  own (`getMaxBytes()`, or `zeroz.upload.maxBytes.<kind>`). Anything else — who may upload,
   how often, how much in total — the application decides for itself from `getPrincipal()`,
   `getRoles()` and `getTenantId()`.
 - **No virus scanning and no content checking.** The framework never looks inside the file.
@@ -537,6 +539,32 @@ cannot. That is a floor, not a guarantee of a usable screen.
 - **A file that did not arrive whole never reaches the handler.** A canceled upload, or one whose
   connection dropped, is answered "That file did not finish sending. Please try again." and the
   part-received file is deleted.
+
+## File download, media and embedded pages
+
+- **A download address is a bearer token.** Anyone holding it, in the same browser, can fetch the
+  file until it expires (60 minutes, `zeroz.download.linkMinutes`). It is tied to the browser id
+  cookie, so another browser is refused, and the handler is asked on every request. It is also in the
+  page's source and in the browser's history for that time.
+- **An address held by the server is lost on restart.** The page asks again with `setServerFile`; a
+  playing file stops at the next range request after a restart.
+- **One range per request.** A request for several ranges at once gets the whole file.
+- **On Helidon a `HEAD` answer says `Content-Length: 0`.** Its type and range headers are right.
+  Browsers fetch media with ranged `GET` requests, which carry the real length. The Jakarta and Vidocq
+  servers report the file's length.
+- **No compression, no caching beyond `ETag` revalidation.** The response is `Cache-Control: private,
+  no-cache`.
+- **Only audio, video, pictures other than SVG, PDF and plain text are shown in the page.** Anything
+  else is sent as a download, whatever the handler asks for.
+- **The players use the browser's media element.** What plays depends on the browser, and
+  `AudioPlayer.error()` carries the sentence when the browser cannot play a file. An iPhone has no full screen for a page element, so
+  `VideoPlayer.isFullscreenAvailable()` is false there.
+- **A watched event cannot tell watching from seeking.** Moving the scrubber to nine tenths of the file
+  counts as watched.
+- **An embedded page sizes the frame only if it cooperates.** It must run the height script, which a
+  sandbox without `allow-scripts` stops. A page that embeds somebody else's site cannot be measured.
+- **The frame follows its page's growth with a limit.** Three growing measurements in a row that only
+  a resize prompted are dropped, to stop a frame and a page enlarging each other.
 
 ## Deployment and transport
 

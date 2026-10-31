@@ -66,4 +66,25 @@ public interface FileUploadRpc {
      *                                  written for the person looking at the screen
      */
     String requestUploadPass(String fileName, String contentType, long sizeBytes);
+
+    /**
+     * The largest file the handler for one upload kind accepts, in bytes.
+     *
+     * @param kind the kind the page set with {@code FileUpload.setKind}, empty for the default
+     * @return the limit for that kind; feedback only, the upload address checks it again
+     * @since 0.11.0
+     */
+    long maxUploadBytesFor(String kind);
+
+    /**
+     * Issues a one-time pass for one file of one upload kind.
+     *
+     * @param kind        the kind the page set, empty for the default handler
+     * @param fileName    the name the browser reported; recorded, not trusted
+     * @param contentType the type the browser reported; recorded, not trusted
+     * @param sizeBytes   the size the browser reported
+     * @return the pass to send in the {@code X-Zeroz4j-Upload-Pass} header
+     * @since 0.11.0
+     */
+    String requestUploadPassFor(String kind, String fileName, String contentType, long sizeBytes);
 }

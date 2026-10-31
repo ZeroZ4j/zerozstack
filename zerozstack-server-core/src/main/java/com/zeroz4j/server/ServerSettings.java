@@ -131,6 +131,24 @@ public final class ServerSettings {
     /** Where a part-received upload is written. Defaults to the JVM temp directory. */
     public static final String UPLOAD_TEMP_DIR = "zeroz.upload.tempDir";
 
+    /**
+     * Start of the per-kind upload limits: {@code zeroz.upload.maxBytes.<kind>} sets the largest file
+     * the handler for that kind accepts, and beats the handler's own
+     * {@link FileUploadHandler#getMaxBytes()}.
+     *
+     * @since 0.11.0
+     */
+    public static final String UPLOAD_MAX_BYTES_PREFIX = "zeroz.upload.maxBytes.";
+
+    // ------------------------------------------------------------------ file download
+
+    /**
+     * How long a download address stays usable, in minutes. Default 60.
+     *
+     * @since 0.11.0
+     */
+    public static final String DOWNLOAD_LINK_MINUTES = "zeroz.download.linkMinutes";
+
     // ------------------------------------------------------------------ slow calls
 
     /**

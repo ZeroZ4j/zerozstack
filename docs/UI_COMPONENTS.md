@@ -520,8 +520,10 @@ All of these carry a caption, an explanation, a required mark and a message line
 - **Toggle**: A switch component, often used as an alternative to a checkbox.
 - **FileInput**: A control for selecting files from the user's system. It reports the chosen file's name and sends nothing anywhere.
 - **FileUpload**: A drop-or-pick box that sends files to the server, several at once, with a progress bar and a cancel button for each. Set the wording with `setTitle` / `setSubtitle`, limit the picker with `setAccept("image/*")`, allow or forbid several files with `setMultiple`, and hear each outcome with `addUploadListener((name, accepted, message) -> …)`. The drop area is a control in its own right: Tab reaches it, Enter and Space open the picker, and it
-  announces itself using the words you set. On the server one `@ApplicationScoped` class implementing
-  `FileUploadHandler` is handed each finished file. See [Accepting file uploads](guides/file-uploads.md).
+  announces itself using the words you set. On the server an `@ApplicationScoped` class implementing
+  `FileUploadHandler` is handed each finished file. An application with several kinds of upload gives
+  each handler a name with `getKind()` and its own limit with `getMaxBytes()`, and the box picks one
+  with `setKind("recording")`; 100 MB recordings and 2 MB avatars can live side by side. See [Accepting file uploads](guides/file-uploads.md).
 
 ### Buttons & Navigation
 Components that trigger actions or navigate between views.
@@ -572,6 +574,7 @@ Components used to present data, alerts, and content to the user.
   reader as a notice; and long text wraps instead of running off the side. `setThemeColor` and
   `new Alert(text, "alert-info")` still work and are deprecated — they spell out a stylesheet class,
   which nothing checks and no reader understands.
+- **AudioPlayer**: Plays an audio file with the browser's own controls, which the keyboard reaches and a screen reader names. `setSource(url)` plays an address; `setServerFile("recording", "42")` plays a file the server's `FileDownloadHandler` hands out, with seeking. `play()`, `pause()`, `seekTo(seconds)`, `skip(seconds)` and `setPlaybackRate(rate)` move it from code; `position()`, `duration()`, `playing()` and `playbackRate()` are signals; `addWatchedListener` fires once when the end or nine tenths of it has been played; `setSpeedControlVisible(true)` adds a Speed list. See [Playing media and embedding pages](guides/media.md).
 - **Avatar**: Represents a user or entity with an image or initials.
 - **Badge**: A small label or indicator, often used for counts or status.
 - **Card**: A bounded container for grouping related content and actions.
@@ -612,6 +615,7 @@ Components used to present data, alerts, and content to the user.
   whatever opened it. `new Drawer("Settings")` gives it a heading and a name a screen reader
   announces. `setModal(false)` turns the dim and the hold off, for a sidebar that lives beside the
   page rather than over it. The panel sits on `Layer.OVERLAY`.
+- **EmbeddedFrame**: Another page inside this one, as a real frame with a name for screen readers. `setSource(url)` shows an address, `setContent(html)` shows a page given as text, and `setSandbox("allow-scripts")` restricts it. The frame takes the height its page reports: the page needs `EmbeddedFrameScript.HEIGHT_SCRIPT`, which `setContent` adds for you. A height is believed only from this frame's own window and the expected origin. See [Playing media and embedding pages](guides/media.md).
 - **EmptyState**: A placeholder view shown when there is no data to display.
 - **Footer**: A standard page footer element.
 - **Login**: A username-and-password sign-in card. It collects the two values and hands them to a
@@ -712,6 +716,7 @@ Components used to present data, alerts, and content to the user.
   hides it until the pointer leaves and comes back. While the tip is showing it is on
   `Layer.TOOLTIP`, the top of the scale; the rest of the time it is ordinary page content, because
   it wraps your control and floating that over every drawer would be wrong.
+- **VideoPlayer**: Plays a video file the same way as `AudioPlayer`, inside the page on a phone, with `setPoster(url)` and the browser's own full screen control. `requestFullscreen()` and `exitFullscreen()` do the same from code; `isFullscreenAvailable()` is false on an iPhone.
 - **VirtualScroller**: A long list that only draws the rows on screen, so ten thousand of them cost
   what ten do. **Changed in 0.8.0** - it is in the tab order, so Page Down and the arrow keys
   scroll it; before this a keyboard could not scroll it at all. `withAriaLabel` says what the list

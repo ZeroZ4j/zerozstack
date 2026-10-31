@@ -601,7 +601,7 @@ message however large, so a single big response is never refused.
 
 **File upload (0.7.0+):** put `FileUpload` on a screen and write one `@ApplicationScoped` class
 implementing `FileUploadHandler`. Files go over their own HTTP address, not the RMI socket — never
-put file bytes in an RMI argument. 25 MB per file by default (`zeroz.upload.maxBytes`). The
+put file bytes in an RMI argument. 25 MB per file by default (`zeroz.upload.maxBytes`). Since 0.11.0 a handler may name a kind (`getKind()`, chosen with `FileUpload.setKind`) and set its own limit (`getMaxBytes()`), and `FileDownloadHandler` serves a file back with byte ranges for `AudioPlayer` and `VideoPlayer`. The
 temporary file is deleted the moment the handler returns, so move it inside the method. Treat
 `getFileName()` and `getContentType()` as text the browser typed: generate the stored name yourself.
 See [docs/guides/file-uploads.md](docs/guides/file-uploads.md).

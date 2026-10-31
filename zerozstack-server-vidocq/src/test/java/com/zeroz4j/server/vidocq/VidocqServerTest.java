@@ -220,6 +220,114 @@ class VidocqServerTest {
         assertTrue(noPass.statusCode() >= 400, "a made-up pass is refused, got " + noPass.statusCode());
     }
 
+    // ------------------------------------------------------------------ kinds, large files, download
+
+    @Test
+    @DisplayName("a named upload kind has its own limit, and a file of 100 MB is accepted in pieces")
+    void uploadKindsAndALargeFile() throws Exception {
+        String cookie = browserCookie();
+        System.setProperty("zeroz.upload.maxBytes", "1024");
+        java.nio.file.Path big = java.nio.file.Files.createTempFile("zeroz4j-big", ".bin");
+        try (Client client = Client.connect("/wasm-rmi", "http://" + host, cookie)) {
+            client.auth();
+            String rpc = FileUploadRpc.class.getName();
+
+            // The default kind is held to the server-wide 1024 bytes, before any byte is sent.
+            Object refused = client.call(rpc, "requestUploadPassFor", "", "a.bin", "application/octet-stream", 5000L);
+            assertTrue(refused instanceof RefusedCall, "default kind over its limit gets no pass, got " + refused);
+            Object unknown = client.call(rpc, "requestUploadPassFor", "photos", "a.png", "image/png", 5L);
+            assertTrue(unknown instanceof RefusedCall, "an unknown kind gets no pass, got " + unknown);
+
+            // The recording kind lifts the limit: 100 MB streams to disk and reaches its handler.
+            long size = 100L * 1024L * 1024L;
+            try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(big.toFile(), "rw")) {
+                file.setLength(size);
+            }
+            Object limit = client.call(rpc, "maxUploadBytesFor", "recording");
+            assertEquals(200L * 1024L * 1024L, ((Number) limit).longValue());
+            Object pass = client.call(rpc, "requestUploadPassFor", "recording", "talk.bin", "audio/mpeg", size);
+            assertTrue(pass instanceof String, "a pass was issued, got " + pass);
+            HttpResponse<String> response = HTTP.send(
+                    HttpRequest.newBuilder(URI.create("http://" + host + "/zeroz4j-upload"))
+                            .header("Origin", "http://" + host)
+                            .header("Cookie", cookie)
+                            .header("X-Zeroz4j-Upload-Pass", (String) pass)
+                            .POST(HttpRequest.BodyPublishers.ofFile(big)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode(), response.body());
+            assertTrue(RecordingFiles.RECEIVED.contains("talk.bin:" + size + ":recording"),
+                    "the recording handler got the file, got " + RecordingFiles.RECEIVED);
+
+            // A pass for 10 bytes of this kind cannot carry more than the declared size.
+            Object small = client.call(rpc, "requestUploadPassFor", "recording", "x.bin", "audio/mpeg", 10L);
+            HttpResponse<String> overreach = post((String) small, cookie, new byte[2000]);
+            assertTrue(overreach.statusCode() >= 400, "got " + overreach.statusCode());
+        } finally {
+            java.nio.file.Files.deleteIfExists(big);
+        }
+    }
+
+    @Test
+    @DisplayName("a file is served back with its type, byte ranges, HEAD and the handler's say")
+    void download() throws Exception {
+        String cookie = browserCookie();
+        java.nio.file.Path clip = java.nio.file.Files.createTempFile("zeroz4j-clip", ".mp3");
+        java.nio.file.Files.write(clip, "0123456789abcdefghij".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        RecordingFiles.clip = clip;
+        try (Client client = Client.connect("/wasm-rmi", "http://" + host, cookie)) {
+            client.auth();
+            String rpc = com.zeroz4j.api.FileDownloadRpc.class.getName();
+            Object address = client.call(rpc, "requestDownloadLink", "recording", "clip");
+            assertTrue(address instanceof String, "an address was issued, got " + address);
+            String path = "/" + address;
+
+            HttpResponse<byte[]> whole = fetch("GET", path, cookie, null);
+            assertEquals(200, whole.statusCode());
+            assertEquals("audio/mpeg", whole.headers().firstValue("Content-Type").orElse(""));
+            assertEquals("bytes", whole.headers().firstValue("Accept-Ranges").orElse(""));
+            assertEquals("0123456789abcdefghij", new String(whole.body(), java.nio.charset.StandardCharsets.US_ASCII));
+
+            HttpResponse<byte[]> part = fetch("GET", path, cookie, "bytes=5-9");
+            assertEquals(206, part.statusCode());
+            assertEquals("bytes 5-9/20", part.headers().firstValue("Content-Range").orElse(""));
+            assertEquals("56789", new String(part.body(), java.nio.charset.StandardCharsets.US_ASCII));
+
+            HttpResponse<byte[]> tail = fetch("GET", path, cookie, "bytes=-3");
+            assertEquals("hij", new String(tail.body(), java.nio.charset.StandardCharsets.US_ASCII));
+
+            assertEquals(416, fetch("GET", path, cookie, "bytes=50-60").statusCode());
+
+            HttpResponse<byte[]> head = fetch("HEAD", path, cookie, null);
+            assertEquals(200, head.statusCode());
+            assertEquals("20", head.headers().firstValue("Content-Length").orElse(""));
+            assertEquals(0, head.body().length);
+
+            assertEquals(401, fetch("GET", path, "zeroz4j-client=forged", null).statusCode(),
+                    "another browser cannot use the address");
+            assertEquals(401, fetch("GET", "/zeroz4j-download?pass=made-up", cookie, null).statusCode());
+
+            Object other = client.call(rpc, "requestDownloadLink", "recording", "missing");
+            assertEquals(404, fetch("GET", "/" + other, cookie, null).statusCode());
+            Object unknownKind = client.call(rpc, "requestDownloadLink", "nope", "clip");
+            assertTrue(unknownKind instanceof RefusedCall, "an unknown kind gets no address, got " + unknownKind);
+        } finally {
+            RecordingFiles.clip = null;
+            java.nio.file.Files.deleteIfExists(clip);
+        }
+    }
+
+    private static HttpResponse<byte[]> fetch(String method, String path, String cookie, String range) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://" + host + path))
+                .method(method, HttpRequest.BodyPublishers.noBody());
+        if (cookie != null) {
+            builder.header("Cookie", cookie);
+        }
+        if (range != null) {
+            builder.header("Range", range);
+        }
+        return HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
     // ------------------------------------------------------------------ static content
 
     @Test

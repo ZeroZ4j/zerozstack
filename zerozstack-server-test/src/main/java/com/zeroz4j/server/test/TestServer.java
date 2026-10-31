@@ -21,6 +21,7 @@ import com.zeroz4j.api.BinaryRegistry;
 import com.zeroz4j.api.ObjectMapper;
 import com.zeroz4j.server.Disclosures;
 import com.zeroz4j.server.EventPublisher;
+import com.zeroz4j.server.FileDownloadRpcImpl;
 import com.zeroz4j.server.FileUploadRpcImpl;
 import com.zeroz4j.server.LiveMutexManager;
 import com.zeroz4j.server.ClientErrorRpcImpl;
@@ -530,6 +531,7 @@ public final class TestServer implements AutoCloseable {
             all.add(LiveMutexManager.class);
             all.add(LiveMutexRpcImpl.class);
             all.add(FileUploadRpcImpl.class);
+            all.add(FileDownloadRpcImpl.class);
             all.add(SlowCalls.class);
             all.add(SlowCallRpcImpl.class);
             all.add(ClientErrorRpcImpl.class);

@@ -77,6 +77,28 @@ version now ships in the same jar, and the rules say which page to read before w
 - **A failed start shows a sentence instead of a blank page.** "Could not start the application.",
   "Could not connect to the server." or "Sign-in was refused.", with a Reload button, in an empty
   `#app-root`. `Zeroz4jClient.showStartFailure(false)` turns it off.
+- **Media: `AudioPlayer`, `VideoPlayer` and `EmbeddedFrame`.** The players use the browser's own controls
+  and add `setSource`, `setServerFile(kind, id)`, `play`, `pause`, `seekTo`, `skip`, `setPlaybackRate`, an
+  optional Speed list, the signals `position()`, `duration()`, `playing()` and `playbackRate()`, and
+  `addWatchedListener`, which fires once at the end or nine tenths in. `VideoPlayer` adds a poster and
+  `requestFullscreen()`. `EmbeddedFrame` shows an address or a page given as text, takes a `sandbox`, and
+  grows to the height its page reports. It believes a height only from its own frame, from the expected
+  origin, as a finite number. The page runs `EmbeddedFrameScript.HEIGHT_SCRIPT` (in
+  `zerozstack-shared-api`, added by `setContent`), which caps unprompted growth so a frame and a page
+  cannot enlarge each other forever. See `docs/guides/media.md`.
+- **Serving a file back: `FileDownloadHandler`.** One `@ApplicationScoped` class per kind checks the
+  caller and returns `FileDownload.of(path)`, `notFound()` or `forbidden()`. The page asks the live
+  connection for an address (`FileDownloadRpc`), and the framework serves it at `zeroz4j-download` on
+  Helidon, in a WAR and on Vidocq, calling the handler on every request. It sends the content type,
+  `Content-Length`, `ETag`, `Last-Modified`, a safe `Content-Disposition` and byte ranges (206, 416, `HEAD`,
+  `If-None-Match`), in 64 KB pieces and never over the RMI socket. `zerozstack-server-core` still has no
+  JAX-RS or servlet type. `zeroz.download.linkMinutes` (60) sets how long an address works.
+- **Several kinds of upload, each with its own limit.** A `FileUploadHandler` names itself with
+  `getKind()` and may set `getMaxBytes()`; `zeroz.upload.maxBytes.<kind>` overrides it; a page chooses with
+  `FileUpload.setKind(...)`. The pass is tied to its kind, and the server checks the kind and the bytes it
+  counts. A box with no kind reaches the handler with an empty kind, so existing code is unchanged. Large
+  files were already copied to disk in 64 KB pieces; Vidocq's request ceiling now follows the largest
+  limit of any kind. `FileUploadRpc` gains `maxUploadBytesFor` and `requestUploadPassFor`.
 - **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
   as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
   `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
