@@ -177,9 +177,22 @@ appear, and lines from Helidon or a library that logs through `System.Logger` ar
 
 `zerozstack-server-helidon` depends on `helidon-logging-slf4j`, which brings
 `slf4j-jdk-platform-logging`. That library hands every `System.Logger` line to SLF4J. With no SLF4J
-provider on the classpath, SLF4J drops them. The example servers have `org.slf4j:slf4j-simple` and do
-not show this. The archetype's server `pom.xml` names no provider, so a generated project does. Add
-one to the server module, `slf4j-simple` as the examples do.
+provider on the classpath, SLF4J drops them.
+
+A project generated from the archetype since 0.11.0 has `org.slf4j:slf4j-simple` (2.0.12, as in the
+example servers) in its server module, and does not show this. It also does no harm under the
+`vidocq` profile, where nothing hands it `System.Logger` lines. A project generated earlier, or one
+that removed it, needs the dependency back:
+
+```xml
+<dependency>
+  <groupId>org.slf4j</groupId>
+  <artifactId>slf4j-simple</artifactId>
+  <version>2.0.12</version>
+</dependency>
+```
+
+Stay on a stable 2.0.x release. SLF4J 2.1 is alpha.
 
 ## Connection problems
 

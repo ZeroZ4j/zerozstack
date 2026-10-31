@@ -329,7 +329,40 @@ public final class StaticContent {
         } catch (IOException ex) {
             return null;
         }
-        return withBaseHref(html, contextPath).getBytes(StandardCharsets.UTF_8);
+        return withThemeScript(withBaseHref(html, contextPath)).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * The script that puts the stored color theme on the {@code html} element before the page is
+     * first painted. It reads the keys {@code com.zeroz4j.ui.theme.Theme} writes
+     * ({@code zeroz4j.theme}, {@code zeroz4j.theme.names}) and does nothing when the first is
+     * absent, so an application with its own theme handling is not touched.
+     */
+    public static final String THEME_SCRIPT =
+            "<script>(function(){try{var store=window.localStorage;var choice=store.getItem('zeroz4j.theme');"
+            + "if(!choice){return;}var names=(store.getItem('zeroz4j.theme.names')||'light,dark').split(',');"
+            + "var dark=choice==='dark'||(choice==='system'&&window.matchMedia"
+            + "&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
+            + "var root=document.documentElement;root.setAttribute('data-theme',dark?names[1]:names[0]);"
+            + "root.setAttribute('data-theme-choice',choice);}catch(ignored){}})();</script>\n";
+
+    /**
+     * Inserts {@link #THEME_SCRIPT} at the end of {@code <head>}, so a returning visitor's theme
+     * is on the page before anything is drawn. A document that already mentions the stored key is
+     * left alone, as is one without a head.
+     *
+     * @param html the document
+     * @return the document, with the script when it needed one
+     */
+    public static String withThemeScript(String html) {
+        if (html == null || html.contains("zeroz4j.theme")) {
+            return html;
+        }
+        int close = html.toLowerCase(Locale.ROOT).indexOf("</head>");
+        if (close < 0) {
+            return html;
+        }
+        return html.substring(0, close) + THEME_SCRIPT + html.substring(close);
     }
 
     /**

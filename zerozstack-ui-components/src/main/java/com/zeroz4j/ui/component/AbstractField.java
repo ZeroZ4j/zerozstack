@@ -565,6 +565,50 @@ public abstract class AbstractField<C extends Component, T> extends Component im
         wrapper = box;
     }
 
+    /**
+     * Puts classes on the row that holds the control and its caption instead of on the control,
+     * building the wrapper first when there is none yet. For classes that size the space around a
+     * control, which would stretch the control itself if they landed on it.
+     *
+     * @param classNames space separated class names
+     */
+    protected final void addControlRowClassName(String classNames) {
+        ensureWrapper();
+        HTMLElement row = controlRow != null ? controlRow : wrapper;
+        for (String name : classNames.split(" ")) {
+            if (name.isEmpty()) {
+                continue;
+            }
+            String current = row.getClassName();
+            if (current == null || current.isEmpty()) {
+                row.setClassName(name);
+            } else if (!(" " + current + " ").contains(" " + name + " ")) {
+                row.setClassName(current + " " + name);
+            }
+        }
+    }
+
+    /**
+     * Takes classes off the row that {@link #addControlRowClassName(String)} put them on.
+     *
+     * @param classNames space separated class names
+     * @return true when the field has a wrapper and the names were looked for there
+     */
+    protected final boolean removeControlRowClassName(String classNames) {
+        if (wrapper == null) {
+            return false;
+        }
+        HTMLElement row = controlRow != null ? controlRow : wrapper;
+        String current = row.getClassName();
+        for (String name : classNames.split(" ")) {
+            if (!name.isEmpty() && current != null) {
+                current = (" " + current + " ").replace(" " + name + " ", " ").trim();
+            }
+        }
+        row.setClassName(current == null ? "" : current);
+        return true;
+    }
+
     private void movePlacementStyle(HTMLElement target, String property) {
         String value = getElement().getStyle().getPropertyValue(property);
         if (value != null && !value.isEmpty()) {

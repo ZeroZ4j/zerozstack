@@ -39,11 +39,29 @@ version now ships in the same jar, and the rules say which page to read before w
 - **`troubleshooting.md` explains missing `System.Logger` lines.** `zerozstack-server-helidon` brings
   `slf4j-jdk-platform-logging`, which hands those lines to SLF4J. With no SLF4J provider they are
   dropped without a message in the log other than three start-up lines. The example servers have
-  `slf4j-simple`; the archetype's server does not. If your server log has no Helidon lines, add a
+  `slf4j-simple`; the archetype's server did not until the next entry. If your server log has no Helidon lines, add a
   provider to the server module.
+- **`Theme`: light, dark and system, stored, in the library.** `Theme.start()` in `main` reads the
+  stored choice (`localStorage`, failure tolerated), sets `data-theme` on the `html` element and
+  follows the operating system live. `Theme.choose(Theme.Choice.LIGHT/DARK/SYSTEM)`, `Theme.choice()`
+  and `Theme.showing()` (read-only signals; `showing()` is light or dark also when the system decides)
+  and `Theme.configure(light, dark)` for an application's own DaisyUI theme names. The server's shell
+  reads the stored choice in a small inline script at the end of `<head>`, so a returning visitor
+  sees no flash; a shell that mentions `zeroz4j.theme` is left alone. An application's own CSS
+  follows with two selectors, `:root[data-theme="dark"]` and
+  `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`, described in `UI_COMPONENTS.md`.
+- **`ThemeSelector`: Light, Dark, System in one control**, for a settings screen.
+- **The archetype calls `Theme.start()`**, and `todo-signals` and `components-showcase` use the new API.
+- **`slf4j-simple` in the archetype's server module** (2.0.12, as in the example servers), so a
+  generated project no longer loses `System.Logger` lines. The `troubleshooting.md` entry is updated.
 
 ### Changed
 
+- **`ThemeController` is driven by `Theme`.** The icon shows the theme that is showing now, also when
+  it comes from the system, and pressing it stores the choice. It no longer uses DaisyUI's
+  `theme-controller` class. Existing code compiles. `Js.setTheme` now sets `data-theme` on `html`
+  and removes one left on `body`; a `data-theme` on `body` overrides `html`, so take it out of
+  `index.html`.
 - **A timed-out call now fails with a sentence a screen can show.** `RequestTimeoutException` kept
   its type, but its message used to read `RMI call Service#method (request 7) timed out: no answer
   within 30000 ms`, and applications showed that to people. The message is now "The server did not
@@ -52,6 +70,10 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Fixed
 
+- **A sizing class on a `Checkbox` or `Toggle` no longer stretches the box.** `min-h-11`, `h-*`, `w-*`
+  and `size-*` now go on the row around the box and its caption, so the row grows and the box keeps
+  its shape. `getElement()` is still the input; `getOuterElement()` returns the row, the same wrapper
+  a caption builds, so callers that use `add(...)` change nothing.
 - **A record or class nested inside a `@DataModel` now crosses the wire.** It compiled, and the first
   send failed in the browser with `Unsupported type for GrowableBuffer: Outer$Inner` while the screen
   that needed it never appeared. The generated registrar used the source name `Outer.Inner` where the

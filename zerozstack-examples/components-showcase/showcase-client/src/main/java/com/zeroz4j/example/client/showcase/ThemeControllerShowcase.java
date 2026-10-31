@@ -26,22 +26,15 @@ public class ThemeControllerShowcase extends ComponentShowcase {
 
     public ThemeControllerShowcase() {
         addTitle("ThemeController");
-        addDescription("ThemeController is a toggle component that changes the active theme between light and dark modes.");
+        addDescription("ThemeController is the sun and moon button. The icon shows the theme that is showing now "
+                + "and pressing it chooses the other one. ThemeSelector offers Light, Dark and System.");
 
-        // Theme Controller Toggle
         ThemeController themeController = new ThemeController();
-        
-        // Show status based on value
-        Span statusSpan = new Span("Current: Light / Dark Toggle");
-        
-        addSection("Theme Toggle Control", themeController, statusSpan);
+        addSection("Theme Toggle Control", themeController);
 
-        // Data Binding Demo
-        ValueSignal<Boolean> signal = new ValueSignal<>(false);
-        ThemeController component = new ThemeController();
-        component.bindValue(signal);
+        ThemeSelector selector = new ThemeSelector();
         Span output = new Span();
-        output.bindText(new Computed<>(() -> "Current value: " + signal.get()));
-        addSection("Data Binding Demo", component, output);
+        output.bindText(new Computed<>(() -> "Choice: " + Theme.choice().get() + ", showing: " + Theme.showing().get()));
+        addSection("Light, Dark, System", selector, output);
     }
 }

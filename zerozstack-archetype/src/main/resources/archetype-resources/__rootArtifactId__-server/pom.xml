@@ -41,6 +41,13 @@
       <artifactId>zerozstack-apt</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- SLF4J needs one provider. Without it the log lines of Helidon and of libraries that log
+         through System.Logger are dropped. The example servers use the same one. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>2.0.12</version>
+    </dependency>
   </dependencies>
 
   <build>
