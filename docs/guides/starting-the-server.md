@@ -108,7 +108,11 @@ java -Dzeroz.port=9000 -cp "target/classes;target/libs/*" com.example.server.Mai
 ```
 
 `--port` and `zeroz.port` are a convention of the examples and of `VidocqLauncher`, not something the
-framework reads for you. The main class above is where they are read.
+framework reads for you. The main class above is where they are read. A generated project reads
+`zeroz.port` in its `ServerApp` and falls back to 8080.
+
+If the port is taken, `Zeroz4jServer.start` throws "Could not listen on port 8080. Another program is
+using it." instead of returning.
 
 ## Development logins: `--dev-login`
 

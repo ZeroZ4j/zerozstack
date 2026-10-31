@@ -22,6 +22,7 @@ import com.zeroz4j.api.RmiSecurityContext;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.theme.TextStyle;
+import com.zeroz4j.ui.theme.Surface;
 import com.zeroz4j.ui.theme.Theme;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -44,9 +45,9 @@ public class ClientApp {
             RmiSecurityContext.onResolved(() -> {
                 // Everything on this page is built out of Java objects, never HTML strings.
                 // The class names come from Tailwind and daisyUI, which index.html loads:
-                // this framework ships no stylesheet of its own.
-                Div card = new Div();
-                card.addClassName("card bg-base-200 shadow-xl mx-auto mt-24 w-96");
+                // this framework ships no stylesheet for its components.
+                Div card = Surface.PANEL.div();
+                card.addClassName("mx-auto mt-24 w-96 max-w-full p-8");
 
                 // Ask for a text size by name instead of describing one. There are five, in
                 // com.zeroz4j.ui.theme.TextStyle, and asking keeps every screen agreeing.
@@ -54,7 +55,7 @@ public class ClientApp {
                     TextStyle.PAGE_TITLE.span("It works"),
                     TextStyle.SECONDARY.paragraph("This page is Java, compiled for the browser, "
                         + "and already talking to the server over one socket."));
-                body.addClassName("card-body items-center gap-2 text-center");
+                body.addClassName("flex flex-col items-center gap-2 text-center");
                 card.add(body);
 
                 // replaceContents, never setInnerHTML(""): clearing the HTML by hand leaves

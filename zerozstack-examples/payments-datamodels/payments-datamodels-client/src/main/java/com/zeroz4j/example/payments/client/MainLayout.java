@@ -29,7 +29,7 @@ public class MainLayout extends VerticalLayout {
         super();
         addClassName("h-screen");
         addClassName("w-screen");
-        addClassName("bg-base-100");
+        addClassName("bg-base-200");
         addClassName("text-base-content");
         addClassName("overflow-y-auto");
         addClassName("p-6");

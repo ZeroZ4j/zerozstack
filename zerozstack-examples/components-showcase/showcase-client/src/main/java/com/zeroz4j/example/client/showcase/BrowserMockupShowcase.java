@@ -37,7 +37,7 @@ public class BrowserMockupShowcase extends ComponentShowcase {
         toolbar.add(urlInput);
 
         Div body = new Div("Welcome to zeroz4j UI components browser preview!");
-        body.addClassName("flex justify-center px-4 py-16 bg-base-200 text-base-content border-t border-base-300");
+        body.addClassName("flex justify-center px-4 py-16 bg-base-100 text-base-content border-t border-base-300");
 
         mockup.add(toolbar, body);
 

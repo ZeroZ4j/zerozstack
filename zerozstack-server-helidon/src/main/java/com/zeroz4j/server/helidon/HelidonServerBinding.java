@@ -58,6 +58,13 @@ public final class HelidonServerBinding implements ServerBinding {
 
         server.start();
 
+        // Helidon logs a failed bind, then returns as if it had started and reports port -1.
+        if (server.port() <= 0) {
+            server.stop();
+            throw new IllegalStateException("Could not listen on port " + port
+                    + ". Another program is using it.");
+        }
+
         LOG.info(appName + " listening on http://localhost:" + port + "/ (RMI at /wasm-rmi)");
 
         return new RunningServer() {

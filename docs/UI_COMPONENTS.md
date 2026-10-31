@@ -92,7 +92,7 @@ before, so a page that uses none is unchanged.
 
 ## Where the styles come from
 
-**ZeroZ Stack ships no stylesheet.** Its components wear class names from two well-known style
+**ZeroZ Stack ships no stylesheet of components.** Its components wear class names from two well-known style
 libraries — Tailwind CSS and daisyUI — and the HTML page your application serves is what has to
 bring those in. This is on purpose: a Java project should not have to install a JavaScript
 toolchain before it can show a button.
@@ -272,6 +272,26 @@ add(text(PlotText.CAPTION, Emphasis.FULL, x, y, name, "middle"));    // words on
 `Emphasis` is the same second question here, answered by the same enum, so the fade on an axis label
 and the fade on the legend underneath it are one number in one place. You only need any of this if
 you are writing a chart of your own on top of `ChartBase`; the shipped charts already ask by name.
+
+## Page and panel colors
+
+Without any theme of your own, the `light` and `dark` themes have a page and panels that are clearly
+different. The page is `base-200`, a panel on it is `base-100`, and a hairline is `base-300`. In dark
+the panel is lighter than the page, and `base-300` is lighter than the panel. Primary, accent and the
+status colors stay daisyUI's.
+
+| | Page (`base-200`) | Panel (`base-100`) | Hairline (`base-300`) |
+|---|---|---|---|
+| light | `#E7EBF0` | `#FFFFFF` | `#C3CCD7` |
+| dark | `oklch(15.5% 0.012 255)` | `oklch(25.5% 0.014 255)` | `oklch(38% 0.016 255)` |
+
+The server adds these to the page as a small style element, `com.zeroz4j.api.ThemeBase`, and draws the
+page in `base-200` whatever class is on `body`. So use `bg-base-100` for a box, or better a surface,
+and never `bg-base-200`, which is the page.
+
+Your own theme file wins in any order, as long as it is not inside a cascade layer: set
+`--color-base-100` and the others in it. A theme with any other name, set with `Theme.configure`, is
+not touched.
 
 ## Naming surfaces
 

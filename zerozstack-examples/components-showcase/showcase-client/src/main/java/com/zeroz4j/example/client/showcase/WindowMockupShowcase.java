@@ -37,7 +37,7 @@ public class WindowMockupShowcase extends ComponentShowcase {
         body.addClassName("justify-center");
         body.addClassName("px-4");
         body.addClassName("py-16");
-        body.addClassName("bg-base-200");
+        body.addClassName("bg-base-100");
         body.getElement().setTextContent("Hello World! This is inside a mockup window.");
 
         window.add(body);

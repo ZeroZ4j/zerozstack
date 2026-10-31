@@ -141,5 +141,5 @@ Layer where = saved.getLayer();   // Layer.TOAST
   behind it, not a lock. A hand-written number on the same element will win, because it is set the
   same way.
 - **There is no stylesheet file to edit.** The numbers are put on the element directly, because this
-  library ships no CSS of its own — it is styled with Tailwind and daisyUI classes loaded by the
+  library ships no CSS for its components — it is styled with Tailwind and daisyUI classes loaded by the
   application's own page.

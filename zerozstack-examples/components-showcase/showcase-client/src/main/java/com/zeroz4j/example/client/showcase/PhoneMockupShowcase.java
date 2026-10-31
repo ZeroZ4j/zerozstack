@@ -47,7 +47,7 @@ public class PhoneMockupShowcase extends ComponentShowcase {
         artboard.addClassName("artboard");
         artboard.addClassName("artboard-demo");
         artboard.addClassName("phone-1");
-        artboard.addClassName("bg-base-200");
+        artboard.addClassName("bg-base-100");
         artboard.addClassName("flex");
         artboard.addClassName("flex-col");
         artboard.addClassName("justify-center");

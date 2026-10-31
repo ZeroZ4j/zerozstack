@@ -20,6 +20,7 @@ package com.zeroz4j.ui.theme;
 import com.zeroz4j.signals.Signal;
 import com.zeroz4j.signals.ValueSignal;
 import com.zeroz4j.ui.Browser;
+import com.zeroz4j.api.ThemeBase;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
@@ -108,6 +109,8 @@ public final class Theme {
             return;
         }
         started = true;
+        // The server puts this in the shell. A shell that came from somewhere else gets it here.
+        installBase(ThemeBase.STYLE_ID, ThemeBase.CSS);
         CHOICE.set(parse(read(STORAGE_KEY)));
         onSystemChange(() -> new Thread(() -> {
             if (CHOICE.get() == Choice.SYSTEM) {
@@ -201,4 +204,12 @@ public final class Theme {
         + "root.setAttribute('data-theme-choice', choice);"
         + "if (document.body) { document.body.removeAttribute('data-theme'); }")
     private static native void setAttributes(String name, String choice);
+
+    @JSBody(params = {"id", "css"}, script =
+        "if (document.getElementById(id)) { return; }"
+        + "var style = document.createElement('style');"
+        + "style.id = id;"
+        + "style.textContent = css;"
+        + "document.head.appendChild(style);")
+    private static native void installBase(String id, String css);
 }

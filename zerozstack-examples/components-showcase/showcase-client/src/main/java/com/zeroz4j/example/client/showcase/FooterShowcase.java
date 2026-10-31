@@ -71,7 +71,7 @@ public class FooterShowcase extends ComponentShowcase {
     private static Component withLegalLine() {
         Footer footer = new Footer();
         footer.setId("footer-legal");
-        footer.addClassName("p-6 bg-base-200 rounded-box w-full flex flex-col gap-4");
+        footer.addClassName("p-6 bg-base-100 rounded-box w-full flex flex-col gap-4");
 
         Div row = new Div();
         row.addClassName("flex flex-wrap gap-6");
@@ -88,7 +88,7 @@ public class FooterShowcase extends ComponentShowcase {
     private static Component longNames() {
         Footer footer = new Footer();
         footer.setId("footer-long");
-        footer.addClassName("p-6 bg-base-200 rounded-box w-full grid grid-cols-1 sm:grid-cols-2 gap-6");
+        footer.addClassName("p-6 bg-base-100 rounded-box w-full grid grid-cols-1 sm:grid-cols-2 gap-6");
         footer.add(
                 column("Deutsch",
                         link("Allgemeine Geschäftsbedingungen"),
