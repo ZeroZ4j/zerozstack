@@ -107,6 +107,7 @@ async function focusReport(page, containerId) {
 // Dialog, Drawer and Dropdown are not here. They live in the overlays section and are driven
 // there, at their own ids, so a second copy would prove nothing the first does not.
 const KEYBOARD_CONTROLS = [
+    { id: 'kb-audioplayer-speed', what: 'AudioPlayer (speed list)', how: 'native', tag: 'SELECT' },
     { id: 'kb-button', what: 'Button', how: 'activate' },
     { id: 'kb-checkbox', what: 'Checkbox', how: 'activate' },
     { id: 'kb-checkbox-tall', what: 'Checkbox with a sizing class', how: 'activate' },

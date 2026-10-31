@@ -17,14 +17,12 @@
  */
 package com.zeroz4j.server;
 
-import jakarta.enterprise.inject.spi.CDI;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -84,9 +82,6 @@ public final class UploadReceiver {
      */
     public static final String PASS_HEADER = "X-Zeroz4j-Upload-Pass";
 
-    /** Set by tests that run without a CDI container. Null in every real deployment. */
-    private static volatile List<FileUploadHandler> handlersForTesting;
-
     private UploadReceiver() {}
 
     /**
@@ -116,10 +111,10 @@ public final class UploadReceiver {
             return UploadOutcome.refused(refused.getStatus(), refused.getMessage());
         }
 
-        long max = UploadLimits.maxBytes();
+        long max = UploadKinds.maxBytes(ServerConfig.fromSystemProperties(), pass.getKind());
         long declaredLength = declaredLength(request);
         if (declaredLength > max) {
-            return UploadOutcome.refused(413, tooBig());
+            return UploadOutcome.refused(413, tooBig(max));
         }
         if (declaredLength > pass.getDeclaredSize()) {
             // The pass was issued for a file of a known size. A request claiming more bytes than
@@ -128,26 +123,17 @@ public final class UploadReceiver {
                     "That file changed while it was being sent. Please choose it again.");
         }
 
-        List<FileUploadHandler> handlers = handlers();
-        if (handlers.isEmpty()) {
+        FileUploadHandler handler = UploadKinds.handlerFor(pass.getKind(), true);
+        if (handler == null && !UploadKinds.handlers().isEmpty()) {
+            return UploadOutcome.refused(404, "That kind of file is not accepted here.");
+        }
+        if (handler == null) {
             LOG.severe("[zeroz4j] A file was uploaded but this application has no FileUploadHandler. "
                     + "Add an @ApplicationScoped bean implementing "
                     + "com.zeroz4j.server.FileUploadHandler.");
             return UploadOutcome.refused(501,
                     "This application cannot take files yet. Please tell whoever runs it.");
         }
-        if (handlers.size() > 1) {
-            StringBuilder names = new StringBuilder();
-            for (FileUploadHandler handler : handlers) {
-                if (names.length() > 0) {
-                    names.append(", ");
-                }
-                names.append(handler.getClass().getName());
-            }
-            LOG.warning("[zeroz4j] More than one FileUploadHandler is deployed; using "
-                    + handlers.get(0).getClass().getName() + ". Found: " + names);
-        }
-
         Path temp;
         try {
             // createTempFile generates the name. The file name from the browser gets nowhere near it.
@@ -163,7 +149,7 @@ public final class UploadReceiver {
                 written = copyCapped(request.body(), temp, max);
             } catch (SizeExceeded exceeded) {
                 // The declared length lied, or there was none. Reading stopped at the limit.
-                return UploadOutcome.refused(413, tooBig());
+                return UploadOutcome.refused(413, tooBig(max));
             } catch (IOException ex) {
                 // A cancelled upload and a dropped connection both land here.
                 LOG.fine("[zeroz4j] Upload did not finish: " + ex.getMessage());
@@ -182,11 +168,11 @@ public final class UploadReceiver {
 
             UploadedFile file = new UploadedFile(temp, pass.getFileName(), pass.getContentType(),
                     written, pass.getPrincipal(), pass.getRoles(), pass.getTenantId(),
-                    pass.getClientId(), pass.getSessionId());
+                    pass.getClientId(), pass.getSessionId(), pass.getKind());
 
             UploadResult result;
             try {
-                result = handlers.get(0).onFileUploaded(file);
+                result = handler.onFileUploaded(file);
             } catch (Exception ex) {
                 LOG.log(Level.SEVERE, "[zeroz4j] FileUploadHandler threw while handling an upload of "
                         + written + " bytes", ex);
@@ -194,7 +180,7 @@ public final class UploadReceiver {
                         "Something went wrong on our side. Please try again.");
             }
             if (result == null) {
-                LOG.warning("[zeroz4j] FileUploadHandler " + handlers.get(0).getClass().getName()
+                LOG.warning("[zeroz4j] FileUploadHandler " + handler.getClass().getName()
                         + " returned null; treating the file as accepted.");
                 return UploadOutcome.ok("Done.");
             }
@@ -264,31 +250,14 @@ public final class UploadReceiver {
         }
     }
 
-    private static String tooBig() {
+    private static String tooBig(long max) {
         return "That file is too big. The largest we can take is "
-                + UploadLimits.describeMaxSize() + ".";
-    }
-
-    /** Every deployed {@link FileUploadHandler}, or the ones a test installed. */
-    private static List<FileUploadHandler> handlers() {
-        List<FileUploadHandler> injected = handlersForTesting;
-        if (injected != null) {
-            return injected;
-        }
-        List<FileUploadHandler> found = new ArrayList<>();
-        try {
-            for (FileUploadHandler handler : CDI.current().select(FileUploadHandler.class)) {
-                found.add(handler);
-            }
-        } catch (RuntimeException ex) {
-            LOG.log(Level.WARNING, "[zeroz4j] Could not look up a FileUploadHandler", ex);
-        }
-        return found;
+                + UploadLimits.describeSize(max) + ".";
     }
 
     /** Test support only: runs the receiver against handlers supplied directly, with no CDI. */
     static void setHandlersForTesting(List<FileUploadHandler> handlers) {
-        handlersForTesting = handlers;
+        UploadKinds.setHandlersForTesting(handlers);
     }
 
     /** Signals that the cap was passed. Carries no stack trace: it is control flow, not a fault. */

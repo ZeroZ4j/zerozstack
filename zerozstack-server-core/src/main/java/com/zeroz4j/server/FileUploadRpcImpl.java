@@ -52,6 +52,21 @@ public class FileUploadRpcImpl implements FileUploadRpc {
         }
     }
 
+    @Override
+    public long maxUploadBytesFor(String kind) {
+        return UploadKinds.maxBytes(config(), kind);
+    }
+
+    @Override
+    public String requestUploadPassFor(String kind, String fileName, String contentType,
+                                       long sizeBytes) {
+        try {
+            return UploadPasses.issue(config(), kind, fileName, contentType, sizeBytes).getToken();
+        } catch (UploadRefusedException refused) {
+            throw new IllegalArgumentException(refused.getMessage(), refused);
+        }
+    }
+
     /** @return this server's settings, or the system properties when there is no server */
     private ServerConfig config() {
         return runtime != null ? runtime.config() : ServerConfig.fromSystemProperties();

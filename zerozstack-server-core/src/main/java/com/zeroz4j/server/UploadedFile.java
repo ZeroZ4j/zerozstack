@@ -45,10 +45,18 @@ public final class UploadedFile {
     private final String tenantId;
     private final String clientId;
     private final String sessionId;
+    private final String kind;
 
     UploadedFile(Path tempFile, String fileName, String contentType, long sizeBytes,
                  Principal principal, Set<String> roles, String tenantId, String clientId,
                  String sessionId) {
+        this(tempFile, fileName, contentType, sizeBytes, principal, roles, tenantId, clientId,
+                sessionId, "");
+    }
+
+    UploadedFile(Path tempFile, String fileName, String contentType, long sizeBytes,
+                 Principal principal, Set<String> roles, String tenantId, String clientId,
+                 String sessionId, String kind) {
         this.tempFile = tempFile;
         this.fileName = fileName;
         this.contentType = contentType;
@@ -58,6 +66,7 @@ public final class UploadedFile {
         this.tenantId = tenantId;
         this.clientId = clientId;
         this.sessionId = sessionId;
+        this.kind = kind == null ? "" : kind;
     }
 
     /**
@@ -141,6 +150,17 @@ public final class UploadedFile {
      */
     public String getClientId() {
         return clientId;
+    }
+
+    /**
+     * The kind of upload the page named, the same text as this handler's
+     * {@link FileUploadHandler#getKind()}.
+     *
+     * @return the kind, empty for the default handler
+     * @since 0.11.0
+     */
+    public String getKind() {
+        return kind;
     }
 
     /** @return the WebSocket session id the upload pass was issued to */

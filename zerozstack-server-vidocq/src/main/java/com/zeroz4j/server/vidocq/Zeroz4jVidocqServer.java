@@ -18,7 +18,8 @@
 package com.zeroz4j.server.vidocq;
 
 import com.zeroz4j.api.BinaryRegistry;
-import com.zeroz4j.server.UploadLimits;
+import com.zeroz4j.server.ServerConfig;
+import com.zeroz4j.server.UploadKinds;
 import com.zeroz4j.server.WasmRmiServerEngine;
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.Response;
@@ -93,6 +94,7 @@ public final class Zeroz4jVidocqServer implements AutoCloseable {
             WebSocketBridge bridge = new WebSocketBridge(engine, reaper);
             StaticContentHandler statics = new StaticContentHandler();
             UploadHandler uploads = new UploadHandler();
+            DownloadHandler downloads = new DownloadHandler();
             RestResources rest = RestResources.create(container);
 
             Handler handler = request -> {
@@ -107,6 +109,9 @@ public final class Zeroz4jVidocqServer implements AutoCloseable {
                     if (UploadHandler.PATH.equals(path)) {
                         return uploads.receive(request);
                     }
+                    if (DownloadHandler.PATH.equals(path)) {
+                        return downloads.serve(request);
+                    }
                     if (rest != null && rest.claims(request)) {
                         return rest.handle(request);
                     }
@@ -117,7 +122,8 @@ public final class Zeroz4jVidocqServer implements AutoCloseable {
                 }
             };
 
-            long maxRequest = Math.max(DEFAULT_MAX_REQUEST_BYTES, UploadLimits.maxBytes() + REQUEST_SLACK_BYTES);
+            long maxRequest = Math.max(DEFAULT_MAX_REQUEST_BYTES, UploadKinds.largestMaxBytes(ServerConfig.fromSystemProperties())
+                    + REQUEST_SLACK_BYTES);
             server = Server.builder().port(port).maxRequestSize(maxRequest).handler(handler).build();
             server.start();
         } catch (RuntimeException | Error failure) {

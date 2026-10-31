@@ -80,8 +80,11 @@ public class FileUpload extends Div {
         void onUploadFinished(String fileName, boolean accepted, String message);
     }
 
-    /** Read once per page and remembered, because it cannot change while the page is open. */
-    private static long maxBytes = -1L;
+    /** The limit per upload kind, read once per page and remembered; it cannot change while the page is open. */
+    private static final java.util.Map<String, Long> LIMITS = new java.util.HashMap<>();
+
+    /** Which server-side handler receives the files; empty is the default one. */
+    private String kind = "";
 
     private final HTMLElement input;
     private final Div dropZone;
@@ -251,6 +254,25 @@ public class FileUpload extends Div {
         }
     }
 
+    /**
+     * Chooses which server-side handler receives these files, and so which size limit applies.
+     *
+     * <p>The name is the {@code getKind()} of a {@code com.zeroz4j.server.FileUploadHandler}. The
+     * server looks the handler up itself and enforces that handler's limit against the bytes it
+     * counts; the check in the browser is only feedback. A box that sets no kind reaches the handler
+     * whose kind is empty, as before kinds existed.</p>
+     *
+     * @param kind letters, digits, dot, dash and underscore, at most 64; null or empty for the default
+     * @return this component
+     * @since 0.11.0
+     */
+    public FileUpload setKind(String kind) {
+        this.kind = kind == null ? "" : kind;
+        updateHint();
+        loadLimitInBackground();
+        return this;
+    }
+
     // ---------------------------------------------------------------- wiring
 
     private void wireUp() {
@@ -365,7 +387,7 @@ public class FileUpload extends Div {
         String pass;
         try {
             pass = (String) RmiClientExecutor.executeCall("com.zeroz4j.api.FileUploadRpc",
-                    "requestUploadPass", new Object[] { name, type, size });
+                    "requestUploadPassFor", new Object[] { kind, name, type, size });
         } catch (RuntimeException ex) {
             row.fail(readable(ex.getMessage()));
             return;
@@ -494,41 +516,45 @@ public class FileUpload extends Div {
     // ---------------------------------------------------------------- the size limit
 
     /** The limit, fetched now if it is not known yet. Must be called from a green thread. */
-    private static long knownMaxBytes() {
-        if (maxBytes < 0L) {
-            fetchLimit();
+    private long knownMaxBytes() {
+        if (!LIMITS.containsKey(kind)) {
+            fetchLimit(kind);
         }
-        return maxBytes;
+        return currentLimit();
+    }
+
+    private long currentLimit() {
+        Long known = LIMITS.get(kind);
+        return known == null ? -1L : known.longValue();
     }
 
     private void loadLimitInBackground() {
-        if (maxBytes >= 0L) {
-            return;
-        }
         new Thread(() -> {
-            fetchLimit();
+            if (!LIMITS.containsKey(kind)) {
+                fetchLimit(kind);
+            }
             updateHint();
         }).start();
     }
 
-    private static void fetchLimit() {
+    private static void fetchLimit(String forKind) {
         try {
             Object answer = RmiClientExecutor.executeCall("com.zeroz4j.api.FileUploadRpc",
-                    "maxUploadBytes", new Object[0]);
+                    "maxUploadBytesFor", new Object[] { forKind });
             if (answer instanceof Number) {
-                maxBytes = ((Number) answer).longValue();
+                LIMITS.put(forKind, Long.valueOf(((Number) answer).longValue()));
             }
         } catch (RuntimeException ex) {
             // Not fatal: the limit is a courtesy. Without it the box simply says nothing about size
             // and the server does the refusing.
-            maxBytes = -1L;
+            LIMITS.remove(forKind);
         }
     }
 
     private void updateHint() {
         StringBuilder text = new StringBuilder();
-        if (maxBytes > 0L) {
-            text.append("Up to ").append(describeSize(maxBytes)).append(" per file.");
+        if (currentLimit() > 0L) {
+            text.append("Up to ").append(describeSize(currentLimit())).append(" per file.");
         }
         if (accept != null) {
             if (text.length() > 0) {

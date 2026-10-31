@@ -42,11 +42,19 @@ public final class UploadPass {
     private final String fileName;
     private final String contentType;
     private final long declaredSize;
+    private final String kind;
     private final long expiresAt;
 
     UploadPass(String token, Principal principal, Set<String> roles, String sessionId,
                String tenantId, String clientId, String fileName, String contentType,
                long declaredSize, long expiresAt) {
+        this(token, principal, roles, sessionId, tenantId, clientId, fileName, contentType,
+                declaredSize, expiresAt, "");
+    }
+
+    UploadPass(String token, Principal principal, Set<String> roles, String sessionId,
+               String tenantId, String clientId, String fileName, String contentType,
+               long declaredSize, long expiresAt, String kind) {
         this.token = token;
         this.principal = principal;
         this.roles = roles == null ? Collections.emptySet()
@@ -57,6 +65,7 @@ public final class UploadPass {
         this.fileName = fileName;
         this.contentType = contentType;
         this.declaredSize = declaredSize;
+        this.kind = kind == null ? "" : kind;
         this.expiresAt = expiresAt;
     }
 
@@ -112,6 +121,16 @@ public final class UploadPass {
      */
     public String getContentType() {
         return contentType;
+    }
+
+    /**
+     * The upload kind the page named when it asked for this pass.
+     *
+     * @return the kind, empty for the default handler
+     * @since 0.11.0
+     */
+    public String getKind() {
+        return kind;
     }
 
     /** @return the size the browser reported, already checked against the configured maximum */

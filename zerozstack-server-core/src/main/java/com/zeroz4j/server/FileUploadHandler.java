@@ -76,11 +76,42 @@ package com.zeroz4j.server;
  * <p><b>The temporary file is deleted when this method returns</b>, whether it returned a result or
  * threw. Move it or copy it; do not keep the {@link java.nio.file.Path} and read it later.</p>
  *
- * <p>If more than one implementation is present the framework uses one and logs a warning naming
- * them all — a second handler is almost always an accident.</p>
+ * <h2>More than one handler</h2>
+ * <p>An application with several kinds of upload (photos, recordings) writes one handler per kind and
+ * names each by overriding {@link #getKind()}. The page chooses with
+ * {@code new FileUpload().setKind("recording")}. A page that sets no kind reaches the handler whose kind
+ * is empty, which is what every handler written before kinds existed has. Two handlers with the same
+ * kind are almost always an accident: the framework uses one and logs a warning naming them both.</p>
+ *
+ * <p>Each kind may have its own size limit: {@link #getMaxBytes()}, or the system property
+ * {@code zeroz.upload.maxBytes.<kind>}, which wins. A kind with neither uses
+ * {@code zeroz.upload.maxBytes}. The server enforces the limit against the bytes it counts; the
+ * browser's own check is feedback only.</p>
  */
 @FunctionalInterface
 public interface FileUploadHandler {
+
+    /**
+     * The name a page uses to reach this handler. Letters, digits, dot, dash and underscore, at most
+     * 64 characters. The default, empty, is the handler for pages that set no kind.
+     *
+     * @return the kind, never null
+     * @since 0.11.0
+     */
+    default String getKind() {
+        return "";
+    }
+
+    /**
+     * The largest file this handler accepts, in bytes. Zero, the default, means the server-wide limit
+     * {@code zeroz.upload.maxBytes}. The property {@code zeroz.upload.maxBytes.<kind>} beats this.
+     *
+     * @return the limit, or zero for the server-wide one
+     * @since 0.11.0
+     */
+    default long getMaxBytes() {
+        return 0L;
+    }
 
     /**
      * Called once, with a complete file on disk.

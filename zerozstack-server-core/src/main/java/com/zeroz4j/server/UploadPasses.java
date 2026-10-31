@@ -92,10 +92,33 @@ public final class UploadPasses {
      */
     public static UploadPass issue(ServerConfig config, String fileName, String contentType,
                                    long sizeBytes) {
-        long max = UploadLimits.maxBytes(config);
+        return issue(config, "", fileName, contentType, sizeBytes);
+    }
+
+    /**
+     * Mints a pass for one kind of upload.
+     *
+     * @param config      that server's settings
+     * @param kind        the kind the page named; empty for the default handler
+     * @param fileName    the name the browser reported; recorded, not trusted
+     * @param contentType the type the browser reported; recorded, not trusted
+     * @param sizeBytes   the size the browser reported
+     * @return the new pass
+     * @throws UploadRefusedException when no handler has that kind, or the declared size is over that
+     *                                kind's maximum
+     * @since 0.11.0
+     */
+    public static UploadPass issue(ServerConfig config, String kind, String fileName,
+                                   String contentType, long sizeBytes) {
+        kind = UploadKinds.normalize(kind);
+        if (!UploadKinds.isValid(kind) || (!UploadKinds.handlers().isEmpty()
+                && UploadKinds.handlerFor(kind, false) == null)) {
+            throw new UploadRefusedException(404, "That kind of file is not accepted here.");
+        }
+        long max = UploadKinds.maxBytes(config, kind);
         if (sizeBytes > max) {
             throw new UploadRefusedException(413, "That file is too big. The largest we can take is "
-                    + UploadLimits.describeMaxSize(config) + ".");
+                    + UploadLimits.describeSize(max) + ".");
         }
         if (sizeBytes < 0L) {
             throw new UploadRefusedException(400, "That file could not be read. Try choosing it again.");
@@ -115,7 +138,7 @@ public final class UploadPasses {
                 fileName == null ? "" : fileName,
                 contentType == null ? "" : contentType,
                 sizeBytes,
-                System.currentTimeMillis() + UploadLimits.passLifetimeMillis(config));
+                System.currentTimeMillis() + UploadLimits.passLifetimeMillis(config), kind);
         ISSUED.put(token, pass);
         return pass;
     }

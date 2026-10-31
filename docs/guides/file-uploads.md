@@ -127,6 +127,113 @@ java -Dzeroz.upload.maxBytes=104857600 -cp "target/classes;target/libs/*" com.ex
 Put `zeroz.upload.tempDir` on the same filesystem as wherever your handler moves files to, so the
 move is a rename rather than a copy.
 
+## Several kinds of upload, each with its own limit
+
+An application that takes 2 MB avatars and 100 MB recordings writes one handler for each and names it.
+The page picks a handler by that name.
+
+```java
+@ApplicationScoped
+public class RecordingUploads implements FileUploadHandler {
+
+    @Override
+    public String getKind() {
+        return "recording";
+    }
+
+    @Override
+    public long getMaxBytes() {
+        return 200L * 1024 * 1024;
+    }
+
+    @Override
+    public UploadResult onFileUploaded(UploadedFile file) throws Exception {
+        // move file.getTempFile() into the recording store
+        return UploadResult.accepted("Saved.");
+    }
+}
+```
+
+```java
+layout.add(new FileUpload().setKind("recording").setAccept("audio/*"));
+```
+
+- **A box that sets no kind reaches the handler whose kind is empty**, which is what every handler
+  written before kinds existed has. Existing code compiles and behaves as before.
+- **The limit of a kind** is the property `zeroz.upload.maxBytes.<kind>` if it is set, else the
+  handler's `getMaxBytes()` if that is above zero, else `zeroz.upload.maxBytes`. For the default
+  handler a `zeroz.upload.maxBytes` that is set explicitly wins over `getMaxBytes()`.
+- **The server decides.** The kind and the declared size are checked when the pass is issued, and the
+  bytes are counted against the limit of that kind as they arrive. A pass is tied to its kind, so a
+  page cannot ask for the recording limit and send to the avatar handler. An unknown or malformed kind
+  gets no pass. The limit shown in the box and the check before sending are feedback only.
+- **Kinds are letters, digits, dot, dash and underscore, at most 64 characters.**
+- `UploadedFile.getKind()` tells the handler which kind it received.
+
+### Large files
+
+A file is copied to the temporary file in 64 KB pieces on all three servers (Helidon, the Jakarta WAR
+servlet and Vidocq), so a 100 MB recording costs the same memory as a 1 KB one. Progress is reported
+by the browser as the bytes leave it, and the cancel button works at any point; a canceled or dropped
+upload leaves nothing behind. On Vidocq the request size ceiling is set at start-up from the largest
+limit of any kind, so a handler deployed with a bigger `getMaxBytes()` is covered.
+
+## Serving a file back
+
+A page can play or show a file the server holds without the bytes crossing the live connection. The
+application writes one `@ApplicationScoped` class implementing `FileDownloadHandler`:
+
+```java
+@ApplicationScoped
+public class RecordingDownloads implements FileDownloadHandler {
+
+    @Inject Recordings recordings;
+
+    @Override
+    public String getKind() {
+        return "recording";
+    }
+
+    @Override
+    public FileDownload open(DownloadRequest request) {
+        Recording recording = recordings.find(request.getId());
+        if (recording == null) {
+            return FileDownload.notFound();
+        }
+        if (!recording.isVisibleTo(request.getPrincipal())) {
+            return FileDownload.forbidden();
+        }
+        return FileDownload.of(recording.getPath()).withContentType("audio/mpeg");
+    }
+}
+```
+
+The page uses `new AudioPlayer().setServerFile("recording", "42")` or `VideoPlayer`. See
+[Playing media and embedding pages](media.md).
+
+- **The address is `zeroz4j-download`** under wherever the application is mounted, on all three servers.
+  A WAR needs `zerozstack-server-jakarta` and a standalone Helidon server `zerozstack-server-jaxrs`, as
+  for uploads; Vidocq serves it itself. Reserved by the framework, like `zeroz4j-upload`.
+- **The page asks the live connection for the address.** The server issues a random token tied to the
+  browser (the signed browser id cookie), the kind and id, and the identity of the connection. It
+  works repeatedly for 60 minutes (`zeroz.download.linkMinutes`), because a media element makes a
+  request for every position it seeks to.
+- **The handler runs on every request**, with the principal, roles, tenant, client id and session id
+  the address was issued to. Check them each time. The id is text from the page: look it up, never use
+  it as a path.
+- **The framework sends the file** with `Content-Type` (yours, else from the extension, else
+  `application/octet-stream`), `Content-Length`, `Accept-Ranges: bytes`, `ETag` and `Last-Modified`.
+  `Range` requests answer 206 with `Content-Range`, a start past the end answers 416, `HEAD` and
+  `If-None-Match` work, and several ranges in one request get the whole file, which HTTP allows. The
+  file is read in 64 KB pieces, never into memory, and never over the RMI socket.
+- **Audio, video, pictures other than SVG, PDF and plain text are sent inline.** Everything else,
+  HTML included, is sent as `attachment`, with `X-Content-Type-Options: nosniff`, so a file a user
+  uploaded cannot run as a page of the application. `asAttachment()` forces a download. The file name
+  in the header is cleaned of quotes, slashes and line breaks.
+- **A refused request answers with a short sentence**: 401 for an address that is unknown, expired or
+  presented by another browser, 403 for `forbidden()`, 404 for `notFound()` or a missing file, and 500
+  with a general apology when the handler threw.
+
 ## What the framework does for you
 
 - **An upload needs a live connection.**
@@ -184,9 +291,9 @@ altogether.
 
 ## Limits
 
-- **One handler per application.**
-  If more than one `FileUploadHandler` is deployed the framework uses one and logs a warning naming
-  them all.
+- **One handler per kind.**
+  If two `FileUploadHandler` beans share a kind the framework uses one and logs a warning naming
+  them both.
 - **No resume and no chunking.**
   A canceled or dropped upload starts again from the beginning.
 - **No per-user or per-tenant quota**, and no limit on how many files can be uploaded at once.

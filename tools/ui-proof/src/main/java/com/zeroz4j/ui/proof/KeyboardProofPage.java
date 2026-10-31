@@ -20,6 +20,7 @@ package com.zeroz4j.ui.proof;
 import com.zeroz4j.api.validation.FieldRule;
 import com.zeroz4j.ui.binding.Binder;
 import com.zeroz4j.ui.component.AbstractField;
+import com.zeroz4j.ui.component.AudioPlayer;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Checkbox;
 import com.zeroz4j.ui.component.CodeBlock;
@@ -28,6 +29,7 @@ import com.zeroz4j.ui.component.Dialog;
 import com.zeroz4j.ui.component.DiffView;
 import com.zeroz4j.ui.component.Drawer;
 import com.zeroz4j.ui.component.Dropdown;
+import com.zeroz4j.ui.component.EmbeddedFrame;
 import com.zeroz4j.ui.component.FileInput;
 import com.zeroz4j.ui.component.FileUpload;
 import com.zeroz4j.ui.component.LaneTimeline;
@@ -50,6 +52,7 @@ import com.zeroz4j.ui.component.ThemeController;
 import com.zeroz4j.ui.component.ThemeSelector;
 import com.zeroz4j.ui.component.Toast;
 import com.zeroz4j.ui.component.Toggle;
+import com.zeroz4j.ui.component.VideoPlayer;
 import com.zeroz4j.ui.component.Tooltip;
 import com.zeroz4j.ui.layout.Div;
 
@@ -258,6 +261,28 @@ public final class KeyboardProofPage {
         // listener on the box would see the mouse click and never the key press.
         recordsOn(fileUpload.getElement().querySelector("input[type=\"file\"]"),
                 "kb-fileupload", "click");
+
+        // -- AudioPlayer, VideoPlayer, EmbeddedFrame ---------------
+        // The browser draws and operates the play, seek, volume and full screen controls, so the
+        // page proves what the components add: the element is named, and the Speed list is a real
+        // select with a caption.
+        AudioPlayer audioPlayer = new AudioPlayer();
+        audioPlayer.setTitle("Sample audio");
+        audioPlayer.setSpeedControlVisible(true);
+        rowFor(host, "AudioPlayer", audioPlayer.getOuterElement(), "kb-audioplayer");
+        Select audioSpeed = audioPlayer.getSpeedControl();
+        audioSpeed.setId("kb-audioplayer-speed");
+        recordsOn(audioSpeed.getElement(), "kb-audioplayer-speed", "change");
+
+        VideoPlayer videoPlayer = new VideoPlayer();
+        videoPlayer.setTitle("Sample video");
+        rowFor(host, "VideoPlayer", videoPlayer.getOuterElement(), "kb-videoplayer");
+
+        EmbeddedFrame embeddedFrame = new EmbeddedFrame();
+        embeddedFrame.setTitle("Sample page");
+        embeddedFrame.setSandbox("allow-scripts");
+        embeddedFrame.setContent("<p>Embedded page</p>");
+        rowFor(host, "EmbeddedFrame", embeddedFrame.getOuterElement(), "kb-embeddedframe");
 
         // -- LaneTimeline ---------------------------------------------
         // Needs lanes: the strip a person scrubs is only drawn once there is a run to scrub.
