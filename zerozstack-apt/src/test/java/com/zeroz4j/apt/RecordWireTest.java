@@ -348,6 +348,93 @@ class RecordWireTest {
         assertTrue(joined.contains("Use a class"), joined);
     }
 
+    @Test
+    void aRecordNestedInsideARecordMakesTheRoundTrip(@TempDir Path tempDir) throws Exception {
+        GeneratedWire wire = GeneratedWire.compileAndRegister(tempDir, GeneratedWire.sources(
+                "rec.inner.CallBriefing",
+                "package rec.inner;\n"
+                + "import com.zeroz4j.api.DataModel;\n"
+                + "import java.util.List;\n"
+                + "@DataModel\n"
+                + "public record CallBriefing(String title, Item lead, List<Item> items) {\n"
+                + "    @DataModel\n"
+                + "    public record Item(String text, int rank) {}\n"
+                + "}\n"));
+
+        Object lead = wire.make("rec.inner.CallBriefing$Item", "open", 1);
+        Object other = wire.make("rec.inner.CallBriefing$Item", "close", 2);
+        Object sent = wire.make("rec.inner.CallBriefing", "Monday", lead,
+                new ArrayList<>(Arrays.asList(lead, other)));
+
+        Object back = GeneratedWire.roundTrip(sent);
+
+        assertEquals(sent, back, "a nested record round-trips by value, inside a list as well");
+    }
+
+    @Test
+    void aNestedRecordWithoutDataModelIsRefusedAtCompileTime(@TempDir Path tempDir)
+            throws Exception {
+        List<String> errors = GeneratedWire.errorsFrom(tempDir, GeneratedWire.sources(
+                "rec.bare.CallBriefing",
+                "package rec.bare;\n"
+                + "import com.zeroz4j.api.DataModel;\n"
+                + "import java.util.List;\n"
+                + "@DataModel\n"
+                + "public record CallBriefing(String title, List<Item> items) {\n"
+                + "    public record Item(String text, int rank) {}\n"
+                + "}\n"));
+
+        String joined = String.join("\n", errors);
+        assertTrue(joined.contains("items"), "the message names the field: " + joined);
+        assertTrue(joined.contains("Item") && joined.contains("@DataModel"), joined);
+    }
+
+    @Test
+    void aNestedClassAndANestedEnumMakeTheRoundTrip(@TempDir Path tempDir) throws Exception {
+        GeneratedWire wire = GeneratedWire.compileAndRegister(tempDir, GeneratedWire.sources(
+                "rec.mixed.Report",
+                "package rec.mixed;\n"
+                + "import com.zeroz4j.api.DataModel;\n"
+                + "@DataModel\n"
+                + "public record Report(String name, Row row, Level level) {\n"
+                + "    public enum Level { LOW, HIGH }\n"
+                + "    @DataModel\n"
+                + "    public static class Row {\n"
+                + "        private String cell;\n"
+                + "        public Row() {}\n"
+                + "        public String getCell() { return cell; }\n"
+                + "        public void setCell(String cell) { this.cell = cell; }\n"
+                + "    }\n"
+                + "}\n"));
+
+        Object row = wire.type("rec.mixed.Report$Row").getDeclaredConstructor().newInstance();
+        row.getClass().getMethod("setCell", String.class).invoke(row, "A1");
+        Object high = Enum.valueOf(wire.type("rec.mixed.Report$Level").asSubclass(Enum.class), "HIGH");
+        Object sent = wire.make("rec.mixed.Report", "March", row, high);
+
+        Object back = GeneratedWire.roundTrip(sent);
+
+        assertEquals("A1", GeneratedWire.read(GeneratedWire.read(back, "row"), "getCell"));
+        assertEquals("HIGH", GeneratedWire.read(back, "level").toString());
+    }
+
+    @Test
+    void aNestedModelWithValidationIsRefusedAtCompileTime(@TempDir Path tempDir) throws Exception {
+        List<String> errors = GeneratedWire.errorsFrom(tempDir, GeneratedWire.sources(
+                "rec.checked.Outer",
+                "package rec.checked;\n"
+                + "import com.zeroz4j.api.DataModel;\n"
+                + "import com.zeroz4j.api.validation.NotBlank;\n"
+                + "@DataModel\n"
+                + "public record Outer(Inner inner) {\n"
+                + "    @DataModel\n"
+                + "    public record Inner(@NotBlank String text) {}\n"
+                + "}\n"));
+
+        String joined = String.join("\n", errors);
+        assertTrue(joined.contains("Move it to a file of its own"), joined);
+    }
+
     private static void assertArrayEqualsInt(int[] expected, int[] actual) {
         assertEquals(Arrays.toString(expected), Arrays.toString(actual));
     }

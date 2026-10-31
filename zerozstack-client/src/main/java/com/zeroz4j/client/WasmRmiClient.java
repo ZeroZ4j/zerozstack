@@ -392,12 +392,17 @@ public class WasmRmiClient {
         }
     }
 
+    /** What the exception says. Plain enough to show on a screen as it is. */
+    static final String TIMEOUT_MESSAGE = "The server did not answer in time. Try again.";
+
     private static void failTimedOut(Integer id) {
         PendingRequest stale = pendingRequests.remove(id);
         if (stale != null) {
-            stale.callback.error(new com.zeroz4j.api.RequestTimeoutException(
-                    "RMI call " + stale.description + " (request " + id + ") timed out: no answer "
-                    + "within " + requestTimeoutMs + " ms"));
+            // The exception carries a sentence a screen can show. Which call and how long goes to
+            // the console, where a developer looks, and not into the text a user may read.
+            System.err.println("[zeroz4j] RMI call " + stale.description + " (request " + id
+                    + ") timed out: no answer within " + requestTimeoutMs + " ms");
+            stale.callback.error(new com.zeroz4j.api.RequestTimeoutException(TIMEOUT_MESSAGE));
         }
     }
 

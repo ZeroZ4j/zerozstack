@@ -178,6 +178,47 @@ public class ProductPersistence implements LiveMutationListener {
 
 Without a listener like this, client edits are lost on restart.
 
+## Observed behavior
+
+These came from applications running on this release. Each is marked with how it was checked:
+**confirmed** means it was read in the source or reproduced, and **reported** means an application
+saw it and it was not checked here.
+
+- **Deleted data stays on disk (confirmed).** EclipseStore rewrites a storage file to remove dead
+  data only when less than 75% of it is live data (the default `defaultMinimumUseRatio` of
+  EclipseStore 4.1.0, which this release uses). It also rewrites files that are too small or too
+  large, which does not depend on dead data. That work runs in the store's own threads while the store is open, in small steps. A
+  store that is closed does none of it, and ZeroZ DB has no compaction method. Removing an object from
+  the graph therefore does not remove its bytes from the file, which matters when a person's data has
+  to be erased for good (GDPR). ZeroZ Stack has no way to force the rewrite today.
+- **A version field in the root cannot tell you the store is old (confirmed).** The root object your
+  build supplies is the instance the stored root is loaded into. A field the old store never had keeps
+  the value your constructor gave it. Reproduced: a store written by a root class with one field,
+  opened by a build whose root also has `int version = 2`, reads `version` as 2. To catch an
+  incompatible change before it ships, use `SchemaCompatibility` in the build.
+- **Every stored object costs memory while the store is open, even behind `Lazy` (confirmed from
+  the source, not measured).** EclipseStore keeps one `StorageEntity` entry per stored object. Its
+  fields add up to about 64 bytes with compressed object references, before the object itself is
+  counted. `Lazy` keeps the object out of the graph; it does not remove the entry. Plan the heap for
+  the number of objects, not only their size.
+- **`ZeroZDbNode` cannot declare a field rename (confirmed).** Its builder has no setting for a
+  `SchemaEvolution`, and by default a field whose name changed arrives unset. `ZeroZDb.open(root,
+  directory, durability, evolution)` takes one, so a rename needs the engine directly, which pins the
+  code to `EMBEDDED` or `AUTO_SERVER`.
+- **Enums are stored by position (confirmed), and `SchemaCompatibility` in this release does not
+  check enum constants (confirmed against the released jar).** Reordering, removing or renaming a
+  constant changes what existing data means, and nothing in the build reports it. Only append
+  constants. A later ZeroZ DB source already checks them; this release does not include that.
+- **`DbQuery` can return live objects (confirmed).** When this process owns the store, `query` runs
+  the query on the real graph and returns exactly what `execute` returned, with no copy. Only a
+  process that does not own the store gets a serialized copy. Code that changes a returned object
+  changes the graph outside any transaction and without saving it. Return copies or plain values
+  from every query, as the rule about queries says, whichever mode you run in today.
+- **Per-tenant stores are never closed before shutdown (confirmed).** `TenantStorageProvider` opens a
+  store the first time a tenant is used and closes all of them when the application stops. Nothing
+  closes an idle tenant's store, so memory grows with the number of tenants that have been used since
+  the start. This is the same per-object cost as above, summed over tenants.
+
 ## Limits
 
 - **Transactions are available** through `ZeroZDbNode` and `DbCommand` (see above); `storeAll`
