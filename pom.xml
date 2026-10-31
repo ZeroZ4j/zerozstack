@@ -75,6 +75,7 @@
         <module>zerozstack-server-test</module>
         <module>zerozstack-server-jaxrs</module>
         <module>zerozstack-server-jakarta</module>
+        <module>zerozstack-dev-tomcat</module>
         <module>zerozstack-server-helidon</module>
         <module>zerozstack-auth-oidc</module>
         <module>zerozstack-examples</module>
@@ -141,6 +142,11 @@
             <dependency>
                 <groupId>com.zeroz4j</groupId>
                 <artifactId>zerozstack-server-jakarta</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zeroz4j</groupId>
+                <artifactId>zerozstack-dev-tomcat</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
