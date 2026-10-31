@@ -1,7 +1,7 @@
 # Signing in with a cookie
 
 A username and password form, a session cookie, and everything around them: renewal, the page the
-person asked for, sign-out, and revocation that closes live connections. Available from 0.11.0.
+person asked for, sign-out, and revocation that closes live connections. Available since 0.11.0.
 
 ## When to use this
 
