@@ -296,6 +296,7 @@ That module carries the things every WAR otherwise had to work out for itself:
 | `ManagedThreadFactoryProvider` | Runs RMI calls on container threads (see below) | No — registered via `META-INF/services` |
 | `Zeroz4jShellServlet` | Serves the client bundle and the shell for client-route deep links | **Yes** — map it yourself |
 | `FileUploadServlet` | Receives file uploads at `/zeroz4j-upload` | No — `@WebServlet` |
+| `SignInServlet` | Answers [cookie sign-in](cookie-sign-in.md) at `/zeroz4j-session/*`; 404 unless the application has a `SignInHandler` | No — `@WebServlet` |
 
 The servlet is deliberately unmapped: where it sits is the deployment's decision, and a WAR with its
 own servlets must be able to take this module without something claiming `/`. Map it in `web.xml`:

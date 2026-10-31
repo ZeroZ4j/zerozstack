@@ -18,3 +18,6 @@ target/
 
 # Private Maven repository head used by worker sessions (see AGENTS.md)
 .m2head/
+
+# Application settings and secrets (docs/guides/cookie-sign-in.md)
+zeroz4j.properties

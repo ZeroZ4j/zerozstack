@@ -130,6 +130,7 @@ This repository contains the core framework and reference implementations.
 * **[Signals: Client-Side Reactive State](docs/SIGNALS.md)** - Reactive UI state with `ValueSignal`, `Computed`, and `Effect` — and `Signals.scoped` for state belonging to one tenant, user or browser.
 * **[Routing: URLs, Views and Colocated Loading](docs/ROUTING.md)** - Real URLs mapped to Java views, with each route declaring the data it needs so nothing renders half-loaded.
 * **[PWA: Installing, Fast Startup and Push](docs/PWA.md)** - One call makes an application installable and push-capable. It does not make it work offline, and the page says why.
+* **[Signing in with a cookie](docs/guides/cookie-sign-in.md)** - A real password form, a session cookie, renewal, the page the person asked for, and revocation that closes live connections.
 * **[Logging in with OpenID Connect](docs/guides/oidc-auth.md)** - Authorization-code flow with PKCE against Keycloak, and how its claims become roles and a tenant.
 * **[Accepting file uploads](docs/guides/file-uploads.md)** - A drop-or-pick box on the screen, one Java class on the server, and the file on disk.
 * **[Packaging and running](docs/guides/packaging.md)** - The four shapes a ZeroZ Stack server ships in, including a WAR on WildFly, Payara, Open Liberty or TomEE.

@@ -84,6 +84,7 @@ nav:
       - Saving data: guides/persistence.md
       - Store modes — embedded or hosted: store-modes.md
       - Authentication and authorization: guides/security-auth.md
+      - Signing in with a cookie: guides/cookie-sign-in.md
       - Logging in with OpenID Connect: guides/oidc-auth.md
       - Forms and binding: guides/ui-forms-and-validation.md
       - Stacking overlays: guides/ui-layering.md

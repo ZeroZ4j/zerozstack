@@ -24,7 +24,7 @@ mvn clean install -DskipTests
 
 Expect a couple of minutes with a warm Maven cache, and considerably longer on the first run while
 dependencies download.
-The build compiles the framework, runs the annotation processor, compiles all twelve example
+The build compiles the framework, runs the annotation processor, compiles all thirteen example
 clients with TeaVM, and installs everything into your local repository.
 
 !!! warning "Always include `clean`"

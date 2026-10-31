@@ -309,7 +309,7 @@ public class WasmRmiServerEngineTest {
         ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
-        assertEquals((byte) 3, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 4, buf.get(), "AUTH protocol version");
         assertEquals((byte) 1, buf.get(), "authenticated flag");
         assertEquals("testUser", BinarySerializer.readString(buf));
         int numRoles = buf.getInt();
@@ -339,7 +339,7 @@ public class WasmRmiServerEngineTest {
         ByteBuffer buf = fakeSession.basic.sentBuffers().get(0);
         assertEquals(0, buf.getInt());
         assertEquals((byte) 0x03, buf.get());
-        assertEquals((byte) 3, buf.get(), "AUTH protocol version");
+        assertEquals((byte) 4, buf.get(), "AUTH protocol version");
         assertEquals((byte) 0, buf.get(),
                 "a declined connection must be marked unauthenticated, not merely role-less");
         assertEquals("anonymous", BinarySerializer.readString(buf));

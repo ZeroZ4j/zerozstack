@@ -25,7 +25,7 @@ Vidocq is a set of Java libraries. This module uses two of them:
 
 `zerozstack-server-core` runs unchanged. The module's job is the gap between Chappe's WebSocket and the
 Jakarta WebSocket `Session` the engine is written against, plus the three addresses a standalone
-server answers: `/wasm-rmi` (the live connection), `/zeroz4j-upload` (file upload) and everything
+server answers: `/wasm-rmi` (the live connection), `/zeroz4j-upload` (file upload), `/zeroz4j-session/...` (cookie sign-in) and everything
 else as static content, with the shell as the fallback for client routes. It also serves the
 application's own JAX-RS resources, described in the next section.
 
@@ -91,7 +91,7 @@ public class ClientLogResource {
   plugin. The class must sit in a jar or folder with `META-INF/beans.xml` (the same as for any bean
   here). `Cassini` is Vidocq's JAX-RS 4.0 implementation; the binding depends on it, so an application
   adds nothing.
-- **Order.** `/wasm-rmi` and `/zeroz4j-upload` are always the framework's. Next, a request goes to a
+- **Order.** `/wasm-rmi`, `/zeroz4j-upload` and `/zeroz4j-session/...` are always the framework's. Next, a request goes to a
   resource if one has a method whose path matches (any HTTP verb; a wrong verb gets 405). Anything
   else is static content, and a path nothing claims gets the shell page. A resource that answers 404
   itself keeps its own 404. An application with no `@Path` class behaves exactly as before.

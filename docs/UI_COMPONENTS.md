@@ -618,10 +618,11 @@ Components used to present data, alerts, and content to the user.
 - **EmbeddedFrame**: Another page inside this one, as a real frame with a name for screen readers. `setSource(url)` shows an address, `setContent(html)` shows a page given as text, and `setSandbox("allow-scripts")` restricts it. The frame takes the height its page reports: the page needs `EmbeddedFrameScript.HEIGHT_SCRIPT`, which `setContent` adds for you. A height is believed only from this frame's own window and the expected origin. See [Playing media and embedding pages](guides/media.md).
 - **EmptyState**: A placeholder view shown when there is no data to display.
 - **Footer**: A standard page footer element.
-- **Login**: A username-and-password sign-in card. It collects the two values and hands them to a
-  `LoginListener`; how they are checked is the application's business. It disables itself when
-  submitted, and `showError("...")` reports a failed attempt, re-enables the form and speaks the
-  message to a screen reader as well as showing it.
+- **Login**: A sign-in card that is a real HTML form, so password managers fill it and browsers
+  offer to save it. `new Login()` posts to the framework's [cookie sign-in](guides/cookie-sign-in.md).
+  `new Login(listener)` hands the two values to a `LoginListener` instead, and how they are checked
+  is the application's business. It disables itself when submitted, and `showError("...")` reports a
+  failed attempt, re-enables the form and speaks the message to a screen reader as well as showing it.
 - **Hero**: A large, prominent banner often used at the top of landing pages.
 - **Icon**: A scalable vector icon component. Besides the original set it has `lock`, `mic`,
   `calendar`, `bell`, `user`, `users`, `mail`, `phone`, `download`, `paperclip`, `eye`,

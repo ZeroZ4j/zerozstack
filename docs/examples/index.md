@@ -1,6 +1,6 @@
 # Examples
 
-Twelve runnable applications under `zerozstack-examples/`. Each isolates one part of the framework, and CI
+Thirteen runnable applications under `zerozstack-examples/`. Each isolates one part of the framework, and CI
 builds all of them on every push — so the code in them is always current, which is not true of every
 page in this documentation.
 
@@ -47,6 +47,7 @@ added in 0.6.0 have their own, and so does `payments-datamodels`, which is in a 
 | `inventory-crud` | `com.zeroz4j.example.server.ExampleServer` | 8089 |
 | `components-showcase` | `com.zeroz4j.example.server.ExampleServer` | 8090 |
 | `payments-datamodels` | `com.zeroz4j.example.payments.server.ExampleServer` | 8092 |
+| `sign-in` | `com.zeroz4j.example.signin.server.ExampleServer` | 8093 |
 
 ### Moving one somewhere else
 
@@ -115,6 +116,7 @@ server is in [Starting the server](../guides/starting-the-server.md); the rest i
 | **`oidc-login`** | OIDC authentication | A real Keycloak login with PKCE, then three RMI calls showing what that identity is worth server-side. Its README carries the realm setup and the two Keycloak defaults that otherwise cost an afternoon. |
 | **`pwa-install`** | PWA | Installability, a per-request manifest built with `PwaManifest`, an install button bound to `Pwa.installable()`, and web push. Stop the server and reload to see the one thing installing does *not* buy you. |
 | **`payments-datamodels`** | The shapes a wire type can take | A till: a basket, four kinds of payment, and a ledger. `Money` and `LineItem` are records; the way somebody paid is a sealed interface with a record per kind; a payment and a refund share a base class. All three travel nested inside each other and inside collections, in both directions, and both the server log and the screen say what actually arrived. |
+| **`sign-in`** | Cookie sign-in | A real password form, a session cookie, and sign-out. The server side is one `SignInHandler`, the client side is `new Login()`. Sign in and land on the page you asked for; sign out everywhere and a second browser goes back to the form by itself. |
 
 The three propagation examples — `chat-events`, `job-monitor` and `chat-livesync` — are best read
 together, alongside [Events, signals or LiveSync?](../decide/events-vs-signals-vs-livesync.md). The

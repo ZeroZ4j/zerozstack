@@ -566,6 +566,33 @@ cannot. That is a floor, not a guarantee of a usable screen.
 - **The frame follows its page's growth with a limit.** Three growing measurements in a row that only
   a resize prompted are dropped, to stop a frame and a page enlarging each other.
 
+## Cookie sign-in
+
+- **Ending a session is remembered in memory.** `revokeSession`, `revokeUser` and sign-out are kept
+  per server, so a restart forgets them and another node never heard of them. A stolen copy of a
+  signed-out cookie works again after a restart until it expires. For anything that must hold, refuse
+  it in `SignInHandler.resume` from your own records.
+- **A renewal does not retire the old cookie.** Both work until the old one expires, so renewal does
+  not show that a cookie was copied.
+- **The attempt limit is per name, per server, in memory.** It does not limit one address trying many
+  names, so put a rate limit in the proxy in front. Somebody can keep one name locked by guessing at
+  it. Sessions already open are not affected. Past 100,000 names the oldest counts are dropped.
+- **No password hashing, reset, sign-up, second factor or magic links.** Those are the application's.
+  `SignInHandler.signIn` gets a form and returns a principal; `sign-in` shows PBKDF2 from the JDK.
+- **The time cap and revocation apply to connections on a session cookie.** One opened through an
+  `AuthenticationProvider` or the development logins has neither; `EventPublisher.disconnect` closes
+  those.
+- **The cap is checked every 30 seconds,** so a connection can run up to that long past it. A call
+  in flight when it closes fails with `DisconnectedException`, like any dropped connection.
+- **A hidden tab reconnects when it is shown again,** so its session ending takes effect then.
+- **If `resume` throws, the connection is anonymous and the page goes to the sign-in form,** though
+  the cookie is kept and a reload after the failure clears signs the person back in.
+- **The session cookie cannot be set from a WebSocket.** All cookies are set on POST answers, which
+  is what makes all three bindings the same.
+- **Script cannot see the session, and the page itself is not protected.** The shell loads for
+  anybody; what is protected is every `@Secured` call. The shell also sends no `X-Frame-Options`, so
+  a deployment that must stop framing sets it in the proxy.
+
 ## Deployment and transport
 
 - **Messages are whole, never partial.** `@OnMessage` takes a complete `ByteBuffer`; there is no

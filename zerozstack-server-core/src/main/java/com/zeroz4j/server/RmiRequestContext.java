@@ -20,6 +20,7 @@ package com.zeroz4j.server;
 import java.security.Principal;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -39,6 +40,7 @@ public final class RmiRequestContext {
     private static final ThreadLocal<String> tenantIdHolder = new ThreadLocal<>();
     private static final ThreadLocal<String> clientIdHolder = new ThreadLocal<>();
     private static final ThreadLocal<Locale> localeHolder = new ThreadLocal<>();
+    private static final ThreadLocal<Map<String, Object>> attributesHolder = new ThreadLocal<>();
 
     /**
      * What language to answer in when no call is in progress — a scheduled job writing a message,
@@ -211,5 +213,54 @@ public final class RmiRequestContext {
         tenantIdHolder.remove();
         clientIdHolder.remove();
         localeHolder.remove();
+        attributesHolder.remove();
+    }
+
+    /**
+     * Binds the connection's attributes to the current thread. Called by the engine next to
+     * {@code setContext}.
+     *
+     * @param attributes the live map held on the connection, or null
+     * @since 0.11.0
+     */
+    public static void setSessionAttributes(Map<String, Object> attributes) {
+        attributesHolder.set(attributes);
+    }
+
+    /**
+     * A value held on this connection, set at the handshake with
+     * {@link AuthenticatedPrincipal#withAttribute(String, Object)} or during a call with
+     * {@link #setSessionAttribute(String, Object)}. Never sent to the browser.
+     *
+     * @param name the attribute name
+     * @param <T>  the type it was stored as
+     * @return the value, or null when absent or when no call is in progress
+     * @since 0.11.0
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T getSessionAttribute(String name) {
+        Map<String, Object> attributes = attributesHolder.get();
+        return attributes == null ? null : (T) attributes.get(name);
+    }
+
+    /**
+     * Stores a value on this connection for later calls on it. It ends with the connection, so a
+     * reconnect starts without it.
+     *
+     * @param name  the attribute name
+     * @param value the value; null removes it
+     * @throws IllegalStateException when no call is in progress
+     * @since 0.11.0
+     */
+    public static void setSessionAttribute(String name, Object value) {
+        Map<String, Object> attributes = attributesHolder.get();
+        if (attributes == null) {
+            throw new IllegalStateException("A connection attribute can only be set during a call.");
+        }
+        if (value == null) {
+            attributes.remove(name);
+        } else {
+            attributes.put(name, value);
+        }
     }
 }

@@ -89,6 +89,7 @@
         <module>oidc-login</module>
         <module>pwa-install</module>
         <module>payments-datamodels</module>
+        <module>sign-in</module>
     </modules>
 
 </project>

@@ -123,6 +123,28 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
     }
 
     /**
+     * Key holding the live map of values kept on one connection ("zeroz.attributes").
+     *
+     * @since 0.11.0
+     */
+    public static final String ATTRIBUTES_KEY = "zeroz.attributes";
+
+    /** Looks the server up through CDI at the first handshake. */
+    public RmiEndpointConfigurator() {
+    }
+
+    /**
+     * For a caller that already knows which server this is, such as a test harness running two.
+     *
+     * @param runtime the server being connected to
+     * @since 0.11.0
+     */
+    public RmiEndpointConfigurator(ServerRuntime runtime) {
+        this.runtime = runtime;
+        this.runtimeResolved = true;
+    }
+
+    /**
      * The server this configurator belongs to, looked up once.
      *
      * <p>A handshake runs before the endpoint exists, so this object cannot be given the runtime;
@@ -181,7 +203,23 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
                                 HandshakeRequest request,
                                 HandshakeResponse response) {
         super.modifyHandshake(config, request, response);
+        authenticateHandshake(config, request, response);
+    }
 
+    /**
+     * Everything the framework decides at a handshake: whether it may proceed, who it is, and what
+     * language it reads. The order is the origin check, the browser id, an
+     * {@link AuthenticationProvider} or the development logins, and then, if the connection is still
+     * anonymous, the session cookie ({@link SignInSessions}). So an explicit credential beats the
+     * ambient cookie, and all of them can be present in one application.
+     *
+     * @param config   the endpoint configuration, whose user properties receive the result
+     * @param request  the handshake request
+     * @param response the handshake response
+     * @since 0.11.0
+     */
+    public void authenticateHandshake(ServerEndpointConfig config, HandshakeRequest request,
+                                      HandshakeResponse response) {
         // Origin first: a browser attaches the client-id cookie to any connection to this origin,
         // whichever page opened it, so which page opened it is the first thing decided.
         // Nothing else about the handshake matters if this fails.
@@ -207,6 +245,7 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
         Principal principal = request.getUserPrincipal();
         Set<String> userRoles = new LinkedHashSet<>();
         String tenantId = null;
+        java.util.Map<String, Object> attributes = java.util.Collections.emptyMap();
 
         // An application-supplied provider decides identity, roles and tenant. It sees the container
         // principal too, so a deployment behind container-managed security can enrich rather than
@@ -221,6 +260,7 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
                     principal = () -> name;
                     userRoles.addAll(authenticated.roles());
                     tenantId = authenticated.tenantId();
+                    attributes = authenticated.attributes();
                 } else {
                     principal = null;   // the provider declined: stay anonymous
                 }
@@ -245,6 +285,32 @@ public class RmiEndpointConfigurator extends ServerEndpointConfig.Configurator {
                 principal = () -> user;
                 userRoles.addAll(devRoles);
             }
+        }
+
+        // Still nobody, so the session cookie gets its turn. A failure here leaves the connection
+        // anonymous and the cookie alone: a database that is down for a minute is not a sign-out.
+        ServerRuntime server = runtime();
+        if (principal == null && server != null) {
+            try {
+                SignInSessions.Resumed resumed = server.signIn().resume(firstHeader(request, "Cookie"));
+                if (resumed != null) {
+                    final String name = resumed.principal().name();
+                    principal = () -> name;
+                    userRoles.addAll(resumed.principal().roles());
+                    tenantId = resumed.principal().tenantId();
+                    attributes = resumed.principal().attributes();
+                    config.getUserProperties().put(SignInSessions.SESSION_KEY, resumed.session());
+                    config.getUserProperties().put(SignInSessions.CLOSE_AT_KEY, resumed.closeAt());
+                    config.getUserProperties().put(SignInSessions.RENEW_DUE_KEY, resumed.renewDue());
+                }
+            } catch (RuntimeException ex) {
+                LOG.log(java.util.logging.Level.WARNING,
+                        "[zeroz4j] Could not read a session cookie: " + ex.getMessage(), ex);
+            }
+        }
+
+        if (!attributes.isEmpty()) {
+            config.getUserProperties().put(ATTRIBUTES_KEY, attributes);
         }
 
         // Anonymous connections have no principal; user-properties maps may reject null

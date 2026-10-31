@@ -60,7 +60,7 @@ On Vidocq, port `0` picks a free port; read it back with `port()`.
 ## How the port is chosen
 
 `start` takes the port as an argument and nothing else decides it. The examples read it from the
-command line so that twelve of them can run side by side. Copy their order if you want the same:
+command line so that thirteen of them can run side by side. Copy their order if you want the same:
 `--port`, then the `zeroz.port` system property, then a constant.
 
 ```java
@@ -186,4 +186,4 @@ the sentence for no binding above. See [Shape 4 in Packaging and running](packag
   `zeroz.*` setting.
 - [Authentication and authorization](security-auth.md) — replace the development logins.
 - [Running on Vidocq](vidocq-server.md) — what is different on the Vidocq binding.
-- [Examples](../examples/index.md) — the main classes of twelve working servers.
+- [Examples](../examples/index.md) — the main classes of thirteen working servers.

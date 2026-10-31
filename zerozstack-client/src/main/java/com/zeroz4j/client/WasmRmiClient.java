@@ -557,6 +557,10 @@ public class WasmRmiClient {
                     readCatalogBlock(buffer);
                     ClientLocale.install();
                 }
+                // Version 4 appends what the server knows about the session cookie, which script
+                // cannot read for itself. Ahead of populating the context, because a session that
+                // has just ended reloads the page rather than telling the application.
+                SignInSession.connected(authenticated, protocolVersion >= 4 ? buffer.get() : 0);
                 RmiSecurityContext.populate(username, roles, authenticated);
                 System.out.println("[zeroz4j] " + (authenticated
                         ? "Authenticated as: " + username + " roles=" + roles

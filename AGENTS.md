@@ -38,7 +38,7 @@ before the modules that consume them can compile, so `mvn clean test` on its own
 entry point.
 
 A full clean build of the reactor, including every example, takes about a minute on a warm Maven
-cache. Compiling the twelve example clients for the browser is roughly **45 seconds** of that — the
+cache. Compiling the thirteen example clients for the browser is roughly **45 seconds** of that — the
 single largest item, and it is paid on every build of the reactor because the compiler has no
 usable incremental mode. There is no flag here that skips it; if you are only changing server-side
 code, build the modules you touched with `-pl <module> -am` rather than the whole reactor.
@@ -78,7 +78,7 @@ shape users receive is `routing-tour`'s client, which alone takes `-Pproduction`
 | `zerozstack-auth-oidc` | Optional OIDC authentication provider — token verification at the handshake, Keycloak claim mapping. |
 | `zerozstack-store-eclipsestore` | Persistence on ZeroZ DB: per-tenant stores, transactions, and the embedded/server mode switch. |
 | `zerozstack-archetype` | Maven archetype scaffolding a three-module application. |
-| `zerozstack-examples` | Twelve runnable reference applications. |
+| `zerozstack-examples` | Thirteen runnable reference applications. |
 
 An application has three modules: **shared** (`@DataModel` classes, `@RmiService` interfaces),
 **client** (the UI, compiled for the browser by TeaVM), **server** (`@ApplicationScoped`
@@ -494,7 +494,7 @@ rather than sending a message the connection would refuse. A test that registers
 
 ## Running the examples
 
-All twelve examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
+All thirteen examples live under `zerozstack-examples/`. After `mvn clean install -DskipTests` from the
 root, the seven original ones and `payments-datamodels` have a `run.bat` (Windows). **Every example
 binds a port of its own (0.8.0+), so several can run at once** — the table below has the numbers.
 
@@ -521,6 +521,7 @@ not**: each has a main class of its own, and three of them also build a runnable
 | `todo-signals` | 8084 | | |
 | `chat-events` | 8085 | | |
 | `chat-livesync` | 8086 | `payments-datamodels` | 8092 |
+| | | `sign-in` | 8093 |
 
 `routing-tour`, `oidc-login` and `scoped-signals` also build runnable jars:
 `java -jar routing-tour-server/target/routing-tour-server-0.11.0.jar`.
@@ -656,6 +657,21 @@ other languages, so add one test calling `CatalogParity.assertConsistent(folder,
 the wire, a language picker, live switching - does not exist yet; see
 [docs/guides/language.md](docs/guides/language.md).
 
+**Cookie sign-in (0.11.0+):** for an application with its own accounts, write one
+`@ApplicationScoped` `SignInHandler` (`signIn` checks the password, `resume` says who a valid cookie
+is now and supplies current roles) and put `new Login()` on the screen. That is all: the framework
+answers `POST /zeroz4j-session/sign-in`, `/sign-out` and `/renew` on all three bindings, sets an
+`HttpOnly`, `Secure`, `SameSite=Strict` cookie, returns the person to the page they asked for,
+renews the cookie, closes a connection after 8 hours so the reconnect is checked again, and reloads
+the page when a session ends. Do not generate a sign-in servlet, a cookie, a redirect check or a
+renewal timer. The cookie is read at the handshake after any `AuthenticationProvider`, so it sits
+beside OIDC and the development logins. `SignInSession.signOut()` signs out in the browser;
+`SignInSessions.current().revokeUser(name, tenantId, reason)` ends every session of a person and
+closes their connections, in memory only, so anything that must survive a restart goes in `resume`.
+`AuthenticatedPrincipal.withAttribute` puts application state on a connection at the handshake, for
+any provider. Keep `zeroz.signin.secret` in the application's property file `zeroz4j.properties`,
+never an environment variable. See [docs/guides/cookie-sign-in.md](docs/guides/cookie-sign-in.md).
+
 **Client identity without a login:** every connection carries a server-issued, HMAC-signed browser id
 in an `HttpOnly` cookie, readable as `RmiRequestContext.getClientId()` and used by `Scope.CLIENT`. It
 identifies a browser, not a person. Handshakes are also origin-checked; set `zeroz.origins` when the
@@ -685,6 +701,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 | `oidc-login` | `OidcClient` PKCE login against Keycloak, and `@Secured`/`@RolesAllowed` enforced from its claims |
 | `pwa-install` | `Pwa.install()`, `Pwa.installable()`, `PwaManifest` per request, push subscription, and the offline page |
 | `payments-datamodels` | The three shapes a wire type can take - `record`, sealed family, and a model extending another model - nested and in collections, both directions, with a `TestServer` test driving real frames |
+| `sign-in` | A real password form, the session cookie, sign-out and revocation, with one `SignInHandler` and `new Login()` |
 
 ## Not implemented — do not generate code against these
 

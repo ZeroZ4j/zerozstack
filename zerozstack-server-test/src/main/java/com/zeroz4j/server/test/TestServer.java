@@ -27,6 +27,7 @@ import com.zeroz4j.server.LiveMutexManager;
 import com.zeroz4j.server.ClientErrorRpcImpl;
 import com.zeroz4j.server.LiveMutexRpcImpl;
 import com.zeroz4j.server.ObjectMapperProducer;
+import com.zeroz4j.server.RmiEndpointConfigurator;
 import com.zeroz4j.server.ServerConfig;
 import com.zeroz4j.server.ServerRuntime;
 import com.zeroz4j.server.SlowCallRpcImpl;
@@ -34,14 +35,23 @@ import com.zeroz4j.server.SlowCalls;
 import com.zeroz4j.server.SyncEngine;
 import com.zeroz4j.server.WasmRmiServerEngine;
 import jakarta.websocket.CloseReason;
+import jakarta.websocket.Decoder;
+import jakarta.websocket.Encoder;
+import jakarta.websocket.Extension;
+import jakarta.websocket.HandshakeResponse;
+import jakarta.websocket.server.HandshakeRequest;
+import jakarta.websocket.server.ServerEndpointConfig;
 import org.jboss.weld.environment.se.Weld;
 import org.jboss.weld.environment.se.WeldContainer;
 
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -207,6 +217,51 @@ public final class TestServer implements AutoCloseable {
      */
     public TestConnection connectSpeaking(String language, String user, String... roles) {
         return open(language, user, null, roles);
+    }
+
+    /**
+     * Opens a connection through the real handshake, with these request headers, the way a browser
+     * does. Unlike {@link #connect(String, String...)}, which states who a connection is, this makes
+     * the framework work it out: the origin check, an {@code AuthenticationProvider}, the session
+     * cookie. A handshake the origin check refuses comes back closed.
+     *
+     * @param headers request headers, such as {@code Cookie}, {@code Origin} and {@code Host}
+     * @return the connection
+     * @since 0.11.0
+     */
+    public TestConnection connectWithHeaders(Map<String, String> headers) {
+        requireRunning();
+        Map<String, List<String>> asLists = new HashMap<>();
+        headers.forEach((name, value) -> asLists.put(name, List.of(value)));
+        Map<String, Object> handshake = new HashMap<>();
+        ServerEndpointConfig config = new ServerEndpointConfig() {
+            @Override public Class<?> getEndpointClass() { return WasmRmiServerEngine.class; }
+            @Override public String getPath() { return "/wasm-rmi"; }
+            @Override public List<String> getSubprotocols() { return List.of(); }
+            @Override public List<Extension> getExtensions() { return List.of(); }
+            @Override public Configurator getConfigurator() { return null; }
+            @Override public List<Class<? extends Encoder>> getEncoders() { return List.of(); }
+            @Override public List<Class<? extends Decoder>> getDecoders() { return List.of(); }
+            @Override public Map<String, Object> getUserProperties() { return handshake; }
+        };
+        HandshakeRequest request = new HandshakeRequest() {
+            @Override public Map<String, List<String>> getHeaders() { return asLists; }
+            @Override public Principal getUserPrincipal() { return null; }
+            @Override public URI getRequestURI() { return URI.create("ws://localhost/wasm-rmi"); }
+            @Override public boolean isUserInRole(String role) { return false; }
+            @Override public Object getHttpSession() { return null; }
+            @Override public Map<String, List<String>> getParameterMap() { return Map.of(); }
+            @Override public String getQueryString() { return null; }
+        };
+        Map<String, List<String>> answered = new HashMap<>();
+        HandshakeResponse response = () -> answered;
+        new RmiEndpointConfigurator(runtime).authenticateHandshake(config, request, response);
+
+        TestConnection connection = new TestConnection(this, name + "-c"
+                + connectionSerial.incrementAndGet());
+        engine.onOpen(connection, config);
+        connections.add(connection);
+        return connection;
     }
 
     /**

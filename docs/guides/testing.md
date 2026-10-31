@@ -64,6 +64,10 @@ Three things are happening.
 they inject. Nothing is discovered by scanning, so a bean you did not name cannot appear by
 accident. The framework's own beans are always there.
 
+`server.connectWithHeaders(Map.of("Cookie", cookie))` runs the real handshake instead of stating who
+the connection is, which is how to test [cookie sign-in](cookie-sign-in.md) or an
+`AuthenticationProvider`.
+
 `server.connect("alice", "admin")` opens a connection the way a browser does — a sign-in with those
 roles, a browser identifier, an opening frame telling the client who it is. It gives back a
 `TestConnection`, which is a real connection as far as the server is concerned; the bytes just land

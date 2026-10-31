@@ -119,9 +119,11 @@ Server responses include an explicit opcode byte at index 4.
 * **0x03 — AUTH (Authentication Result)**
   * Sent by the **server** on every connection open, including anonymous and rejected ones. The
     client never sends this frame; credentials are presented on the WebSocket handshake instead.
-  * Payload: `[1 byte]` (Protocol Version, currently `3`) + `[1 byte]` (Authenticated: `1` or `0`) +
+  * Payload: `[1 byte]` (Protocol Version, currently `4`) + `[1 byte]` (Authenticated: `1` or `0`) +
     `[String]` (Username) + `[4 bytes]` (Role Count) + `[N Strings]` (Roles), then, **from version 3
-    on**, the catalog block described under 0x04.
+    on**, the catalog block described under 0x04, then, **from version 4 on**, `[1 byte]` of sign-in
+    flags: `1` when this connection came in on a session cookie, `2` when that cookie is old enough
+    to renew. Script cannot read an `HttpOnly` cookie, so the server has to say.
   * **The authenticated flag is the server's decision and nothing else stands in for it.** A refused
     connection still carries a name (`"anonymous"`), and a genuinely signed-in user may hold no roles
     at all — so neither field can be used to infer the outcome. Before version 2 the flag did not
