@@ -20,6 +20,7 @@ package com.zeroz4j.ui.chart;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
+import com.zeroz4j.ui.theme.Surface;
 import com.zeroz4j.ui.theme.TextStyle;
 
 /**
@@ -72,9 +73,10 @@ public final class PanelFrame extends Div {
     }
 
     public PanelFrame(String titleText) {
-        addClassName("flex min-w-0 flex-col rounded-xl border border-base-300 bg-base-100 shadow-sm");
+        addClassName("flex min-w-0 flex-col");
+        Surface.PANEL.applyTo(this);
 
-        header.addClassName("flex items-start gap-3 border-b border-base-300/70 px-4 py-2.5");
+        header.addClassName("flex items-start gap-3 border-b border-base-content/15 px-4 py-2.5");
         titleBox.addClassName("flex min-w-0 flex-col");
         title.addClassName("truncate " + TextStyle.SECTION_TITLE.getClassNames());
         subtitle.addClassName("truncate " + TextStyle.CAPTION.getClassNames());
@@ -88,7 +90,7 @@ public final class PanelFrame extends Div {
             + "gap-2 rounded-b-xl bg-base-100/80 px-4 text-center backdrop-blur-[1px]");
         body.add(overlay);
 
-        footer.addClassName("hidden border-t border-base-300/70 px-4 py-1.5 " + TextStyle.CAPTION.getClassNames());
+        footer.addClassName("hidden border-t border-base-content/15 px-4 py-1.5 " + TextStyle.CAPTION.getClassNames());
 
         add(header, body, footer);
         setTitle(titleText);
@@ -154,7 +156,7 @@ public final class PanelFrame extends Div {
     /** Tightens the padding, for panels in a dense grid. */
     public PanelFrame setDense(boolean dense) {
         body.setClassName("relative min-w-0 flex-1 " + (dense ? "p-2" : "p-4"));
-        header.setClassName("flex items-start gap-3 border-b border-base-300/70 px-4 "
+        header.setClassName("flex items-start gap-3 border-b border-base-content/15 px-4 "
             + (dense ? "py-1.5" : "py-2.5"));
         return this;
     }

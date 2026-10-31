@@ -18,6 +18,7 @@
 package com.zeroz4j.ui.component;
 
 import com.zeroz4j.ui.theme.Emphasis;
+import com.zeroz4j.ui.theme.Surface;
 import com.zeroz4j.ui.theme.TextStyle;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.Span;
@@ -65,8 +66,9 @@ public final class KpiTile extends Div {
     private Direction direction = Direction.UP_IS_GOOD;
 
     public KpiTile(String label) {
-        addClassName("rounded-xl border border-base-300 bg-base-200/50 p-4 flex flex-col gap-1 "
+        addClassName("p-4 flex flex-col gap-1 "
             + "min-w-[10rem]");
+        Surface.TILE.applyTo(this);
         // A metric's name and its value both break rather than setting the tile's width. A metric
         // named after a path or an identifier has no spaces in it, and without this one tile made
         // the whole page scroll sideways.

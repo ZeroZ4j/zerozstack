@@ -125,8 +125,17 @@ public final class Zeroz4jClient {
 
     public static void connect(String wsUrl, Runnable onReady) {
         BinaryRegistry.init();
+        ClientErrors.install();
         System.out.println("[zeroz4j] Connecting to " + wsUrl + "...");
-        channel = new WasmRmiClientChannel(wsUrl, onReady);
+        Runnable guardedReady = () -> {
+            try {
+                onReady.run();
+            } catch (RuntimeException failure) {
+                ClientErrors.startThrew(failure);
+                throw failure;
+            }
+        };
+        channel = new WasmRmiClientChannel(wsUrl, guardedReady);
         if (urlProvider != null) {
             channel.setConnectUrlProvider(urlProvider);
         }
@@ -149,6 +158,27 @@ public final class Zeroz4jClient {
      * The client has stopped trying by itself (0.9.1+). Waiting will not help, and reloading the
      * page will, so the bar says that and offers the button.
      */
+    /**
+     * Turns the report of uncaught browser errors to the server log on or off (0.11.0+). On by
+     * default. Call it before {@link #connect(String, Runnable)}. The server has a setting of its
+     * own, {@code zeroz.clienterrors.enabled}.
+     *
+     * @param enabled false to send nothing
+     */
+    public static void reportErrors(boolean enabled) {
+        ClientErrors.setReporting(enabled);
+    }
+
+    /**
+     * Turns the message shown in place of a blank page when the application does not start on or
+     * off (0.11.0+). On by default. Turn it off only when the application draws its own.
+     *
+     * @param enabled false to show nothing
+     */
+    public static void showStartFailure(boolean enabled) {
+        ClientErrors.setShowingStartFailure(enabled);
+    }
+
     @ReadsMessagesOnce("shown once the connection is gone for good; the language cannot change "
             + "without a connection, and Reload replaces the page")
     private static void showGaveUpBanner() {

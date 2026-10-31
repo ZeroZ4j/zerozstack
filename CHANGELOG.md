@@ -16,6 +16,23 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **Surfaces: `com.zeroz4j.ui.theme.Surface`.** `PAGE`, `PANEL`, `TILE`, `SUNKEN`, `RAISED` and
+  `OVERLAY`, used as `Surface.PANEL.applyTo(component)` or `Surface.TILE.div()`, drawn from the text
+  color so they read in light and dark. Three applications had repaired the same fault in their own
+  CSS: on a dark theme the page, a box and its border were close grays, and `base-300` was darker
+  than the box it outlined. If you wrote `bg-base-100 border border-base-300 shadow-sm`, use a
+  surface. Styles: `--zeroz4j-surface-edge`, `--zeroz4j-surface-shade`, `--zeroz4j-surface-radius`.
+  See [Naming surfaces](docs/UI_COMPONENTS.md#naming-surfaces).
+- **Uncaught browser errors go to the server log.** An error or an unhandled rejection in the browser
+  is written to the log `com.zeroz4j.client` with a six-character reference, from the user and page
+  it happened on. Limited to 20 per connection and 120 a minute per server, cut to length, line
+  breaks removed. On by default. `zeroz.clienterrors.enabled=false` and
+  `zeroz.clienterrors.maxPerConnection` on the server, `Zeroz4jClient.reportErrors(false)` in the
+  browser. It uses an internal service, `ClientErrorRpc`, so no opcode was added. If you wrote an
+  `onerror` handler that posts to your server, delete it.
+- **A failed start shows a sentence instead of a blank page.** "Could not start the application.",
+  "Could not connect to the server." or "Sign-in was refused.", with a Reload button, in an empty
+  `#app-root`. `Zeroz4jClient.showStartFailure(false)` turns it off.
 - **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
   as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
   `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
@@ -77,6 +94,10 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Changed
 
+- **`KpiTile` and `PanelFrame` use surfaces.** A `KpiTile` was `bg-base-200/50` with a `base-300`
+  border, which looked muddy on a panel and nearly vanished on a dark page. It is now a `TILE`. A
+  `PanelFrame` is a `PANEL`, and its header and footer rules follow the text color. Sizes are the same
+  within a few pixels.
 - **`AGENTS.md` no longer says a query always returns values.** When a process owns the store,
   `query` returns exactly what `execute` returned, with no copy, so changing it changes the graph. The
   rule is now to return copies or plain values in every mode.

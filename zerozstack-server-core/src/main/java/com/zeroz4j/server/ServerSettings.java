@@ -174,6 +174,24 @@ public final class ServerSettings {
      */
     public static final String SLOW_CALL_MAX_MINUTES = "zeroz.slowcall.maxMinutes";
 
+    // ------------------------------------------------------------------ client errors
+
+    /**
+     * Whether the server takes uncaught browser errors into its log. Default true. {@code false}
+     * makes every report answer "not taken", and the browser stops sending.
+     *
+     * @since 0.11.0
+     */
+    public static final String CLIENT_ERRORS_ENABLED = "zeroz.clienterrors.enabled";
+
+    /**
+     * Most browser error reports one connection may send. Default 20. Later ones are dropped.
+     *
+     * @since 0.11.0
+     */
+    public static final String CLIENT_ERRORS_MAX_PER_CONNECTION =
+            "zeroz.clienterrors.maxPerConnection";
+
     // ------------------------------------------------------------------ language
 
     /**

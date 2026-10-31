@@ -272,6 +272,42 @@ add(text(PlotText.CAPTION, Emphasis.FULL, x, y, name, "middle"));    // words on
 and the fade on the legend underneath it are one number in one place. You only need any of this if
 you are writing a chart of your own on top of `ChartBase`; the shipped charts already ask by name.
 
+## Naming surfaces
+
+A box on a page is a surface, and `com.zeroz4j.ui.theme.Surface` names the six an application needs:
+
+| Name | What it is |
+|---|---|
+| `PAGE` | the page itself, the deepest surface |
+| `PANEL` | a box on the page: a card, a section, a form block |
+| `TILE` | a small flat box with an edge: a figure, a list row, a chart frame |
+| `SUNKEN` | an area sunk into a panel: a log, a code block |
+| `RAISED` | a box lifted off its panel |
+| `OVERLAY` | what sits above the page: a dialog, a menu, a popover |
+
+```java
+import com.zeroz4j.ui.theme.Surface;
+
+Surface.PANEL.applyTo(card);
+add(Surface.TILE.div());
+```
+
+`applyTo` takes any other surface off first, and `Surface.clear(component)` takes it off again. A
+surface sets background, border, radius and shadow, and nothing else: padding and layout stay yours.
+
+**Do not write the pieces yourself.** `bg-base-100 border border-base-300 shadow-sm` looks right on
+a light theme. On a dark theme the box, the page and the border are three close grays, and the
+border is darker than the box. A surface takes its edge and shadow from the text color, so it holds
+on any theme. On a dark theme `RAISED` and `OVERLAY` are also a little lighter than what is under
+them, because that is how height shows there.
+
+The first time a surface is applied, a short stylesheet is added at the start of `<head>`, so an
+application's own styles come after it. It sits in the `components` layer, so a utility class on the
+same element, such as `rounded-none`, still wins. Three custom properties change it, on `:root` or
+on one element: `--zeroz4j-surface-edge`, `--zeroz4j-surface-shade` and `--zeroz4j-surface-radius`.
+
+`KpiTile` is a `TILE` and `PanelFrame` is a `PANEL`. Both used to draw their own box.
+
 ## Swapping what is inside something
 
 **Never empty a container by hand.** `getElement().setInnerHTML("")` takes what was inside off the
@@ -752,6 +788,8 @@ screen shares, so the same thing is asked for by name rather than described agai
 - **Emphasis**: How loud a piece of text is, separately from how big — `FULL`, `QUIET`, `FAINT`.
   It carries the fade twice, as class names and as a number, so text the browser styles and text a
   chart draws fade by the same amount. See [Small without being quiet](#small-without-being-quiet).
+- **Surface**: What kind of box something is, by name - `PAGE`, `PANEL`, `TILE`, `SUNKEN`, `RAISED`,
+  `OVERLAY` - right in light and dark. See [Naming surfaces](#naming-surfaces).
 - **Layer**: How high above the page something floats, by name — see
   [Overlays: what sits above what](#overlays-what-sits-above-what).
 - **Theme**: `com.zeroz4j.ui.theme.Theme`, the page's light, dark or system choice: `start()`,
