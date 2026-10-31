@@ -203,9 +203,40 @@ server's host and port, and that it uses `wss://` when the page is served over H
 
 ### A blank page and no errors
 
-The compiled client did not load or threw during startup. Open the browser console — a TeaVM failure
+Since 0.11.0 a page whose application does not start shows a sentence and a Reload button in
+`#app-root` instead of nothing: "Could not start the application." when the start code threw,
+"Could not connect to the server." when the connection is not usable after 15 seconds, and
+"Sign-in was refused." when the server refused the sign-in. The error is also in the server log, see
+[Browser errors in the server log](#browser-errors-in-the-server-log). It shows only when `#app-root`
+holds no element, so an application that drew something is never covered.
+
+If you still get a blank page, the compiled client did not load or threw before it could say so. Open the browser console — a TeaVM failure
 shows up there. Check that `classes.js` is being served (the client build writes it to the client
 module's `target/js`) and that the page's script tag points at it.
+
+### Browser errors in the server log
+
+Since 0.11.0 an uncaught error in the browser, and a promise rejected with no handler, are written to
+the server log once the connection is up:
+
+```
+WARNING: Browser error [k3m9xa] user=anna page=/orders: Cannot read properties of undefined | at ...
+```
+
+The reference in brackets is also shown on the page when the start failure message is up. At most 20
+reports leave one connection, 120 a minute leave the server, and an identical error twice running is
+sent once. The text is cut to length and line breaks become spaces, so one report is one log line. The
+page path is logged without its query. Errors before the connection opens are in the browser console
+only.
+
+| Setting | Effect | Default |
+|---|---|---|
+| `zeroz.clienterrors.enabled` | `false` takes no reports, and the browser stops sending after the first answer | on |
+| `zeroz.clienterrors.maxPerConnection` | Reports taken from one connection | **20** |
+
+In the client, `Zeroz4jClient.reportErrors(false)` sends nothing and
+`Zeroz4jClient.showStartFailure(false)` removes the start message. Call either before `connect`. The
+logger is `com.zeroz4j.client`.
 
 ### The connection drops every 60 seconds when idle, and works again the moment you click
 

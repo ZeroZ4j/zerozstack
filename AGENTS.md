@@ -139,6 +139,13 @@ implementations).
    goes wrong on a tinted notice or a dark page. Text drawn *inside* a chart has its own four names,
    `com.zeroz4j.ui.chart.PlotText` - `FIGURE`, `LABEL`, `CAPTION`, `MESSAGE` - because class names do
    not reach a drawing; a test fails the build if a chart draws text without naming a role.
+13. **Ask for a surface by name; never write out a background, border and shadow** (0.11.0+). Six in
+   `com.zeroz4j.ui.theme.Surface` - `PAGE`, `PANEL`, `TILE`, `SUNKEN`, `RAISED`, `OVERLAY` - used as
+   `Surface.PANEL.applyTo(component)` or `Surface.TILE.div()`. Never write
+   `bg-base-100 border border-base-300 shadow-sm rounded-box` on a box: on a dark theme the page, the
+   box and the border are three near-identical grays, and `base-300` is darker than the box it
+   outlines. A surface draws its edge and shadow from the text color, so it reads in light and dark.
+   It sets no padding and no layout.
 
 ## Starting the server: one call, any container
 

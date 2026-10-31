@@ -23,6 +23,7 @@ import com.zeroz4j.server.Disclosures;
 import com.zeroz4j.server.EventPublisher;
 import com.zeroz4j.server.FileUploadRpcImpl;
 import com.zeroz4j.server.LiveMutexManager;
+import com.zeroz4j.server.ClientErrorRpcImpl;
 import com.zeroz4j.server.LiveMutexRpcImpl;
 import com.zeroz4j.server.ObjectMapperProducer;
 import com.zeroz4j.server.ServerConfig;
@@ -531,6 +532,7 @@ public final class TestServer implements AutoCloseable {
             all.add(FileUploadRpcImpl.class);
             all.add(SlowCalls.class);
             all.add(SlowCallRpcImpl.class);
+            all.add(ClientErrorRpcImpl.class);
             all.addAll(beans);
 
             Weld weld = new Weld(serverName)

@@ -125,6 +125,34 @@ public final class FrameworkKeys {
      */
     public static final String UI_RELOAD = "ui.reload";
 
+    /**
+     * What the page says when the application did not start.
+     *
+     * @since 0.11.0
+     */
+    public static final String UI_START_FAILED = "ui.start.failed";
+
+    /**
+     * What the page says when the connection never became usable.
+     *
+     * @since 0.11.0
+     */
+    public static final String UI_START_NO_CONNECTION = "ui.start.noConnection";
+
+    /**
+     * What the page says when the server refused the sign-in at start.
+     *
+     * @since 0.11.0
+     */
+    public static final String UI_START_REFUSED = "ui.start.refused";
+
+    /**
+     * The word before the reference of a logged error.
+     *
+     * @since 0.11.0
+     */
+    public static final String UI_REFERENCE = "ui.reference";
+
     private FrameworkKeys() {
     }
 }

@@ -53,6 +53,17 @@ What automatic recovery deliberately does **not** cover:
   with the final value; intermediate values are not replayed. Concurrent edits from other clients
   during the outage are settled by the server's usual last-write-wins rules, not merged.
 
+## Client errors and surfaces
+
+- **A browser error that happens before the connection opens is not sent.** It is in the browser
+  console only. A report that cannot be sent is dropped and never reported in turn.
+- **The start message appears only in an empty `#app-root`.** An application that mounts somewhere
+  else gets the server log entry and no message.
+- **A surface needs a browser that supports `light-dark()`** (Chrome and Edge 123, Safari 17.5,
+  Firefox 120). Older ones draw the box without its shadow.
+- **`Button`, `Badge` and `Loading` are unchanged.** Applications that restyle them (a badge as a plain
+  tag, a button that does not stretch in a column, a ring spinner) still do it in their own CSS.
+
 ## LiveSync
 
 - **Change notification is per object, not per field.** Any inbound sync touching an instance re-runs

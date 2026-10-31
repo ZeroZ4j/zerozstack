@@ -100,9 +100,14 @@ public final class FrameworkText {
             FrameworkKeys.UI_NAVIGATION_FORBIDDEN,
             FrameworkKeys.UI_NAVIGATION_WAITING_FOR_CONNECTION,
             FrameworkKeys.UI_RETRY,
-            FrameworkKeys.UI_DISMISS,
+            FrameworkKeys.UI_DISMISS
+,
             FrameworkKeys.UI_CONNECTION_GAVE_UP,
-            FrameworkKeys.UI_RELOAD
+            FrameworkKeys.UI_RELOAD,
+            FrameworkKeys.UI_START_FAILED,
+            FrameworkKeys.UI_START_NO_CONNECTION,
+            FrameworkKeys.UI_START_REFUSED,
+            FrameworkKeys.UI_REFERENCE
         };
     }
 
@@ -176,6 +181,14 @@ public final class FrameworkText {
                 return "We could not reconnect to the server. Reload the page to try again.";
             case FrameworkKeys.UI_RELOAD:
                 return "Reload";
+            case FrameworkKeys.UI_START_FAILED:
+                return "Could not start the application.";
+            case FrameworkKeys.UI_START_NO_CONNECTION:
+                return "Could not connect to the server.";
+            case FrameworkKeys.UI_START_REFUSED:
+                return "Sign-in was refused.";
+            case FrameworkKeys.UI_REFERENCE:
+                return "Reference";
             default:
                 return null;
         }
@@ -403,5 +416,45 @@ public final class FrameworkText {
      */
     public static Message uiReload() {
         return new Message(CATALOG, FrameworkKeys.UI_RELOAD);
+    }
+
+    /**
+     * What the page says when the application did not start.
+     *
+     * @return the message
+     * @since 0.11.0
+     */
+    public static Message uiStartFailed() {
+        return new Message(CATALOG, FrameworkKeys.UI_START_FAILED);
+    }
+
+    /**
+     * What the page says when the connection never became usable.
+     *
+     * @return the message
+     * @since 0.11.0
+     */
+    public static Message uiStartNoConnection() {
+        return new Message(CATALOG, FrameworkKeys.UI_START_NO_CONNECTION);
+    }
+
+    /**
+     * What the page says when the server refused the sign-in at start.
+     *
+     * @return the message
+     * @since 0.11.0
+     */
+    public static Message uiStartRefused() {
+        return new Message(CATALOG, FrameworkKeys.UI_START_REFUSED);
+    }
+
+    /**
+     * The word before the reference of a logged error.
+     *
+     * @return the message
+     * @since 0.11.0
+     */
+    public static Message uiReference() {
+        return new Message(CATALOG, FrameworkKeys.UI_REFERENCE);
     }
 }
