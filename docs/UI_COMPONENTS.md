@@ -425,7 +425,10 @@ All of these carry a caption, an explanation, a required mark and a message line
 - **TextField**: Standard single-line text input. The single-argument constructor sets the
   placeholder; `withLabel` sets the caption.
 - **TextArea**: Multi-line text input area. Same two, same meanings.
-- **Checkbox**: A standard boolean toggle for individual options.
+- **Checkbox**: A standard boolean toggle for individual options. Its caption is a `<label>` tied
+  to the box, so clicking the words ticks it. A class you add lands on the `<input>` itself, so a
+  sizing class such as `min-h-11`, `h-*` or `w-*` stretches the box and its tick out of shape. Size
+  the box with `setThemeSize(ThemeSize.LG)`, and give a row more height with the layout around it.
 - **RadioButtonGroup**: A set of mutually exclusive radio options.
 - **Select**: A dropdown list for selecting a single item from a collection.
 - **Range**: A slider for selecting numeric values within a defined range.

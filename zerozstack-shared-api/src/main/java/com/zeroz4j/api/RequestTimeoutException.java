@@ -40,7 +40,9 @@ package com.zeroz4j.api;
 public class RequestTimeoutException extends RuntimeException {
 
     /**
-     * Creates the exception with a message naming the call and the deadline it missed.
+     * Creates the exception. The browser client gives it a sentence a screen can show, "The server
+     * did not answer in time. Try again.", and writes the call and the deadline it missed to the
+     * console instead.
      *
      * @param message human-readable description
      */

@@ -684,7 +684,12 @@ application built on it, and neither is written by hand:
   the `rules` array in `context7.json`, stamped with this build's version. Every application
   resolves that artifact, so an assistant gets rules for the version the project actually depends
   on rather than for whatever a documentation index is currently serving. Change `context7.json`
-  and the jar follows; there is nothing else to edit.
+  and the jar follows; there is nothing else to edit. The same build copies `docs/**/*.md`,
+  `README.md`, `CHANGELOG.md` and `llms.txt` into `META-INF/zeroz4j/docs/` in that jar
+  (`tools/agent-rules/GenerateAgentRules.java`), rewrites links to `main` on GitHub into relative
+  ones, and fails if a relative link in the copy points at a file that is not in it. The list of
+  components at the end of the generated rules is read from the "Component Reference" section of
+  `docs/UI_COMPONENTS.md`, so keep that section's `- **Name**: sentence` shape.
 - **`AGENTS.md` in a generated project.** The archetype writes it, with `${zeroz4jVersion}`
   substituted. Source:
   `zerozstack-archetype/src/main/resources/archetype-resources/AGENTS.md`. Its `##` headings are

@@ -10,6 +10,59 @@ upgrading.
 
 ## [Unreleased]
 
+An application's AI assistant used to read the rules in the jar and stop there, and so it rebuilt
+components that exist and met failures the guides already describe. The documentation for the exact
+version now ships in the same jar, and the rules say which page to read before which task.
+
+### Added
+
+- **The documentation is in `zerozstack-shared-api`.** Every page under `docs/`, plus `README.md`,
+  `CHANGELOG.md` and `llms.txt`, is copied into the jar at `META-INF/zeroz4j/docs/` with the same
+  folder layout, at build time, so it cannot describe another version. Links between pages work as
+  relative paths inside that folder, and links to `main` on GitHub for a file that ships are
+  rewritten to relative ones. To read a page without the network:
+  `unzip -p ~/.m2/repository/com/zeroz4j/zerozstack-shared-api/<version>/zerozstack-shared-api-<version>.jar META-INF/zeroz4j/docs/guides/troubleshooting.md`.
+  Nothing reaches the browser bundle, because TeaVM compiles only the classes and resources a client
+  declares.
+- **The generated rules say which page to read first.** `META-INF/zeroz4j/AGENTS.md` opens with where
+  the documentation is and how to read a page. The rules now start with a list of the form "before you
+  write X, read Y", and the file ends with one line for each component in `com.zeroz4j.ui`, read from
+  `docs/UI_COMPONENTS.md` so it cannot drift. New rules cover the 30 second request timeout as a design
+  rule, what `ThemeController` does not do, how a `Checkbox` is sized, and which Java calls pass
+  `mvn compile` but fail the browser build.
+- **`docs/guides/persistence.md` has an "Observed behavior" section.** It records what applications
+  found, each marked as confirmed or reported: deleted data stays in the storage files, a version
+  field in the root cannot tell you the store is old, every stored object costs heap while the store
+  is open, `ZeroZDbNode` cannot declare a field rename, enum constants are stored by position and
+  not checked by `SchemaCompatibility`, `DbQuery` can return live objects, and per-tenant stores are
+  never closed before shutdown.
+- **`troubleshooting.md` explains missing `System.Logger` lines.** `zerozstack-server-helidon` brings
+  `slf4j-jdk-platform-logging`, which hands those lines to SLF4J. With no SLF4J provider they are
+  dropped without a message in the log other than three start-up lines. The example servers have
+  `slf4j-simple`; the archetype's server does not. If your server log has no Helidon lines, add a
+  provider to the server module.
+
+### Changed
+
+- **A timed-out call now fails with a sentence a screen can show.** `RequestTimeoutException` kept
+  its type, but its message used to read `RMI call Service#method (request 7) timed out: no answer
+  within 30000 ms`, and applications showed that to people. The message is now "The server did not
+  answer in time. Try again." and the call and the deadline go to the browser console. If you
+  matched the old text, catch `RequestTimeoutException` instead.
+
+### Fixed
+
+- **A record or class nested inside a `@DataModel` now crosses the wire.** It compiled, and the first
+  send failed in the browser with `Unsupported type for GrowableBuffer: Outer$Inner` while the screen
+  that needed it never appeared. The generated registrar used the source name `Outer.Inner` where the
+  runtime looks up `Outer$Inner`. Nested models, and enums and sealed families declared inside a
+  model, are now registered under the right name. A nested type that is used as a field of a
+  `@DataModel` but has no `@DataModel` of its own is now a compile error naming the field. A nested
+  model with validation annotations, `@LiveSync` or `@ClientWritable` is a compile error that tells
+  you to move it to its own file.
+- **`Checkbox` documentation.** A sizing class such as `min-h-11` lands on the input and stretches the
+  box and its tick. The component list now says so and names `setThemeSize` instead.
+
 ## [0.10.0] — 2026-10-12
 
 This release is about the seconds between clicking a link and seeing the page. The router now says

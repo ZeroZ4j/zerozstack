@@ -170,6 +170,17 @@ Both binding jars are in `target/libs`, usually left over from a build with the 
 Run `mvn clean install` with one profile, or pick one with `-Dzeroz.server.binding=helidon` (or
 `vidocq`). See [Starting the server](starting-the-server.md#when-more-than-one-is-on-the-classpath).
 
+### Log lines written through `System.Logger` never appear
+
+The log shows `SLF4J(W): No SLF4J providers were found` at start, lines from `java.util.logging`
+appear, and lines from Helidon or a library that logs through `System.Logger` are missing.
+
+`zerozstack-server-helidon` depends on `helidon-logging-slf4j`, which brings
+`slf4j-jdk-platform-logging`. That library hands every `System.Logger` line to SLF4J. With no SLF4J
+provider on the classpath, SLF4J drops them. The example servers have `org.slf4j:slf4j-simple` and do
+not show this. The archetype's server `pom.xml` names no provider, so a generated project does. Add
+one to the server module, `slf4j-simple` as the examples do.
+
 ## Connection problems
 
 ### The page loads but the app never starts
@@ -199,7 +210,9 @@ control it.
 ### An RMI call never returns
 
 The default request timeout is 30 seconds, and a call still unanswered then fails with
-`RequestTimeoutException`. The deadline is checked by a timer of its own, so it fires even when
+`RequestTimeoutException`. Its message is "The server did not answer in time. Try again.", which a
+screen can show as it is; the browser console names the call and the deadline it missed
+(`[zeroz4j] RMI call ... timed out`). The deadline is checked by a timer of its own, so it fires even when
 nothing else is happening on the connection. If calls time out, check the server log for an exception
 inside the service method — an error becomes an error frame, but a hung method produces nothing.
 

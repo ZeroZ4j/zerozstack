@@ -157,8 +157,8 @@ class ConnectionLivenessTest {
         WasmRmiClient.timeoutTick(sent + 4_000);
         assertInstanceOf(RequestTimeoutException.class, callback.error,
                 "a timeout is its own type, so it can be told from a refusal");
-        assertTrue(callback.error.getMessage().contains("SlowService#neverAnswers"),
-                callback.error.getMessage());
+        assertEquals(WasmRmiClient.TIMEOUT_MESSAGE, callback.error.getMessage(),
+                "the text is something a screen can show, with no call name or number in it");
         assertTrue(WasmRmiClient.pendingRequests.isEmpty());
     }
 

@@ -507,7 +507,7 @@ public class WasmRmiClientTest {
 
             assertTrue(callback.completed, "Stale request should be completed with an error");
             assertNotNull(callback.error);
-            assertTrue(callback.error.getMessage().contains("timed out"));
+            assertEquals(WasmRmiClient.TIMEOUT_MESSAGE, callback.error.getMessage());
             assertEquals(0, WasmRmiClient.pendingRequests.size());
         } finally {
             WasmRmiClient.setRequestTimeout(30_000);

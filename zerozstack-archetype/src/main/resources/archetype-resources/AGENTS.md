@@ -25,16 +25,31 @@ read disagrees with the version above, the version above wins.
 
 #[[## Where to look things up]]#
 
-**The rules for exactly this version travel inside the jar this project already depends on.** They
-are correct by construction, need no network, and are the first place to look:
+**The rules and the documentation for exactly this version travel inside the jar this project
+already depends on.** They are correct by construction, need no network, and are the first place to
+look. The rules, which say which page to read before which task:
 
 ```bash
 unzip -p ~/.m2/repository/com/zeroz4j/zerozstack-shared-api/${zeroz4jVersion}/zerozstack-shared-api-${zeroz4jVersion}.jar META-INF/zeroz4j/AGENTS.md
 ```
 
-For anything longer than a rule — guides, worked examples, the protocol, the decision procedure for
-how state moves — use the published documentation, and check what it tells you against the version
-above:
+Every guide, the component reference `UI_COMPONENTS.md`, the troubleshooting page, the protocol and the
+decision pages are in the same jar under `META-INF/zeroz4j/docs/`, with the folder layout of the
+framework's `docs/` folder. Read one page:
+
+```bash
+unzip -p ~/.m2/repository/com/zeroz4j/zerozstack-shared-api/${zeroz4jVersion}/zerozstack-shared-api-${zeroz4jVersion}.jar META-INF/zeroz4j/docs/guides/troubleshooting.md
+```
+
+Or put the whole set on disk in one command, and read it with the file tools:
+
+```bash
+mvn dependency:unpack -Dartifact=com.zeroz4j:zerozstack-shared-api:${zeroz4jVersion} -DoutputDirectory=target/zeroz4j-docs -Dmdep.unpack.includes='META-INF/zeroz4j/**'
+```
+
+Read the page for your task before you write the code. Do not rebuild a component or a mechanism
+the documentation already describes. The online copies below follow the framework's main line, so
+check what they tell you against the version above:
 
 - <https://stack.zeroz4j.com/>
 - Context7, indexed as `/zeroz4j/zerozstack`

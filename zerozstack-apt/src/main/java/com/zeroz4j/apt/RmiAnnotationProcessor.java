@@ -191,6 +191,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 }
                 try {
                     if (generateRules(typeElement, typeUtils)) {
+                        if (typeElement.getNestingKind().isNested()) {
+                            refuseNested(typeElement, "validation annotations");
+                        }
                         validatedModels.add(recordFqcn);
                     }
                 } catch (IOException e) {
@@ -219,6 +222,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 }
                 try {
                     if (generateRules(typeElement, typeUtils)) {
+                        if (typeElement.getNestingKind().isNested()) {
+                            refuseNested(typeElement, "validation annotations");
+                        }
                         validatedModels.add(fqcn);
                     }
                 } catch (IOException e) {
@@ -230,7 +236,9 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 // setters to report outbound mutations.
                 boolean liveSync = typeElement.getAnnotation(LiveSync.class) != null;
                 boolean clientWritable = typeElement.getAnnotation(ClientWritable.class) != null;
-                if (liveSync || clientWritable) {
+                if ((liveSync || clientWritable) && typeElement.getNestingKind().isNested()) {
+                    refuseNested(typeElement, "@LiveSync or @ClientWritable");
+                } else if (liveSync || clientWritable) {
                     try {
                         generateLiveSubclass(typeElement, typeUtils, clientWritable);
                         clientWritableModels.add(fqcn);
@@ -380,7 +388,7 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
     private void generateRecordSerializer(TypeElement typeElement, Types typeUtils) throws IOException {
         String packageName = getPackageName(typeElement);
         String className = typeElement.getSimpleName().toString();
-        String serializerClassName = className + "_Serializer";
+        String serializerClassName = flatName(typeElement) + "_Serializer";
         String modelName = typeElement.getQualifiedName().toString();
         String serializerFqcn = packageName.isEmpty()
                 ? serializerClassName : packageName + "." + serializerClassName;
@@ -464,8 +472,8 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
 
     private void generateSerializer(TypeElement typeElement, Types typeUtils) throws IOException {
         String packageName = getPackageName(typeElement);
-        String className = typeElement.getSimpleName().toString();
-        String serializerClassName = className + "_Serializer";
+        String className = typeElement.getQualifiedName().toString();
+        String serializerClassName = flatName(typeElement) + "_Serializer";
         serializerNames.put(typeElement.getQualifiedName().toString(),
                 packageName.isEmpty() ? serializerClassName : packageName + "." + serializerClassName);
 
@@ -1136,18 +1144,18 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             writer.write("    @Override\n");
             writer.write("    public void registerAll() {\n");
             for (String model : validatedModels) {
-                writer.write("        com.zeroz4j.api.validation.ValidationRegistry.register(\"" + model + "\",\n");
+                writer.write("        com.zeroz4j.api.validation.ValidationRegistry.register(\"" + binaryName(model) + "\",\n");
                 writer.write("            obj -> " + model + "_Rules.validate((" + model + ") obj));\n");
             }
             for (String model : clientWritableModels) {
                 // Both names, because the browser holds the subclass and the wire carries
                 // the model: the writer needs the pair to put the model's own name on a
                 // client edit.
-                writer.write("        BinaryRegistry.registerLive(\"" + model + "\", \""
+                writer.write("        BinaryRegistry.registerLive(\"" + binaryName(model) + "\", \""
                         + model + "_Live\", " + model + "_Live::new);\n");
             }
             for (String enumType : enumTypes) {
-                writer.write("        BinaryRegistry.registerEnum(\"" + enumType + "\", " + enumType + "::valueOf);\n");
+                writer.write("        BinaryRegistry.registerEnum(\"" + binaryName(enumType) + "\", " + enumType + "::valueOf);\n");
             }
             for (Map.Entry<String, List<String>> sealed : sealedBases.entrySet()) {
                 StringBuilder members = new StringBuilder();
@@ -1155,14 +1163,14 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                     if (members.length() > 0) {
                         members.append(", ");
                     }
-                    members.append('"').append(member).append('"');
+                    members.append('"').append(binaryName(member)).append('"');
                 }
-                writer.write("        BinaryRegistry.registerSealed(\"" + sealed.getKey()
+                writer.write("        BinaryRegistry.registerSealed(\"" + binaryName(sealed.getKey())
                         + "\", new String[] { " + members + " });\n");
             }
             for (String model : binaryModels) {
                 String serializer = serializerNames.getOrDefault(model, model + "_Serializer");
-                writer.write("        BinaryRegistry.register(\"" + model + "\", " + model + "::new, new BinarySerializerDelegate<" + model + ">() {\n");
+                writer.write("        BinaryRegistry.register(\"" + binaryName(model) + "\", " + model + "::new, new BinarySerializerDelegate<" + model + ">() {\n");
                 writer.write("            @Override\n");
                 writer.write("            public void write(" + model + " obj, GrowableBuffer buffer, ObjectMapper mapper) {\n");
                 writer.write("                " + serializer + ".write(obj, buffer, mapper);\n");
@@ -1177,7 +1185,7 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                 String serializer = serializerNames.getOrDefault(model, model + "_Serializer");
                 // No supplier: there is no empty record to hand out, so the delegate returns the
                 // finished value instead of filling one.
-                writer.write("        BinaryRegistry.registerRecord(\"" + model + "\", new BinaryRecordDelegate<" + model + ">() {\n");
+                writer.write("        BinaryRegistry.registerRecord(\"" + binaryName(model) + "\", new BinaryRecordDelegate<" + model + ">() {\n");
                 writer.write("            @Override\n");
                 writer.write("            public void write(" + model + " obj, GrowableBuffer buffer, ObjectMapper mapper) {\n");
                 writer.write("                " + serializer + ".write(obj, buffer, mapper);\n");
@@ -1219,6 +1227,38 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
             }
         }
         return Long.toHexString(h & 0x7fffffffffffffffL);
+    }
+
+    /**
+     * The name {@code Class.getName()} gives at run time, {@code Outer$Inner} for a nested type.
+     * The registry is keyed by it, while generated code names the type as {@code Outer.Inner}.
+     */
+    private String binaryName(String canonicalName) {
+        TypeElement element = processingEnv.getElementUtils().getTypeElement(canonicalName);
+        return element == null ? canonicalName
+                : processingEnv.getElementUtils().getBinaryName(element).toString();
+    }
+
+    /** {@code Outer_Inner} for a nested type, so two nested types of one name do not collide. */
+    private static String flatName(TypeElement typeElement) {
+        StringBuilder name = new StringBuilder(typeElement.getSimpleName());
+        for (Element owner = typeElement.getEnclosingElement();
+                owner instanceof TypeElement; owner = owner.getEnclosingElement()) {
+            name.insert(0, owner.getSimpleName() + "_");
+        }
+        return name.toString();
+    }
+
+    /**
+     * A nested model gets a serializer, which needs nothing from its surroundings. Validation rules
+     * and live subclasses are named after the model in the package and extend it, which a nested
+     * type cannot do without more work, so those are refused with the way out.
+     */
+    private void refuseNested(TypeElement typeElement, String what) {
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+            typeElement.getQualifiedName() + " is declared inside another type and has " + what
+            + ", which a nested model does not support. Move it to a file of its own.",
+            typeElement);
     }
 
     private String getPackageName(TypeElement typeElement) {
@@ -1377,6 +1417,37 @@ public class RmiAnnotationProcessor extends AbstractProcessor {
                         "@DataModel field '" + field.name + "' has unsupported type " + erased
                         + ": " + advice + ".", typeElement);
             }
+            checkNestedWireTypes(typeElement, field.name, type, typeUtils);
+        }
+    }
+
+    /**
+     * A record or class declared inside a {@code @DataModel} is only a wire type if it carries
+     * {@code @DataModel} itself. Without it the type compiled, the registry had nothing under its
+     * name, and the first send failed at run time with "Unsupported type for GrowableBuffer".
+     */
+    private void checkNestedWireTypes(TypeElement owner, String fieldName, TypeMirror type,
+                                      Types typeUtils) {
+        if (!(type instanceof DeclaredType)) {
+            return;
+        }
+        DeclaredType declared = (DeclaredType) type;
+        Element element = declared.asElement();
+        if (element instanceof TypeElement
+                && (element.getKind() == ElementKind.RECORD || element.getKind() == ElementKind.CLASS)
+                && !element.getModifiers().contains(Modifier.ABSTRACT)
+                && element.getAnnotation(DataModel.class) == null
+                && ((TypeElement) element).getNestingKind().isNested()
+                && element.getEnclosingElement().getAnnotation(DataModel.class) != null) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "@DataModel field '" + fieldName + "' has type "
+                    + ((TypeElement) element).getQualifiedName() + ", which is declared inside "
+                    + ((TypeElement) element.getEnclosingElement()).getQualifiedName()
+                    + " but is not annotated @DataModel, so it cannot cross the wire. Annotate "
+                    + element.getSimpleName() + " with @DataModel.", owner);
+        }
+        for (TypeMirror argument : declared.getTypeArguments()) {
+            checkNestedWireTypes(owner, fieldName, argument, typeUtils);
         }
     }
 
