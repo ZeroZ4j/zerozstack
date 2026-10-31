@@ -23,8 +23,8 @@ package com.zeroz4j.api;
  * <p>DaisyUI's stock themes put the page, a panel and an edge within a few percent of each other,
  * so a screen reads as one flat gray. Here the page is {@code base-200}, a panel on it is
  * {@code base-100} and a hairline is {@code base-300}, and the page is drawn in {@code base-200}
- * whatever class is on {@code body}. Only those colors change; primary, accent and the status
- * colors stay DaisyUI's.</p>
+ * whatever class is on {@code body}. Every surface and every DaisyUI card gets the hairline as a
+ * border. Only those colors change; primary, accent and the status colors stay DaisyUI's.</p>
  *
  * <p>The server puts this at the end of {@code <head>}, in a cascade layer of its own. That layer
  * comes after DaisyUI's, so it beats the stock themes, and any stylesheet outside a layer beats
@@ -38,11 +38,12 @@ public final class ThemeBase {
 
     private static final String LIGHT = "color-scheme:light;"
         + "--color-base-100:#FFFFFF;--color-base-200:#E7EBF0;--color-base-300:#C3CCD7;"
-        + "--color-base-content:#1B2430;";
+        + "--color-base-content:#1B2430;--zeroz4j-surface-edge:var(--color-base-300);";
 
     private static final String DARK = "color-scheme:dark;"
         + "--color-base-100:oklch(25.5% 0.014 255);--color-base-200:oklch(15.5% 0.012 255);"
-        + "--color-base-300:oklch(38% 0.016 255);--color-base-content:oklch(94% 0.008 250);";
+        + "--color-base-300:oklch(38% 0.016 255);--color-base-content:oklch(94% 0.008 250);"
+        + "--zeroz4j-surface-edge:var(--color-base-300);";
 
     /** The stylesheet text. */
     public static final String CSS = "@layer zeroz4j-theme{"
@@ -50,6 +51,8 @@ public final class ThemeBase {
         + "@media (prefers-color-scheme:dark){:root:not([data-theme]){" + DARK + "}}"
         + "[data-theme=\"dark\"]{" + DARK + "}"
         + "html,body{background-color:var(--color-base-200)}"
+        + ":where(:root:not([data-theme]),[data-theme=\"light\"],[data-theme=\"dark\"])"
+        + " .card:not(.card-border,.card-dash,.image-full){border:1px solid var(--color-base-300)}"
         + "}";
 
     private ThemeBase() {

@@ -65,7 +65,7 @@ public class AdminView extends VerticalLayout {
 
     private HorizontalLayout createActionRow(String titleStr, String descStr, String btnText, String btnClass, Runnable action) {
         HorizontalLayout row = new HorizontalLayout();
-        row.addClassName("bg-base-100");
+        row.addClassName("bg-base-100 border border-base-300");
         row.addClassName("rounded-box");
         row.addClassName("p-4");
         row.setAlignItems(Alignment.CENTER);

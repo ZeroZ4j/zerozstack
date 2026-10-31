@@ -71,7 +71,7 @@ public class OidcLoginApp {
                 call("Public call", output, service::publicGreeting),
                 call("@Secured call", output, service::whoAmI),
                 call("@RolesAllowed(\"planner\")", output, service::plannerOnly)));
-        root.add(box("p-4 rounded bg-base-100 min-h-24", output));
+        root.add(box("p-4 rounded bg-base-100 border border-base-300 min-h-24", output));
 
         Button logout = new Button("Log out");
         logout.addClassName("btn-outline");

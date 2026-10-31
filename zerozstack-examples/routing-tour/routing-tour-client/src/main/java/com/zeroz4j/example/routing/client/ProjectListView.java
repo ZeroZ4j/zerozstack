@@ -56,7 +56,7 @@ public class ProjectListView implements RouteView<List<Project>> {
     public Component render(List<Project> projects, RouteParams params) {
         Div rows = Ui.box("flex flex-col gap-2");
         for (Project project : projects) {
-            rows.add(Ui.box("flex items-center gap-3 p-3 rounded bg-base-100",
+            rows.add(Ui.box("flex items-center gap-3 p-3 rounded bg-base-100 border border-base-300",
                     Ui.routerLink("/projects/" + project.getId(), project.getName()),
                     Ui.text(project.getSummary(), TextStyle.SECONDARY.getClassNames() + " flex-1"),
                     Ui.text(project.getOpenTasks() + " open", "badge badge-ghost")));

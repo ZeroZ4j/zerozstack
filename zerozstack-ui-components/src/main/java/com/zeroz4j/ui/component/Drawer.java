@@ -129,7 +129,7 @@ public class Drawer extends Component implements HasComponents, HasStyle, HasSiz
         overlay.getElement().setAttribute("aria-label", "Close");
 
         panel = new Div();
-        panel.addClassName("menu bg-base-100 text-base-content min-h-full w-80 p-4");
+        panel.addClassName("menu bg-base-100 border-r border-base-300 text-base-content min-h-full w-80 p-4");
         panel.getElement().setAttribute("role", "dialog");
 
         heading = new Heading();

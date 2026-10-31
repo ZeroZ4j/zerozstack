@@ -154,7 +154,7 @@ public class InventoryView extends Card {
         Div tableContainer = new Div();
         tableContainer.addClassName("w-full");
         tableContainer.addClassName("overflow-x-auto");
-        tableContainer.addClassName("bg-base-100");
+        tableContainer.addClassName("bg-base-100 border border-base-300");
         tableContainer.addClassName("rounded-box");
         tableContainer.addClassName("p-2");
         masterPanel.add(tableContainer);

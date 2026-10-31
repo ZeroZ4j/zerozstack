@@ -62,7 +62,7 @@ public class MainLayout extends HorizontalLayout {
         // --- Sidebar ---
         VerticalLayout sidebar = new VerticalLayout();
         sidebar.addClassName("w-64");
-        sidebar.addClassName("bg-base-100");
+        sidebar.addClassName("bg-base-100 border-r border-base-300");
         sidebar.addClassName("h-full");
         sidebar.addClassName("p-0"); // Menu will handle padding
         sidebar.addClassName("flex-shrink-0");
