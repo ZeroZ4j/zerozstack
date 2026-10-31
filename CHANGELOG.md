@@ -16,6 +16,16 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **`-Pproduction` builds a finished stylesheet in a generated application.** The two CDN style tags
+  in `index.html` (Tailwind running in the browser, daisyUI's whole stylesheet) are replaced by one
+  minified local file with only the classes in use. The build downloads the pinned Tailwind 4.1.16
+  standalone executable and daisyUI 5.6.14 bundle once into `~/.zeroz4j/cache`, checks their SHA-256
+  and fails on a mismatch. `zerozstack-ui-components` now ships the list of its CSS classes
+  (`META-INF/zeroz4j/css/library-classes.txt`, written at its build from its sources, including names
+  built by joining a prefix and a color or size). The archetype's `index.html` gains two
+  `zeroz4j:styles` comments the build looks for; **an application generated earlier needs them added
+  before `-Pproduction` will build a stylesheet**. The ordinary build is unchanged, and the
+  repository's examples stay on the CDN tags. See `docs/guides/packaging.md`.
 - **`zerozstack-dev-tomcat`: run a WAR application in development without a container.**
   `Zeroz4jDevServer.builder().port(8080).contextPath("/app").beans(...).servlet(...).start()` starts
   embedded Tomcat and Weld with no classpath scan, with the framework's listener, the WebSocket

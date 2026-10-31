@@ -470,6 +470,12 @@ cannot. That is a floor, not a guarantee of a usable screen.
   a dialog opened after the framework's "connection lost" bar is drawn over it.
 - **On a browser older than Chrome 114, Safari 17 or Firefox 125 the "connection lost" bar has
   nowhere to go**, and behaves as it did before 0.8.0: visible everywhere except under a dialog.
+- **The production stylesheet is limited to what the Tailwind standalone executable supports.**
+  `-Pproduction` in a generated application builds it with that executable, downloaded once and
+  checked against a pinned SHA-256. Supported: Windows x64 (also used on Windows on ARM), Linux x64
+  and arm64 (glibc or musl), macOS x64 and arm64. A first build needs the network (GitHub and
+  jsDelivr). A class an application assembles from pieces of text is not found by the scanner and has
+  no CSS in production. The repository's own examples stay on the CDN tags and are not built this way.
 - **A tooltip is drawn on the side it was told to sit on.** One placed against the right-hand edge of
   the window is still partly off the window. It no longer takes the whole page sideways, which is
   what it did before 0.8.0.

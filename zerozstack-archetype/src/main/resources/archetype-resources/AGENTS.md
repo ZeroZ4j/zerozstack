@@ -133,6 +133,13 @@ perfectly — that has happened in this framework before, and it survived two re
 nobody ran the minified shape until users did. Start it, click through it, and read the browser
 console.
 
+`-Pproduction` also swaps the two CDN style tags in `index.html` for one finished, minified local
+stylesheet. The first such build downloads the pinned Tailwind executable and daisyUI bundle into
+`~/.zeroz4j/cache` and checks their SHA-256; later builds use the cache. Keep the two `zeroz4j:styles`
+comments around the tags in `index.html`, because the build fails without them. A class you build
+by joining strings in your own code is not found; write it out whole. Your own CSS goes in
+`src/main/tailwind/app.css`. See `guides/packaging.md` in the documentation jar.
+
 #[[## Ten things that are not ordinary Java]]#
 
 1. **The client is Java, compiled to JavaScript by TeaVM.** Only JDK APIs TeaVM emulates are

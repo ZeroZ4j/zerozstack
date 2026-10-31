@@ -26,6 +26,11 @@
     -->
     <teavm.optimizationLevel>SIMPLE</teavm.optimizationLevel>
     <teavm.minifying>false</teavm.minifying>
+
+    <!-- The daisyUI themes `-Pproduction` puts in the finished stylesheet. The theme marked default
+         is used when the visitor's system has no preference, the one marked prefersdark when it is
+         dark. If you call Theme.configure(...) with other theme names, list the same names here. -->
+    <zeroz4j.css.themes>light --default, dark --prefersdark</zeroz4j.css.themes>
   </properties>
 
   <dependencies>
@@ -125,6 +130,68 @@
         <teavm.optimizationLevel>ADVANCED</teavm.optimizationLevel>
         <teavm.minifying>true</teavm.minifying>
       </properties>
+      <build>
+        <plugins>
+          <!--
+              One finished, minified stylesheet instead of the two CDN tags in index.html.
+
+              What happens, in order:
+                1. The class list and the build script are unpacked from zerozstack-ui-components.
+                2. The script downloads the pinned Tailwind standalone executable for this machine
+                   (Windows, Linux or macOS; x64 or arm64) and daisyUI's bundle ONCE into
+                   ~/.zeroz4j/cache, checks both against SHA-256 values pinned in the script, and
+                   fails the build if either differs. Later builds use the cached copies, so this
+                   is the only step that needs the network.
+                3. It runs Tailwind over the component library's class list, your Java sources and
+                   index.html, and writes target/webapp-production/ : a copy of src/main/webapp
+                   whose index.html links css/app-<hash>.css instead of the CDN tags.
+              The server module serves that folder in place of src/main/webapp when -Pproduction is on.
+              An ordinary build is unchanged: CDN tags, nothing downloaded.
+          -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.6.1</version>
+            <executions>
+              <execution>
+                <id>unpack-css-tooling</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>unpack-dependencies</goal>
+                </goals>
+                <configuration>
+                  <includeArtifactIds>zerozstack-ui-components</includeArtifactIds>
+                  <includes>META-INF/zeroz4j/css/**</includes>
+                  <outputDirectory>${project.build.directory}/zeroz4j-css</outputDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>production-stylesheet</id>
+                <phase>prepare-package</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>${java.home}/bin/java</executable>
+                  <arguments>
+                    <argument>${project.build.directory}/zeroz4j-css/META-INF/zeroz4j/css/ProductionCss.java</argument>
+                    <argument>${project.build.directory}/zeroz4j-css</argument>
+                    <argument>${project.basedir}</argument>
+                    <argument>${zeroz4j.css.themes}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 </project>

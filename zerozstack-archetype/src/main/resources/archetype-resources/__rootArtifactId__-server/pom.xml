@@ -19,6 +19,9 @@
     <zeroz4j.server.java>#if( $container == 'vidocq' )25#{else}21#{end}</zeroz4j.server.java>
     <maven.compiler.source>${zeroz4j.server.java}</maven.compiler.source>
     <maven.compiler.target>${zeroz4j.server.java}</maven.compiler.target>
+    <!-- Where index.html and the static assets come from; -Pproduction points it at the client's
+         production copy. -->
+    <client.webapp.dir>${project.basedir}/../${rootArtifactId}-client/src/main/webapp</client.webapp.dir>
   </properties>
 
   <dependencies>
@@ -62,9 +65,11 @@
         <directory>${project.basedir}/../${rootArtifactId}-client/target/js</directory>
         <targetPath>META-INF/resources/js</targetPath>
       </resource>
-      <!-- index.html and any static assets, served at / -->
+      <!-- index.html and any static assets, served at /. Under -Pproduction this is the client's
+           target/webapp-production instead: the same files, with index.html linking the finished
+           stylesheet rather than the two CDN tags. -->
       <resource>
-        <directory>${project.basedir}/../${rootArtifactId}-client/src/main/webapp</directory>
+        <directory>${client.webapp.dir}</directory>
         <targetPath>META-INF/resources</targetPath>
       </resource>
     </resources>
@@ -134,6 +139,16 @@
   </build>
 
   <profiles>
+    <!-- Serves the page the client's production profile wrote (finished stylesheet, no CDN tags).
+         Every goal that builds the server for people to use takes this profile: `mvn install
+         -Pproduction`, the Docker build, `-Ppackage`. The client module must be in the same build;
+         `-pl` on the server alone leaves this folder missing and the server without an index.html. -->
+    <profile>
+      <id>production</id>
+      <properties>
+        <client.webapp.dir>${project.basedir}/../${rootArtifactId}-client/target/webapp-production</client.webapp.dir>
+      </properties>
+    </profile>
     <!-- mvn install -Phelidon / mvn install -Pvidocq: build this server for the other container.
          Each only sets the two properties at the top of this file. Run `mvn clean install` when
          switching, so target/libs holds one container's jars and not both. -->
