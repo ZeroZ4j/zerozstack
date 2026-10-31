@@ -138,6 +138,19 @@ What automatic recovery deliberately does **not** cover:
 - **Serialization failures throw to the caller.** The payload is checked once before the broadcast, so
   `publish` fails loudly instead of appearing to succeed while reaching nobody.
 
+## Slow calls
+
+- **Memory only.** A server restart loses running work and results, and nothing resumes.
+- **One server.** Work and results live in the process that started them.
+- **No time limit unless you set one.** With `zeroz.slowcall.maxMinutes` unset, work that hangs and
+  ignores its interrupt holds a running slot until the server stops. With it set, the slot is freed,
+  and the thread itself runs on until it returns.
+- **Result size is not limited.** A result is held whole in memory and sent in one message.
+- **`getSessionId()` is null in the work,** so anything needing a session fails there.
+- **In a WAR the work gets a thread from your `SessionThreadFactoryProvider`, and nothing has been
+  tested on a servlet container.** The context it carries is that factory's contract.
+- **The roles of the caller are the ones at the start.** Fetching the result does not check them again.
+
 ## Shared signals
 
 - **`Signals.shared` is JVM-global.** The registry is static: one value per signal name for the whole

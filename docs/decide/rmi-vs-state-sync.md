@@ -63,6 +63,13 @@ jobService.startJob();                    // RMI — a named operation, with a r
 `job-monitor` is exactly this. So is any CRUD screen: `save()` and `delete()` are RMI methods, while
 the list everyone is looking at updates through sync.
 
+## Work that can pass 30 seconds
+
+A plain RMI method fails at 30 seconds. When the caller is the only one waiting for the answer, return
+a [`SlowCall<T>`](../guides/slow-calls.md). It is still a named operation with its own `@Secured` and
+`@RolesAllowed`, and it survives a reconnect and a page reload. Use a shared signal, as `startJob` does
+above, when everybody watches the same work.
+
 ## The pull that goes the other way
 
 There is also a first-call obligation in the other direction: `syncEngine.notifyChanged(obj)` does

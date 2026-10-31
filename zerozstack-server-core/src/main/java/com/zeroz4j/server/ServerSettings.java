@@ -131,6 +131,49 @@ public final class ServerSettings {
     /** Where a part-received upload is written. Defaults to the JVM temp directory. */
     public static final String UPLOAD_TEMP_DIR = "zeroz.upload.tempDir";
 
+    // ------------------------------------------------------------------ slow calls
+
+    /**
+     * How long a slow call's result is kept after the work ends, in minutes. Default 60.
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_KEEP_MINUTES = "zeroz.slowcall.keepMinutes";
+
+    /**
+     * Most ended slow calls kept for one browser or user, oldest dropped first. Default 16.
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_MAX_KEPT_PER_CLIENT = "zeroz.slowcall.maxKeptPerClient";
+
+    /**
+     * Most slow calls one browser or user may run at once. Default 8. One more is refused with a
+     * sentence.
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_MAX_RUNNING_PER_CLIENT =
+            "zeroz.slowcall.maxRunningPerClient";
+
+    /**
+     * Most slow calls this server runs at once, across everybody. Default 1,000. One more is
+     * refused with a sentence.
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_MAX_RUNNING = "zeroz.slowcall.maxRunning";
+
+    /**
+     * How long one slow call may run, in minutes. Default 0, which means no limit.
+     *
+     * <p>Work past the limit is stopped the way a cancel stops it, its running slot is freed even if
+     * it ignores the interrupt, and the page shows it failed. Checked every few seconds.</p>
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_MAX_MINUTES = "zeroz.slowcall.maxMinutes";
+
     // ------------------------------------------------------------------ language
 
     /**

@@ -120,6 +120,7 @@ public class WasmRmiClient {
         ClientSignalTransport.install();
         LiveMutations.install();
         ClientLazyAdapter.install();
+        com.zeroz4j.api.SlowCall.installTracker(new ClientSlowCalls());
         // An idle socket is closed by whichever proxy has the shortest timeout - nginx at 60
         // seconds, Cloudflare at 100 - and a browser cannot send a WebSocket ping frame itself.
         // Only pings a connection that has gone quiet; see Keepalive.

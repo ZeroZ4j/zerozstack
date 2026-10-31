@@ -216,6 +216,11 @@ screen can show as it is; the browser console names the call and the deadline it
 nothing else is happening on the connection. If calls time out, check the server log for an exception
 inside the service method — an error becomes an error frame, but a hung method produces nothing.
 
+Work that can pass 30 seconds does not belong in a plain call. Make it a
+[slow call](slow-calls.md): the method returns at once, the screen follows the work, and the result
+survives a reconnect and a page reload. Raising `WasmRmiClient.setRequestTimeout` moves the limit for
+every call in the browser, so treat it as a stopgap.
+
 A hang is **not** the connection: since 0.5.0 a call made while the socket is down, or in flight
 when it drops, fails immediately with `DisconnectedException` instead of hanging. A network that
 dies without closing the socket is caught too: a call that has waited five seconds with nothing

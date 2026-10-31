@@ -16,6 +16,26 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
+  as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
+  `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
+  gets running with progress, finished with the value, failed with a sentence, or canceled, with no
+  timer and no polling. The work belongs to the signed-in user within the tenant, or to the browser id
+  when anonymous, so it survives a reconnect and a page reload, and `SlowCall.find(key)` finds it
+  again after a reload. `call.cancel()` interrupts it. It runs with the caller's `RmiRequestContext`
+  and a request scope, except that `getSessionId()` is null. If you wrote start, pending state and
+  resume by hand, this replaces them. Results are in memory: 60 minutes
+  (`zeroz.slowcall.keepMinutes`), 16 per owner (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner
+  (`zeroz.slowcall.maxRunningPerClient`) and 1,000 per server (`zeroz.slowcall.maxRunning`). A restart
+  loses them, and a page that was following the work shows a sentence. `zeroz.slowcall.maxMinutes` sets
+  a time limit, and it is 0 by default, meaning none. Work past it is stopped, its running slot is
+  freed even if it ignores the interrupt, and the page shows "The work took too long." No opcode or type tag was added:
+  the state travels on `0x17 SIGNAL_UPD` and only a browser that uses a slow call is sent anything.
+  See `docs/guides/slow-calls.md`. The `job-monitor` example's report is one.
+- **`TestConnection.call(Service.class, "method", args...)` calls a service through the real engine**
+  and returns the answer, or throws with the server's sentence. `awaitSlowCall`, `slowCallState` and
+  `cancelSlowCall` follow a slow call, and `TestServer.reconnect(connection)` opens the next connection
+  for the same browser and person.
 - **The documentation is in `zerozstack-shared-api`.** Every page under `docs/`, plus `README.md`,
   `CHANGELOG.md` and `llms.txt`, is copied into the jar at `META-INF/zeroz4j/docs/` with the same
   folder layout, at build time, so it cannot describe another version. Links between pages work as
@@ -44,6 +64,9 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Changed
 
+- **`AGENTS.md` no longer says a query always returns values.** When a process owns the store,
+  `query` returns exactly what `execute` returned, with no copy, so changing it changes the graph. The
+  rule is now to return copies or plain values in every mode.
 - **A timed-out call now fails with a sentence a screen can show.** `RequestTimeoutException` kept
   its type, but its message used to read `RMI call Service#method (request 7) timed out: no answer
   within 30000 ms`, and applications showed that to people. The message is now "The server did not

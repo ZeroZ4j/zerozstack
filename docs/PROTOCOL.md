@@ -230,6 +230,13 @@ LiveSync handles real-time object graph synchronization and reactive signals.
   * A signal's value. Broadcast to all sessions on every server-side change, and sent
     directly to a session in response to a subscribe.
   * Payload: `[String]` Signal Name + `[Type Tag + Value]` Serialized Value
+  * **Slow calls (0.11.0+) use this frame under the name `zeroz.slowcalls`.** The value is a
+    `com.zeroz4j.api.SlowCallBoard` in the ordinary object format: every slow call the connection's
+    owner has, with no results in it. It is sent only to a connection that subscribed to that name,
+    whose owner it belongs to. The handle a service method returns is a
+    `com.zeroz4j.api.SlowCall` in the same format on `0x01`, and a value is fetched with an ordinary
+    call to `com.zeroz4j.api.SlowCallRpc`. No opcode or type tag was added. See
+    [Slow calls](guides/slow-calls.md).
   * **A scoped signal uses the same frame and carries the family's base name only** — never the
     target. The server resolves the target from the subscribing session's own identity and sends
     that target's value; the frame is written only to sessions matching it. A client therefore

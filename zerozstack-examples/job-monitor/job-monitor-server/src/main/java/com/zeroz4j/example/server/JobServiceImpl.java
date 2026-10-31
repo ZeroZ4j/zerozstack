@@ -17,10 +17,14 @@
  */
 package com.zeroz4j.example.server;
 
+import com.zeroz4j.api.SlowCall;
 import com.zeroz4j.example.api.JobService;
 import com.zeroz4j.example.api.JobSignals;
+import com.zeroz4j.example.model.JobReport;
 import com.zeroz4j.example.model.JobStatus;
+import com.zeroz4j.server.SlowCalls;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,7 +36,28 @@ import java.util.concurrent.atomic.AtomicLong;
 @ApplicationScoped
 public class JobServiceImpl implements JobService {
 
+    private static final String[] REPORT_STEPS = {
+            "Reading the build log", "Reading the test results", "Writing the summary"
+    };
+
+    /** How long each step of the report takes. A test shortens it. */
+    static long reportStepMillis = 13_000L;
+
     private final AtomicLong jobIdGenerator = new AtomicLong(1000L);
+
+    @Inject
+    SlowCalls slowCalls;
+
+    @Override
+    public SlowCall<JobReport> writeReport() {
+        return slowCalls.start(REPORT_KEY, job -> {
+            for (int i = 0; i < REPORT_STEPS.length; i++) {
+                job.progress(i * 100 / REPORT_STEPS.length, REPORT_STEPS[i]);
+                Thread.sleep(reportStepMillis);
+            }
+            return new JobReport("Pipeline finished with 2 warnings.", 2);
+        });
+    }
 
     @Override
     public void startJob() {

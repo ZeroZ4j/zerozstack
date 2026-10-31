@@ -214,6 +214,16 @@ default, and a fresh application needs none of them set.
 | `zeroz.disclosure.maxHandlesPerClient` | Objects remembered as sent to one browser | **10,000** |
 | `zeroz.disclosure.idleHours` | How long that record survives with no activity | **24** |
 
+### Slow calls
+
+| Property | What it does | Unset |
+|---|---|---|
+| `zeroz.slowcall.keepMinutes` | How long a result is kept after the work ends | **60** |
+| `zeroz.slowcall.maxKeptPerClient` | Ended slow calls kept per browser or user, oldest dropped first | **16** |
+| `zeroz.slowcall.maxRunningPerClient` | Slow calls one browser or user may run at once | **8** |
+| `zeroz.slowcall.maxRunning` | Slow calls this server runs at once, across everybody | **1,000** |
+| `zeroz.slowcall.maxMinutes` | How long one slow call may run; 0 means no limit | **0** |
+
 ### File uploads
 
 | Property | What it does | Unset |

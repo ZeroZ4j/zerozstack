@@ -121,6 +121,11 @@ three examples:
 `PaymentsWireRoundTripTest` in `zerozstack-examples/payments-datamodels` is about sixty lines of
 this, comments included, and is the one to copy.
 
+`TestConnection.call(Service.class, "method", args...)` (0.11.0+) does all of that for you and returns
+the answer, or throws with the server's sentence. `server.reconnect(browser)` opens the next
+connection for the same browser and person. For a [slow call](slow-calls.md#test-it), follow it with
+`browser.awaitSlowCall(call, millis)`.
+
 ## Settings belong to the server, not to the process
 
 Settings have always been system properties: `-Dzeroz.ws.maxBinaryMessageBytes=8388608` and the

@@ -143,6 +143,12 @@ public final class ServerSignalTransport implements SignalTransport {
                     WasmRmiServerEngine.languageTagOf(session), transport.mapper);
             return;
         }
+        if (com.zeroz4j.api.SlowCallBoard.SIGNAL_NAME.equals(signalName)) {
+            // Not a signal value either. It is kept by owner rather than by Scope, so a user of the
+            // same name in another tenant does not read it.
+            transport.runtime.slowCalls().subscribe(session);
+            return;
+        }
         SharedValueSignal<?> signal = Signals.lookup(signalName);
         if (signal != null) {
             WasmRmiServerEngine.sendSignalUpdate(session, signalName, signal.get(), transport.mapper);
