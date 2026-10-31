@@ -17,6 +17,16 @@
  */
 package com.zeroz4j.server.test;
 
+import com.zeroz4j.api.BinarySerializer;
+import com.zeroz4j.api.GrowableBuffer;
+import com.zeroz4j.api.ObjectMapper;
+import com.zeroz4j.api.SlowCall;
+import com.zeroz4j.api.SlowCallBoard;
+import com.zeroz4j.api.SlowCallRpc;
+import com.zeroz4j.api.SlowCallState;
+import com.zeroz4j.api.SlowCallStatus;
+import com.zeroz4j.api.SyncFrameTypes;
+import com.zeroz4j.api.i18n.FrameworkText;
 import jakarta.websocket.CloseReason;
 import jakarta.websocket.Decoder;
 import jakarta.websocket.Encoder;
@@ -39,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * One browser talking to a {@link TestServer}, without a browser.
@@ -81,6 +92,9 @@ public final class TestConnection implements Session, AutoCloseable {
     /** The opcode byte of a LiveSync object update. */
     public static final byte OBJECT_UPDATE = 0x10;
 
+    /** How long {@link #call} waits for an answer. A service method under test should be quick. */
+    private static final long CALL_WAIT_MILLIS = 10_000L;
+
     private final String id;
     private final TestServer server;
     private final Map<String, Object> properties = new HashMap<>();
@@ -90,6 +104,12 @@ public final class TestConnection implements Session, AutoCloseable {
     private volatile CloseReason closeReason;
     private int maxBinaryBufferSize;
     private long maxIdleTimeout;
+
+    /** Message numbers for {@link #call}. High, so they stand apart from a test's own frames. */
+    private final AtomicInteger callSerial = new AtomicInteger(1_000_000);
+    /** What a browser keeps: its own table of the objects it was sent. */
+    private final ObjectMapper browserMapper = new ObjectMapper();
+    private volatile boolean subscribedToSlowCalls;
 
     TestConnection(TestServer server, String id) {
         this.server = server;
@@ -117,6 +137,24 @@ public final class TestConnection implements Session, AutoCloseable {
      */
     public String browserId() {
         return (String) properties.get("zeroz.clientId");
+    }
+
+    /** @return the user name this connection signed in with, or null */
+    String user() {
+        Principal principal = getUserPrincipal();
+        return principal == null ? null : principal.getName();
+    }
+
+    /** @return the tenant this connection belongs to, or null */
+    String tenant() {
+        return (String) properties.get("zeroz.tenant");
+    }
+
+    /** @return the roles this connection signed in with */
+    @SuppressWarnings("unchecked")
+    String[] roles() {
+        Set<String> roles = (Set<String>) properties.get("zeroz.roles");
+        return roles == null ? new String[0] : roles.toArray(new String[0]);
     }
 
     /**
@@ -219,6 +257,158 @@ public final class TestConnection implements Session, AutoCloseable {
      */
     public void send(byte[] frame) {
         server.deliverToServer(this, ByteBuffer.wrap(frame));
+    }
+
+    /**
+     * Calls a service method the way a browser does, and waits for the answer.
+     *
+     * <p>A real call frame goes through the real engine, so {@code @Secured}, {@code @RolesAllowed},
+     * validation and the caller's identity all apply.</p>
+     *
+     * @param <R>     what the method returns
+     * @param service the {@code @RmiService} interface
+     * @param method  the method name
+     * @param args    the arguments
+     * @return the answer
+     * @throws IllegalStateException with the server's sentence when it answered with an error, and
+     *                               when it has not answered within ten seconds
+     * @since 0.11.0
+     */
+    @SuppressWarnings("unchecked")
+    public <R> R call(Class<?> service, String method, Object... args) {
+        int messageId = callSerial.incrementAndGet();
+        GrowableBuffer buffer = new GrowableBuffer();
+        buffer.putInt(messageId);
+        BinarySerializer.writeString(buffer, service.getName());
+        BinarySerializer.writeString(buffer, method);
+        buffer.putInt(args.length);
+        for (Object arg : args) {
+            BinarySerializer.writeValue(buffer, arg, browserMapper);
+        }
+        send(buffer.toByteArray());
+
+        long deadline = System.currentTimeMillis() + CALL_WAIT_MILLIS;
+        while (System.currentTimeMillis() < deadline) {
+            for (byte[] frame : frames()) {
+                ByteBuffer answer = ByteBuffer.wrap(frame);
+                if (answer.getInt() != messageId) {
+                    continue;
+                }
+                if (answer.get() == SyncFrameTypes.RPC_ERROR) {
+                    throw new IllegalStateException(BinarySerializer.readString(answer));
+                }
+                return (R) BinarySerializer.readValue(answer, browserMapper);
+            }
+            pause();
+        }
+        throw new IllegalStateException(service.getSimpleName() + "." + method
+                + " was not answered within " + CALL_WAIT_MILLIS + " ms.");
+    }
+
+    /**
+     * Where a slow call stands, as a browser would see it now.
+     *
+     * <p>Reads the board the server sends this connection and, for finished work, fetches the value.
+     * A key the board does not have is {@link SlowCallStatus#IDLE} for a handle from
+     * {@code SlowCall.find}, and failed with the sentence a screen gets for a handle that had a
+     * run, which is what a browser shows after a server restart.</p>
+     *
+     * @param <T>  what the work returns
+     * @param call the handle
+     * @return the state
+     * @since 0.11.0
+     */
+    public <T> SlowCallState<T> slowCallState(SlowCall<T> call) {
+        SlowCallBoard board = latestBoard();
+        SlowCallBoard.Entry entry = board.find(call.key());
+        if (entry == null) {
+            return call.id() == null ? SlowCallState.idle()
+                    : SlowCallState.failed(com.zeroz4j.server.ServerMessages.inEnglish(FrameworkText.slowCallLost()));
+        }
+        if (entry.status() == SlowCallStatus.RUNNING) {
+            return SlowCallState.running(entry.percent(), entry.progressText());
+        }
+        if (entry.status() == SlowCallStatus.FAILED) {
+            return SlowCallState.failed(entry.message());
+        }
+        if (entry.status() == SlowCallStatus.CANCELED) {
+            return SlowCallState.canceled();
+        }
+        T value = call(SlowCallRpc.class, "collect", entry.id());
+        return SlowCallState.finished(value);
+    }
+
+    /**
+     * Waits until a slow call has ended, and answers how.
+     *
+     * @param <T>           what the work returns
+     * @param call          the handle
+     * @param timeoutMillis how long to wait
+     * @return the final state
+     * @throws IllegalStateException when the work is still running at the end of the wait
+     * @since 0.11.0
+     */
+    public <T> SlowCallState<T> awaitSlowCall(SlowCall<T> call, long timeoutMillis) {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (true) {
+            SlowCallState<T> state = slowCallState(call);
+            if (!state.isRunning()) {
+                return state;
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("Slow call '" + call.key() + "' is still running "
+                        + "after " + timeoutMillis + " ms: " + state);
+            }
+            pause();
+        }
+    }
+
+    /**
+     * Asks a slow call to stop, the way {@code SlowCall.cancel()} does in a browser.
+     *
+     * @param call the handle
+     * @since 0.11.0
+     */
+    public void cancelSlowCall(SlowCall<?> call) {
+        call(SlowCallRpc.class, "cancel", call.key());
+    }
+
+    /** The newest board this connection was sent, subscribing first if it has not. */
+    private SlowCallBoard latestBoard() {
+        if (!subscribedToSlowCalls) {
+            subscribedToSlowCalls = true;
+            GrowableBuffer buffer = new GrowableBuffer();
+            buffer.putInt(0);
+            BinarySerializer.writeString(buffer, SyncFrameTypes.SIGNALS_SERVICE);
+            BinarySerializer.writeString(buffer, "subscribe");
+            buffer.putInt(1);
+            BinarySerializer.writeValue(buffer, SlowCallBoard.SIGNAL_NAME, browserMapper);
+            send(buffer.toByteArray());
+        }
+        long deadline = System.currentTimeMillis() + CALL_WAIT_MILLIS;
+        while (System.currentTimeMillis() < deadline) {
+            List<byte[]> written = frames();
+            for (int i = written.size() - 1; i >= 0; i--) {
+                ByteBuffer frame = ByteBuffer.wrap(written.get(i));
+                frame.getInt();
+                if (frame.get() == SIGNAL_UPDATE
+                        && SlowCallBoard.SIGNAL_NAME.equals(BinarySerializer.readString(frame))) {
+                    return (SlowCallBoard) BinarySerializer.readValue(frame, browserMapper);
+                }
+            }
+            pause();
+        }
+        throw new IllegalStateException("The server did not answer the slow call subscription "
+                + "within " + CALL_WAIT_MILLIS + " ms.");
+    }
+
+    private static void pause() {
+        try {
+            Thread.sleep(2);
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the server.", stopped);
+        }
     }
 
     /**

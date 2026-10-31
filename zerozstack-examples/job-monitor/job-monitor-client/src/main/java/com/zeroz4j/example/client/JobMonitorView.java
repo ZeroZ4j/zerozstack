@@ -18,9 +18,12 @@
 package com.zeroz4j.example.client;
 
 import com.zeroz4j.api.Disposable;
+import com.zeroz4j.api.SlowCall;
+import com.zeroz4j.api.SlowCallState;
 import com.zeroz4j.example.api.JobService;
 import com.zeroz4j.example.api.JobService_Stub;
 import com.zeroz4j.example.api.JobSignals;
+import com.zeroz4j.example.model.JobReport;
 import com.zeroz4j.example.model.JobStatus;
 import com.zeroz4j.signals.Effect;
 import com.zeroz4j.ui.component.*;
@@ -51,6 +54,9 @@ public class JobMonitorView extends Card {
     private final Progress progressBar;
     private final Steps steps;
     private final Button startButton;
+
+    /** Found by key, so a reloaded page picks up the report where it stands. */
+    private final SlowCall<JobReport> report = SlowCall.find(JobService.REPORT_KEY);
 
     public JobMonitorView() {
         super();
@@ -136,6 +142,8 @@ public class JobMonitorView extends Card {
 
         footerRow.add(messageSpan, startButton);
         add(footerRow);
+
+        add(reportRow());
 
         // Reactive Binding: Disable Start button while job is running
         disposables.add(Effect.create(() -> {
@@ -242,6 +250,53 @@ public class JobMonitorView extends Card {
                 steps.add(stepItem);
             }
         }));
+    }
+
+    /**
+     * The report: a slow call, started with the button and followed in one {@link Effect}. Nothing
+     * here knows about timers, reconnects or reloads.
+     */
+    private HorizontalLayout reportRow() {
+        Span reportText = TextStyle.SECONDARY.span("");
+        Button writeButton = new Button("Write report");
+        Button cancelButton = new Button("Cancel");
+        cancelButton.addClassName("btn-ghost");
+
+        writeButton.addClickListener(e -> {
+            try {
+                jobService.writeReport();
+            } catch (RuntimeException refused) {
+                reportText.setText(refused.getMessage());
+            }
+        });
+        cancelButton.addClickListener(e -> report.cancel());
+
+        disposables.add(Effect.create(() -> {
+            SlowCallState<JobReport> state = report.state();
+            writeButton.setEnabled(!state.isRunning() && !state.isChecking());
+            cancelButton.setVisible(state.isRunning());
+            if (state.isRunning()) {
+                reportText.setText(state.percent() + "% " + state.progressText());
+            } else if (state.isFinished()) {
+                reportText.setText(state.value().summary());
+            } else if (state.isFailed()) {
+                reportText.setText(state.message());
+            } else if (state.isCanceled()) {
+                reportText.setText("Canceled");
+            } else {
+                reportText.setText("");
+            }
+        }));
+
+        HorizontalLayout row = new HorizontalLayout();
+        row.addClassName("items-center");
+        row.addClassName("justify-between");
+        row.addClassName("pt-4");
+        HorizontalLayout buttons = new HorizontalLayout();
+        buttons.addClassName("gap-2");
+        buttons.add(cancelButton, writeButton);
+        row.add(reportText, buttons);
+        return row;
     }
 
     /**

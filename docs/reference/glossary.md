@@ -26,6 +26,10 @@ ZeroZ Stack is not a message broker.
 
 ## Framework terms
 
+**Slow call**
+: A service method returning `SlowCall<T>`. It returns at once and the work runs on the server, so it
+is not bound by the 30 second limit on a call. See [Slow calls](../guides/slow-calls.md).
+
 **`@DataModel`**
 : Marks a type as wire-serializable. The annotation processor generates a binary serializer for it at
 compile time. It may be a **class**, which needs a public no-arg constructor and, for every serialized

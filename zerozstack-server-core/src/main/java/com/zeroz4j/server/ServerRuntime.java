@@ -122,6 +122,8 @@ public class ServerRuntime {
 
     private final LazyHandles.Registry lazyHandles = new LazyHandles.Registry();
 
+    private final SlowCallRegistry slowCalls = new SlowCallRegistry(this);
+
     /** Roles this server's services ask about, collected from its own beans at startup. */
     private final Set<String> knownRoles = ConcurrentHashMap.newKeySet();
 
@@ -209,6 +211,7 @@ public class ServerRuntime {
     public void shutDown() {
         if (shutDown.compareAndSet(false, true)) {
             ServerSignalTransport.uninstall(this);
+            slowCalls.shutDown();
             for (Session session : activeSessions) {
                 session.getUserProperties().remove(RUNTIME_KEY);
             }
@@ -398,6 +401,11 @@ public class ServerRuntime {
     /** @return this server's lazy-reference handles */
     LazyHandles.Registry lazyHandles() {
         return lazyHandles;
+    }
+
+    /** @return this server's slow calls */
+    SlowCallRegistry slowCalls() {
+        return slowCalls;
     }
 
     /** @return the roles this server's own services ask about */

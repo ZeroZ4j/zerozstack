@@ -53,6 +53,15 @@ public final class FrameworkKeys {
     /** A request to open a lazy reference this connection was never given. */
     public static final String UNKNOWN_LAZY_HANDLE = "error.unknownLazyHandle";
 
+    /** A browser or user starting more slow calls than it may run at once. */
+    public static final String SLOW_TOO_MANY = "slow.tooMany";
+
+    /** A slow call started while the whole server is at its limit. */
+    public static final String SLOW_SERVER_BUSY = "slow.serverBusy";
+
+    /** A slow call the server no longer has, after a restart or because its result expired. */
+    public static final String SLOW_LOST = "slow.lost";
+
     /** A live change whose payload names a different class than the object it edits. */
     public static final String LIVE_WRONG_TYPE = "live.wrongType";
 

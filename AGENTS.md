@@ -243,8 +243,11 @@ reaches fields directly and the JVM refuses that for records without
 `--add-exports java.base/jdk.internal.misc=ALL-UNNAMED`. It fails at the first remote call rather
 than at compile time, so it looks like a networking fault. Public fields, public no-arg constructor.
 
-**A query returns values, not live graph nodes.** Whatever it returns is serialized to the caller,
-so returning a deeply-connected entity ships its reachable graph. Copy or reduce first.
+**A query must return copies or plain values.** When this process owns the store, `query` runs on
+the real graph and returns exactly what `execute` returned, with no copy, so changing a returned
+object changes the graph outside any transaction and without saving it. Only a process that does not
+own the store gets a serialized copy, and there a deeply-connected entity ships its reachable graph.
+Copy or reduce first, in every mode.
 
 **Never start a write inside a read block.** A read lock cannot be upgraded; the engine throws
 rather than deadlocking.
@@ -275,6 +278,7 @@ This is the decision developers most often get wrong. Ask in order:
 2. Does the client need an answer, or is it invoking a named operation
    ("approve", "checkout", "log in")?
    Yes -> RMI call on an @RmiService. Stop.
+          If the work can pass 30 seconds: the same, returning SlowCall<T>.
 
 3. Does the data belong to somebody rather than to everybody?
    Yes -> scope it, then continue to 4 to pick the mechanism.
@@ -372,6 +376,48 @@ button.addClickListener(e -> new Thread(() -> service.save(item)).start());
 
 That is a green thread re-entering TeaVM's scheduler, not parallelism. The router does this
 internally for every navigation.
+
+## Slow calls (0.11.0+)
+
+Every RMI call fails at 30 seconds. Work that can pass that returns `SlowCall<T>`:
+
+```java
+// shared
+SlowCall<JobReport> writeReport();                                  // on an @RmiService
+
+// server
+@Inject SlowCalls slowCalls;
+public SlowCall<JobReport> writeReport() {
+    return slowCalls.start(REPORT_KEY, job -> {
+        job.progress(10, "Reading the build log");
+        return model.report();
+    });
+}
+
+// client
+SlowCall<JobReport> report = new JobService_Stub().writeReport();   // or SlowCall.find(REPORT_KEY)
+Effect.create(() -> show(report.state()));                          // no timer, no polling
+```
+
+- **Do not generate** a pending state, a result store, polling, or a thread that reports through a
+  signal. This replaces all of them, and it survives a reconnect and a reload.
+- The key names the work per caller. A running key joins, an ended key runs again.
+  `SlowCall.find(key)` is how a screen finds the work after a reload, and it starts nothing.
+- The owner is the signed-in user within the tenant, or the browser id when anonymous, taken from the
+  connection. It is never a session id. Connections learn of changes through a board on `0x17
+  SIGNAL_UPD` named `zeroz.slowcalls`, and fetch a value with `SlowCallRpc.collect`. No opcode was
+  added.
+- `@Secured`, `@RolesAllowed` and validation apply to the service method, so they run before the work.
+- The work runs on a thread from `SessionThreads.factory()` with the caller's `RmiRequestContext` and
+  a request scope. `getSessionId()` is null there.
+- Results are in memory: 60 minutes (`zeroz.slowcall.keepMinutes`), 16 per owner
+  (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner (`zeroz.slowcall.maxRunningPerClient`) and
+  1,000 per server (`zeroz.slowcall.maxRunning`). A restart loses them, and a page that was following
+  the work shows a sentence.
+- `ClientVisibleException` keeps its sentence. Anything else is the reference sentence with the real
+  message in the log, the same as a failed call.
+
+See [docs/guides/slow-calls.md](docs/guides/slow-calls.md).
 
 ## When nothing happens
 
@@ -621,7 +667,7 @@ is built. See [docs/PWA.md](docs/PWA.md).
 | `todo-signals` | Local signals, `Computed`, `Effect` in isolation |
 | `chat-events` | `EventTopic` / `EventPublisher` / `ServerEvents`, deliberately without signals |
 | `chat-livesync` | `@LiveSync` both ways: the message list comes down into an `Effect`, the topic box is `@ClientWritable` and goes up, and `LiveMutationRefusals` tells the person when the server would not have their edit |
-| `job-monitor` | `Signals.shared` driven from a server-side virtual thread |
+| `job-monitor` | `Signals.shared` driven from a server-side virtual thread, and a `SlowCall` report that outlasts the 30 second limit |
 | `form-signup` | Validation annotations, generated `_Rules`, `Computed` form validity |
 | `inventory-crud` | Master-detail CRUD, local signals, `Computed` KPIs |
 | `components-showcase` | The component library gallery |

@@ -2067,7 +2067,7 @@ public class WasmRmiServerEngine implements EventPublisher {
     }
 
     /** A short code, unique enough to find one log line among a day of them. */
-    private static String newErrorReference() {
+    static String newErrorReference() {
         long bits = java.util.concurrent.ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFL;
         String hex = Long.toHexString(bits);
         while (hex.length() < 8) {

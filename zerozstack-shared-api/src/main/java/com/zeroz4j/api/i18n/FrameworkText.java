@@ -82,6 +82,9 @@ public final class FrameworkText {
             FrameworkKeys.ACCESS_DENIED,
             FrameworkKeys.VALIDATION_FAILED,
             FrameworkKeys.UNKNOWN_LAZY_HANDLE,
+            FrameworkKeys.SLOW_TOO_MANY,
+            FrameworkKeys.SLOW_SERVER_BUSY,
+            FrameworkKeys.SLOW_LOST,
             FrameworkKeys.LIVE_WRONG_TYPE,
             FrameworkKeys.LIVE_NOT_CLIENT_WRITABLE,
             FrameworkKeys.LIVE_VALIDATION_FAILED,
@@ -127,6 +130,12 @@ public final class FrameworkText {
                 return "Validation failed for {0}: {1}";
             case FrameworkKeys.UNKNOWN_LAZY_HANDLE:
                 return "Unknown or unauthorized lazy handle: {0}";
+            case FrameworkKeys.SLOW_TOO_MANY:
+                return "Too many slow calls are running. Wait for one to finish.";
+            case FrameworkKeys.SLOW_SERVER_BUSY:
+                return "The server is busy. Try again in a moment.";
+            case FrameworkKeys.SLOW_LOST:
+                return "The server no longer has this work. Start it again.";
             case FrameworkKeys.LIVE_WRONG_TYPE:
                 return "The change claims to be a {0} but names an object the server holds as a {1}."
                         + " Nothing was changed.";
@@ -170,6 +179,21 @@ public final class FrameworkText {
     }
 
     // ---------------------------------------------------------------- one method per refusal
+
+    /** @return the refusal when a browser or user is running as many slow calls as it may */
+    public static Message slowCallTooMany() {
+        return new Message(CATALOG, FrameworkKeys.SLOW_TOO_MANY);
+    }
+
+    /** @return the refusal when the whole server is running as many slow calls as it may */
+    public static Message slowCallServerBusy() {
+        return new Message(CATALOG, FrameworkKeys.SLOW_SERVER_BUSY);
+    }
+
+    /** @return what a screen says about a slow call the server no longer has */
+    public static Message slowCallLost() {
+        return new Message(CATALOG, FrameworkKeys.SLOW_LOST);
+    }
 
     /**
      * @param reference the code that also appears in the server log

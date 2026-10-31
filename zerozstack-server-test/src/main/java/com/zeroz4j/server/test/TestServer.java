@@ -27,6 +27,8 @@ import com.zeroz4j.server.LiveMutexRpcImpl;
 import com.zeroz4j.server.ObjectMapperProducer;
 import com.zeroz4j.server.ServerConfig;
 import com.zeroz4j.server.ServerRuntime;
+import com.zeroz4j.server.SlowCallRpcImpl;
+import com.zeroz4j.server.SlowCalls;
 import com.zeroz4j.server.SyncEngine;
 import com.zeroz4j.server.WasmRmiServerEngine;
 import jakarta.websocket.CloseReason;
@@ -205,7 +207,30 @@ public final class TestServer implements AutoCloseable {
         return open(language, user, null, roles);
     }
 
+    /**
+     * Drops a connection and opens the next one for the same browser and the same person, which is
+     * what a reconnect and a page reload both are to a server: a new session id, and the same
+     * browser id, sign-in, roles, tenant and language.
+     *
+     * @param connection the connection to replace; closed first if it is still open
+     * @return the new connection
+     * @since 0.11.0
+     */
+    public TestConnection reconnect(TestConnection connection) {
+        requireRunning();
+        if (connection.isOpen()) {
+            closeConnection(connection);
+        }
+        return open(connection.language(), connection.user(), connection.tenant(),
+                connection.browserId(), connection.roles());
+    }
+
     private TestConnection open(String language, String user, String tenant, String... roles) {
+        return open(language, user, tenant, null, roles);
+    }
+
+    private TestConnection open(String language, String user, String tenant, String sameBrowser,
+                                String... roles) {
         requireRunning();
         String connectionId = name + "-c" + connectionSerial.incrementAndGet();
         TestConnection connection = new TestConnection(this, connectionId);
@@ -220,7 +245,7 @@ public final class TestServer implements AutoCloseable {
         }
         // Every connection carries a browser id, the way a real one does: it is what Scope.CLIENT
         // uses, and what the record of "we sent this browser that object" is kept under.
-        String browserId = connectionId + "-browser";
+        String browserId = sameBrowser != null ? sameBrowser : connectionId + "-browser";
         // Narrowed the same way a real handshake narrows it, so a test cannot put a connection in
         // a state no browser could reach - asking for a language this deployment does not have.
         String spoken = language == null ? null
@@ -504,6 +529,8 @@ public final class TestServer implements AutoCloseable {
             all.add(LiveMutexManager.class);
             all.add(LiveMutexRpcImpl.class);
             all.add(FileUploadRpcImpl.class);
+            all.add(SlowCalls.class);
+            all.add(SlowCallRpcImpl.class);
             all.addAll(beans);
 
             Weld weld = new Weld(serverName)

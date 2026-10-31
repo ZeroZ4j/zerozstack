@@ -18,8 +18,17 @@
 package com.zeroz4j.example.api;
 
 import com.zeroz4j.api.RmiService;
+import com.zeroz4j.api.SlowCall;
+import com.zeroz4j.example.model.JobReport;
 
 @RmiService
 public interface JobService {
+
+    /** What the report's slow call is called, on both tiers. */
+    String REPORT_KEY = "job-report";
+
     void startJob();
+
+    /** Takes about forty seconds, which a plain remote call could not. */
+    SlowCall<JobReport> writeReport();
 }

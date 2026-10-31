@@ -117,6 +117,38 @@ class VidocqServerTest {
         }
     }
 
+    // ------------------------------------------------------------------ slow call
+
+    @Test
+    @DisplayName("a slow call runs here, and the next connection of the same user collects it")
+    @SuppressWarnings("unchecked")
+    void slowCall() throws Exception {
+        String login = "/wasm-rmi?user=demo&password=demo";
+        com.zeroz4j.api.SlowCall<String> call;
+        try (Client client = Client.connect(login, "http://" + host, null)) {
+            client.auth();
+            call = (com.zeroz4j.api.SlowCall<String>) client.call(
+                    SlowPingService.class.getName(), "slowPing");
+        }
+        try (Client client = Client.connect(login, "http://" + host, null)) {
+            client.auth();
+            String rpc = com.zeroz4j.api.SlowCallRpc.class.getName();
+            Object answer = client.call(rpc, "collect", call.id());
+            long deadline = System.currentTimeMillis() + 5_000L;
+            while (answer instanceof RefusedCall && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+                answer = client.call(rpc, "collect", call.id());
+            }
+            assertEquals("pong demo", answer);
+        }
+        try (Client stranger = Client.connect("/wasm-rmi?user=admin&password=admin",
+                "http://" + host, null)) {
+            stranger.auth();
+            assertTrue(stranger.call(com.zeroz4j.api.SlowCallRpc.class.getName(), "collect",
+                    call.id()) instanceof RefusedCall, "another user is refused");
+        }
+    }
+
     // ------------------------------------------------------------------ (c) foreign origin
 
     @Test
