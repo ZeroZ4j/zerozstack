@@ -147,7 +147,6 @@ public class Login extends Card {
         super();
         addClassName("w-96");
         addClassName("max-w-full");
-        addClassName("bg-base-200");
         addClassName("shadow-xl");
         addClassName("mx-auto");
         addClassName("mt-24");

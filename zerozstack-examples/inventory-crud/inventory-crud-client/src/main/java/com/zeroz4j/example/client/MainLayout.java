@@ -37,14 +37,14 @@ public class MainLayout extends HorizontalLayout {
         super();
         addClassName("h-screen");
         addClassName("w-screen");
-        addClassName("bg-base-100");
+        addClassName("bg-base-200");
         addClassName("text-base-content");
         addClassName("flex");
 
         // --- Sidebar ---
         VerticalLayout sidebar = new VerticalLayout();
         sidebar.addClassName("w-64");
-        sidebar.addClassName("bg-base-200");
+        sidebar.addClassName("bg-base-100");
         sidebar.addClassName("h-full");
         sidebar.addClassName("p-0");
         sidebar.addClassName("flex-shrink-0");

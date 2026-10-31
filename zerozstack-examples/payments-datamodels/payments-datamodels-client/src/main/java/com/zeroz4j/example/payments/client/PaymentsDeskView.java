@@ -211,7 +211,7 @@ public class PaymentsDeskView extends VerticalLayout {
         Card card = new Card();
         card.addClassName("flex-1");
         card.addClassName("min-w-[20rem]");
-        card.addClassName("bg-base-200");
+        card.addClassName("bg-base-100");
         card.add(new CardTitle("This sale"));
 
         itemName.withLabel("What are they buying?");
@@ -344,7 +344,7 @@ public class PaymentsDeskView extends VerticalLayout {
         Card card = new Card();
         card.addClassName("flex-1");
         card.addClassName("min-w-[20rem]");
-        card.addClassName("bg-base-200");
+        card.addClassName("bg-base-100");
         card.add(new CardTitle("How they are paying"));
 
         kindSelect.withLabel("Payment kind");
@@ -545,7 +545,7 @@ public class PaymentsDeskView extends VerticalLayout {
         Card card = new Card();
         card.addClassName("flex-1");
         card.addClassName("min-w-[22rem]");
-        card.addClassName("bg-base-200");
+        card.addClassName("bg-base-100");
         card.add(new CardTitle("The ledger"));
 
         Div rows = new Div();

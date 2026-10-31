@@ -143,7 +143,7 @@ public class TodoView extends Card {
 
         // Task list container
         Div taskListContainer = new Div();
-        taskListContainer.addClassName("bg-base-200");
+        taskListContainer.addClassName("bg-base-100");
         taskListContainer.addClassName("rounded-box");
         taskListContainer.addClassName("p-2");
         add(taskListContainer);

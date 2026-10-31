@@ -17,6 +17,7 @@
  */
 package com.zeroz4j.server;
 
+import com.zeroz4j.api.ThemeBase;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -329,7 +330,27 @@ public final class StaticContent {
         } catch (IOException ex) {
             return null;
         }
-        return withThemeScript(withBaseHref(html, contextPath)).getBytes(StandardCharsets.UTF_8);
+        return withThemeBase(withThemeScript(withBaseHref(html, contextPath))).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Inserts {@link ThemeBase#CSS} at the end of {@code <head>}, so the page and its panels have
+     * their colors before anything is drawn. A document that already has it is left alone, as is
+     * one without a head.
+     *
+     * @param html the document
+     * @return the document, with the style element when it needed one
+     */
+    public static String withThemeBase(String html) {
+        if (html == null || html.contains(ThemeBase.STYLE_ID)) {
+            return html;
+        }
+        int close = html.toLowerCase(Locale.ROOT).indexOf("</head>");
+        if (close < 0) {
+            return html;
+        }
+        return html.substring(0, close) + "<style id=\"" + ThemeBase.STYLE_ID + "\">" + ThemeBase.CSS
+                + "</style>\n" + html.substring(close);
     }
 
     /**

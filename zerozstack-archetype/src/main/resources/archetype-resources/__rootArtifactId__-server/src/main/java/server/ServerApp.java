@@ -25,6 +25,6 @@ public class ServerApp {
         LogManager.getLogManager().readConfiguration(
             ServerApp.class.getResourceAsStream("/logging.properties"));
             
-        Zeroz4jServer.start(8080, "Zeroz4j Archetype App").join();
+        Zeroz4jServer.start(Integer.getInteger("zeroz.port", 8080), "Zeroz4j Archetype App").join();
     }
 }

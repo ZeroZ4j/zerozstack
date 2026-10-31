@@ -131,7 +131,7 @@ public abstract class ComponentShowcase extends VerticalLayout {
     protected void addSection(String title, Component... components) {
         Card sectionCard = new Card();
         sectionCard.addClassName("p-6");
-        sectionCard.addClassName("bg-base-200");
+        sectionCard.addClassName("bg-base-100");
         sectionCard.addClassName("shadow");
         
         sectionCard.add(new CardTitle(title));

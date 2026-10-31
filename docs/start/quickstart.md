@@ -60,7 +60,7 @@ somewhere else, add `--port 9000` to the command, or pass the number to `run.bat
 
 !!! note "`mvn exec:java` never works, and most examples have no runnable jar"
     There is no `exec-maven-plugin` anywhere, so `mvn exec:java` fails in every module. Eight of the
-    twelve examples also have no runnable jar — `todo-signals`, `chat-events`, `chat-livesync`,
+    thirteen examples also have no runnable jar — `todo-signals`, `chat-events`, `chat-livesync`,
     `job-monitor`, `form-signup`, `inventory-crud`, `components-showcase` and
     `payments-datamodels` — because no shade or assembly plugin is configured for them. For those
     eight, the classpath command above is the way, and it is what `run.bat` does. The four added in

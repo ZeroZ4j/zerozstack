@@ -66,7 +66,7 @@ public class ProjectDetailView implements RouteView<ProjectDetailView.Data> {
     public Component render(Data data, RouteParams params) {
         Div taskRows = Ui.box("flex flex-col gap-2");
         for (Task task : data.tasks) {
-            taskRows.add(Ui.box("flex items-center gap-3 p-3 rounded bg-base-200",
+            taskRows.add(Ui.box("flex items-center gap-3 p-3 rounded bg-base-100",
                     Ui.text(task.isDone() ? "done" : "open",
                             "badge " + (task.isDone() ? "badge-success" : "badge-warning")),
                     Ui.routerLink("/projects/" + data.project.getId() + "/tasks/" + task.getId(),

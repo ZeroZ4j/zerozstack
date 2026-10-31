@@ -78,7 +78,7 @@ public final class ContextMenu {
     private HTMLElement openedFrom;
 
     public ContextMenu() {
-        menu.addClassName("menu bg-base-200 rounded-box shadow-xl border border-base-300 "
+        menu.addClassName("menu bg-base-100 rounded-box shadow-xl border border-base-300 "
             + "w-56 p-1 " + TextStyle.SECONDARY.getClassNames(Emphasis.FULL));
         menu.setStyle("position", "fixed");
         HasLayer.applyTo(menu, Layer.DROPDOWN);

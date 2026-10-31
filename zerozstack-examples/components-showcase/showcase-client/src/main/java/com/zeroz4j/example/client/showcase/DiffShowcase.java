@@ -40,7 +40,7 @@ public class DiffShowcase extends ComponentShowcase {
         item2.addClassName("diff-item-2");
         
         Div content2 = new Div("ZEROZ4J - BASE");
-        content2.addClassName("bg-base-200 text-base-content text-3xl font-black grid place-content-center h-full");
+        content2.addClassName("bg-base-100 text-base-content text-3xl font-black grid place-content-center h-full");
         item2.add(content2);
 
         Div resizer = new Div();

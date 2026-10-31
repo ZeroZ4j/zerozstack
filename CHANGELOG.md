@@ -8,85 +8,85 @@ changes may land in a minor version while the design settles.
 ZeroZ4j is an experimental proof-of-concept. Read each release's **Breaking** section before
 upgrading.
 
-## [Unreleased]
+## [0.11.0] — 2026-10-31
 
-An application's AI assistant used to read the rules in the jar and stop there, and so it rebuilt
-components that exist and met failures the guides already describe. The documentation for the exact
-version now ships in the same jar, and the rules say which page to read before which task.
+This release fills in what three real applications kept building for themselves. Signing in with a
+password is now one `SignInHandler` and `new Login()`: a real form that password managers fill, a
+session cookie that renews itself, and a way to revoke a session. Work that can pass the 30 second
+limit on a remote call is `SlowCall`. Audio, video, embedded pages, downloads with byte ranges and
+uploads with a limit per kind are in the library, and so are a complete light, dark and system theme
+and named surfaces that hold up on a dark page.
+
+The rest is about what goes wrong quietly. An uncaught error in the browser now reaches the server
+log, a failed start shows a sentence instead of a blank page, and copy buttons actually copy.
+`-Pproduction` in a generated application builds one small local stylesheet instead of loading
+Tailwind from a CDN. An application's AI assistant now finds the documentation for its exact version
+inside the jar, and the rules say which page to read before which task.
+
+**Four things in the Breaking section can catch an application.** The page is now `base-200`, so a
+box painted `bg-base-200` disappears into it. A `data-theme` left on `body` stops the theme toggle
+working. `ThemeController` no longer carries DaisyUI's `theme-controller`
+class. And the text of a timed-out call changed, so code that matches the old words stops matching.
+
+### Breaking
+
+- **The page is now `base-200`, and a box painted `bg-base-200` disappears into it.** The stock
+  themes put the page, a panel and an edge within a few percent of each other, which is why every
+  application so far wrote a theme file to tell them apart. The library now sets those colors for
+  `light` and `dark` in every shell the server sends: a gray page (`#E7EBF0`), white panels and a
+  visible hairline, and in dark a near-black page, lighter panels and a hairline lighter than both.
+  The page is drawn in `base-200` whatever class is on `body`. If you painted a box or a sidebar
+  `bg-base-200`, use `Surface.PANEL.applyTo(box)` or `bg-base-100`. If you have your own theme file
+  outside a cascade layer, nothing changes, and a theme with any other name is not touched. `Menu`,
+  `Drawer`, `ContextMenu` and `Login` are now `base-100`, and so is every panel in the examples.
+  See `docs/UI_COMPONENTS.md`.
+- **A `data-theme` on `body` now stops the theme changing.** `Theme` and `Js.setTheme` set
+  `data-theme` on the `html` element, and a value on `body` wins over it, so the toggle moves and the
+  page keeps its colors. `Js.setTheme` removes one it finds on `body`, but `Theme` does not touch your
+  page. If your `index.html` has `<body data-theme="...">`, take the attribute out and call
+  `Theme.start()` in `main`. For a fixed look, put `data-theme` on `<html>` instead.
+- **`ThemeController` no longer uses DaisyUI's `theme-controller` class.** It is driven by `Theme`:
+  the icon shows the theme that is showing now, also when it comes from the system, and pressing it
+  stores the choice. Existing code compiles. If you had CSS or a test that looked for that class, or
+  read the checkbox to find the theme, use `Theme.showing()`.
+- **A timed-out call has a new message.** `RequestTimeoutException` kept its type, but its message
+  used to read `RMI call Service#method (request 7) timed out: no answer within 30000 ms`, and
+  applications showed that to people. It is now "The server did not answer in time. Try again." and
+  the call and the deadline go to the browser console. If you matched the old text, catch
+  `RequestTimeoutException` instead.
 
 ### Added
 
-- **`-Pproduction` builds a finished stylesheet in a generated application.** The two CDN style tags
-  in `index.html` (Tailwind running in the browser, daisyUI's whole stylesheet) are replaced by one
-  minified local file with only the classes in use. The build downloads the pinned Tailwind 4.1.16
-  standalone executable and daisyUI 5.6.14 bundle once into `~/.zeroz4j/cache`, checks their SHA-256
-  and fails on a mismatch. `zerozstack-ui-components` now ships the list of its CSS classes
-  (`META-INF/zeroz4j/css/library-classes.txt`, written at its build from its sources, including names
-  built by joining a prefix and a color or size). The archetype's `index.html` gains two
-  `zeroz4j:styles` comments the build looks for; **an application generated earlier needs them added
-  before `-Pproduction` will build a stylesheet**. The ordinary build is unchanged, and the
-  repository's examples stay on the CDN tags. See `docs/guides/packaging.md`.
-- **`zerozstack-dev-tomcat`: run a WAR application in development without a container.**
-  `Zeroz4jDevServer.builder().port(8080).contextPath("/app").beans(...).servlet(...).start()` starts
-  embedded Tomcat and Weld with no classpath scan, with the framework's listener, the WebSocket
-  endpoint and the shell servlet wired as a container would. Servlets are mapped from their own
-  `@WebServlet` and created through CDI. Development only: take it with test or provided scope, and
-  no runtime module depends on it. If you hand-built Tomcat and Weld for this, this replaces it. See
-  `docs/guides/war-dev-server.md`.
-- **Copy buttons copy.** `CodeBlock` and `PropertyGrid` said "Copied" and put nothing on the
-  clipboard, because their listener ran on a new thread and the browser refuses the clipboard there.
-  The copy now runs inside the click, and the label says "Copied" only when the browser accepted it
-  and "Copy failed" otherwise. `Component.addGestureListener(type, listener)` is the supported way
-  to add a listener that needs the click's own stack (clipboard, microphone, install prompt), and
-  `Js.copyToClipboard(text, result)` reports the outcome.
-- **`Background`** (`com.zeroz4j.client`): `run(task)` runs a remote call from a timer, a callback or
-  an `Effect`; `after(millis, task)` runs it once later; `every(millis, task)` polls, starts the next
-  run after the last one ends, survives a failure, and returns a `Disposable` that stops it.
-- **`Browser`** (`com.zeroz4j.ui`): storage that tolerates being blocked, `open`, `goTo`, `path`,
-  `scrollToBottom`, `scrollIntoView`, `download` through a hidden link, and `warn`. `Theme` now uses
-  its storage.
-- **`DateField`, `TimeField`, `NumberField`**: values as `LocalDate`, `LocalTime` and `Double`, with
-  `withLabel` and the other three field methods, and no date library.
-- **`El`**, a plain element component of any tag, and **`RouteLink`**, a link the router takes over
-  with `setCurrent(boolean)` for `aria-current`.
-- **Icons**: `lock`, `mic`, `calendar`, `bell`, `user`, `users`, `mail`, `phone`, `download`,
-  `paperclip`, `eye`, `check-circle`, `help`, `log-out`, `sun`, `moon`, `more`, `credit-card`,
-  `trending-up`, `switch`, and `Icon.ofShapes(...)` for your own shapes.
-- **`Select.setOptions(map)`** for options whose value differs from their text.
-- **Chart series colors from the theme.** `Palette` reads `--color-chart-1` to `--color-chart-8`
-  and falls back to the DaisyUI colors.
-- **`Pwa.pushState()`** (unsupported, iOS not installed, denied, granted, ask) and
-  **`Pwa.deviceLabel()`**.
-
-### Fixed
-
-- `Js.eventKey` returned `undefined` as a broken String for events without a key; it now returns the
-  empty string.
-- `Js.localGet` and `Js.localSet` no longer throw when storage is blocked.
-
-### Changed
-
-- The `chat-events`, `chat-livesync`, `form-signup`, `inventory-crud` and `job-monitor` examples use
-  `Theme` through `ThemeController` and no longer set `data-theme` on `body`.
-- `slf4j-simple` is 2.0.20 in the archetype and in every server module.
-
-- **Surfaces: `com.zeroz4j.ui.theme.Surface`.** `PAGE`, `PANEL`, `TILE`, `SUNKEN`, `RAISED` and
-  `OVERLAY`, used as `Surface.PANEL.applyTo(component)` or `Surface.TILE.div()`, drawn from the text
-  color so they read in light and dark. Three applications had repaired the same fault in their own
-  CSS: on a dark theme the page, a box and its border were close grays, and `base-300` was darker
-  than the box it outlined. If you wrote `bg-base-100 border border-base-300 shadow-sm`, use a
-  surface. Styles: `--zeroz4j-surface-edge`, `--zeroz4j-surface-shade`, `--zeroz4j-surface-radius`.
-  See [Naming surfaces](docs/UI_COMPONENTS.md#naming-surfaces).
-- **Uncaught browser errors go to the server log.** An error or an unhandled rejection in the browser
-  is written to the log `com.zeroz4j.client` with a six-character reference, from the user and page
-  it happened on. Limited to 20 per connection and 120 a minute per server, cut to length, line
-  breaks removed. On by default. `zeroz.clienterrors.enabled=false` and
-  `zeroz.clienterrors.maxPerConnection` on the server, `Zeroz4jClient.reportErrors(false)` in the
-  browser. It uses an internal service, `ClientErrorRpc`, so no opcode was added. If you wrote an
-  `onerror` handler that posts to your server, delete it.
-- **A failed start shows a sentence instead of a blank page.** "Could not start the application.",
-  "Could not connect to the server." or "Sign-in was refused.", with a Reload button, in an empty
-  `#app-root`. `Zeroz4jClient.showStartFailure(false)` turns it off.
+- **Cookie sign-in.** Write one `@ApplicationScoped` `SignInHandler` and put `new Login()` on the
+  screen. The framework answers `POST /zeroz4j-session/sign-in`, `/sign-out` and `/renew` under
+  Helidon, in a WAR and on Vidocq, and sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie that
+  lasts 30 days and slides, up to a year from the password. It goes back to the page the person asked
+  for, refuses requests from other sites with `CrossSiteGuard`, limits attempts per name, closes a
+  connection after 8 hours so the reconnect is checked again, and takes roles from
+  `SignInHandler.resume` at every handshake. `SignInSessions.current().revokeUser(...)` and
+  `revokeSession(...)` close live connections and stop the cookies working. The cookie is read after
+  any `AuthenticationProvider`, so it sits beside OIDC and the development logins. See
+  [Signing in with a cookie](docs/guides/cookie-sign-in.md) and the `sign-in` example on port 8093.
+- **`Login` is a real HTML form.** Both fields have `name` and `autocomplete`, so password managers
+  fill it, and `new Login()` posts natively so browsers offer to save the password. A refused sign-in
+  comes back with the name still in the box. Existing `new Login(listener)` code compiles and
+  behaves as before, and reads the fields directly, so an autofilled value is no longer missed.
+- **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
+  as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
+  `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
+  gets running with progress, finished with the value, failed with a sentence, or canceled, with no
+  timer and no polling. The work belongs to the signed-in user within the tenant, or to the browser id
+  when anonymous, so it survives a reconnect and a page reload, and `SlowCall.find(key)` finds it
+  again after a reload. `call.cancel()` interrupts it. It runs with the caller's `RmiRequestContext`
+  and a request scope, except that `getSessionId()` is null. If you wrote start, pending state and
+  resume by hand, this replaces them. Results are in memory: 60 minutes
+  (`zeroz.slowcall.keepMinutes`), 16 per owner (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner
+  (`zeroz.slowcall.maxRunningPerClient`) and 1,000 per server (`zeroz.slowcall.maxRunning`). A restart
+  loses them, and a page that was following the work shows a sentence. `zeroz.slowcall.maxMinutes` sets
+  a time limit, and it is 0 by default, meaning none. Work past it is stopped, its running slot is
+  freed even if it ignores the interrupt, and the page shows "The work took too long." No opcode or type tag was added:
+  the state travels on `0x17 SIGNAL_UPD` and only a browser that uses a slow call is sent anything.
+  See `docs/guides/slow-calls.md`. The `job-monitor` example's report is one.
 - **Media: `AudioPlayer`, `VideoPlayer` and `EmbeddedFrame`.** The players use the browser's own controls
   and add `setSource`, `setServerFile(kind, id)`, `play`, `pause`, `seekTo`, `skip`, `setPlaybackRate`, an
   optional Speed list, the signals `position()`, `duration()`, `playing()` and `playbackRate()`, and
@@ -109,20 +109,69 @@ version now ships in the same jar, and the rules say which page to read before w
   counts. A box with no kind reaches the handler with an empty kind, so existing code is unchanged. Large
   files were already copied to disk in 64 KB pieces; Vidocq's request ceiling now follows the largest
   limit of any kind. `FileUploadRpc` gains `maxUploadBytesFor` and `requestUploadPassFor`.
-- **Cookie sign-in.** Write one `@ApplicationScoped` `SignInHandler` and put `new Login()` on the
-  screen. The framework answers `POST /zeroz4j-session/sign-in`, `/sign-out` and `/renew` under
-  Helidon, in a WAR and on Vidocq, and sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie that
-  lasts 30 days and slides, up to a year from the password. It goes back to the page the person asked
-  for, refuses requests from other sites with `CrossSiteGuard`, limits attempts per name, closes a
-  connection after 8 hours so the reconnect is checked again, and takes roles from
-  `SignInHandler.resume` at every handshake. `SignInSessions.current().revokeUser(...)` and
-  `revokeSession(...)` close live connections and stop the cookies working. The cookie is read after
-  any `AuthenticationProvider`, so it sits beside OIDC and the development logins. See
-  [Signing in with a cookie](docs/guides/cookie-sign-in.md) and the `sign-in` example on port 8093.
-- **`Login` is a real HTML form.** Both fields have `name` and `autocomplete`, so password managers
-  fill it, and `new Login()` posts natively so browsers offer to save the password. A refused sign-in
-  comes back with the name still in the box. Existing `new Login(listener)` code compiles and
-  behaves as before, and reads the fields directly, so an autofilled value is no longer missed.
+- **`Theme`: light, dark and system, stored, in the library.** `Theme.start()` in `main` reads the
+  stored choice (`localStorage`, failure tolerated), sets `data-theme` on the `html` element and
+  follows the operating system live. `Theme.choose(Theme.Choice.LIGHT/DARK/SYSTEM)`, `Theme.choice()`
+  and `Theme.showing()` (read-only signals; `showing()` is light or dark also when the system decides)
+  and `Theme.configure(light, dark)` for an application's own DaisyUI theme names. The server's shell
+  reads the stored choice in a small inline script at the end of `<head>`, so a returning visitor
+  sees no flash; a shell that mentions `zeroz4j.theme` is left alone. An application's own CSS
+  follows with two selectors, `:root[data-theme="dark"]` and
+  `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`, described in `UI_COMPONENTS.md`.
+- **`ThemeSelector`: Light, Dark, System in one control**, for a settings screen.
+- **The archetype calls `Theme.start()`**, and `todo-signals` and `components-showcase` use the new API.
+- **Surfaces: `com.zeroz4j.ui.theme.Surface`.** `PAGE`, `PANEL`, `TILE`, `SUNKEN`, `RAISED` and
+  `OVERLAY`, used as `Surface.PANEL.applyTo(component)` or `Surface.TILE.div()`, drawn from the text
+  color so they read in light and dark. Three applications had repaired the same fault in their own
+  CSS: on a dark theme the page, a box and its border were close grays, and `base-300` was darker
+  than the box it outlined. If you wrote `bg-base-100 border border-base-300 shadow-sm`, use a
+  surface. Styles: `--zeroz4j-surface-edge`, `--zeroz4j-surface-shade`, `--zeroz4j-surface-radius`.
+  See [Naming surfaces](docs/UI_COMPONENTS.md#naming-surfaces).
+- **Uncaught browser errors go to the server log.** An error or an unhandled rejection in the browser
+  is written to the log `com.zeroz4j.client` with a six-character reference, from the user and page
+  it happened on. Limited to 20 per connection and 120 a minute per server, cut to length, line
+  breaks removed. On by default. `zeroz.clienterrors.enabled=false` and
+  `zeroz.clienterrors.maxPerConnection` on the server, `Zeroz4jClient.reportErrors(false)` in the
+  browser. It uses an internal service, `ClientErrorRpc`, so no opcode was added. If you wrote an
+  `onerror` handler that posts to your server, delete it.
+- **A failed start shows a sentence instead of a blank page.** "Could not start the application.",
+  "Could not connect to the server." or "Sign-in was refused.", with a Reload button, in an empty
+  `#app-root`. `Zeroz4jClient.showStartFailure(false)` turns it off.
+- **`-Pproduction` builds a finished stylesheet in a generated application.** The two CDN style tags
+  in `index.html` (Tailwind running in the browser, daisyUI's whole stylesheet) are replaced by one
+  minified local file with only the classes in use. The build downloads the pinned Tailwind 4.1.16
+  standalone executable and daisyUI 5.6.14 bundle once into `~/.zeroz4j/cache`, checks their SHA-256
+  and fails on a mismatch. `zerozstack-ui-components` now ships the list of its CSS classes
+  (`META-INF/zeroz4j/css/library-classes.txt`, written at its build from its sources, including names
+  built by joining a prefix and a color or size). The archetype's `index.html` gains two
+  `zeroz4j:styles` comments the build looks for; **an application generated earlier needs them added
+  before `-Pproduction` will build a stylesheet**. The ordinary build is unchanged, and the
+  repository's examples stay on the CDN tags. See `docs/guides/packaging.md`.
+- **`zerozstack-dev-tomcat`: run a WAR application in development without a container.**
+  `Zeroz4jDevServer.builder().port(8080).contextPath("/app").beans(...).servlet(...).start()` starts
+  embedded Tomcat and Weld with no classpath scan, with the framework's listener, the WebSocket
+  endpoint and the shell servlet wired as a container would. Servlets are mapped from their own
+  `@WebServlet` and created through CDI. Development only: take it with test or provided scope, and
+  no runtime module depends on it. If you hand-built Tomcat and Weld for this, this replaces it. See
+  `docs/guides/war-dev-server.md`.
+- **`Background`** (`com.zeroz4j.client`): `run(task)` runs a remote call from a timer, a callback or
+  an `Effect`; `after(millis, task)` runs it once later; `every(millis, task)` polls, starts the next
+  run after the last one ends, survives a failure, and returns a `Disposable` that stops it.
+- **`Browser`** (`com.zeroz4j.ui`): storage that tolerates being blocked, `open`, `goTo`, `path`,
+  `scrollToBottom`, `scrollIntoView`, `download` through a hidden link, and `warn`. `Theme` now uses
+  its storage.
+- **`DateField`, `TimeField`, `NumberField`**: values as `LocalDate`, `LocalTime` and `Double`, with
+  `withLabel` and the other three field methods, and no date library.
+- **`El`**, a plain element component of any tag, and **`RouteLink`**, a link the router takes over
+  with `setCurrent(boolean)` for `aria-current`.
+- **Icons**: `lock`, `mic`, `calendar`, `bell`, `user`, `users`, `mail`, `phone`, `download`,
+  `paperclip`, `eye`, `check-circle`, `help`, `log-out`, `sun`, `moon`, `more`, `credit-card`,
+  `trending-up`, `switch`, and `Icon.ofShapes(...)` for your own shapes.
+- **`Select.setOptions(map)`** for options whose value differs from their text.
+- **Chart series colors from the theme.** `Palette` reads `--color-chart-1` to `--color-chart-8`
+  and falls back to the DaisyUI colors.
+- **`Pwa.pushState()`** (unsupported, iOS not installed, denied, granted, ask) and
+  **`Pwa.deviceLabel()`**.
 - **Application state on a connection.** `AuthenticatedPrincipal.withAttribute(name, value)` leaves a
   value on the connection at the handshake, for any `AuthenticationProvider`, and
   `RmiRequestContext.getSessionAttribute` and `setSessionAttribute` read and change it during a call.
@@ -132,22 +181,6 @@ version now ships in the same jar, and the rules say which page to read before w
   `-Dzeroz.settings.file` names. `zeroz.clientId.secret` and the other settings can live there too.
   Environment variables are not read.
 - **`TestServer.connectWithHeaders`** opens a connection through the real handshake.
-- **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
-  as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
-  `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen
-  gets running with progress, finished with the value, failed with a sentence, or canceled, with no
-  timer and no polling. The work belongs to the signed-in user within the tenant, or to the browser id
-  when anonymous, so it survives a reconnect and a page reload, and `SlowCall.find(key)` finds it
-  again after a reload. `call.cancel()` interrupts it. It runs with the caller's `RmiRequestContext`
-  and a request scope, except that `getSessionId()` is null. If you wrote start, pending state and
-  resume by hand, this replaces them. Results are in memory: 60 minutes
-  (`zeroz.slowcall.keepMinutes`), 16 per owner (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner
-  (`zeroz.slowcall.maxRunningPerClient`) and 1,000 per server (`zeroz.slowcall.maxRunning`). A restart
-  loses them, and a page that was following the work shows a sentence. `zeroz.slowcall.maxMinutes` sets
-  a time limit, and it is 0 by default, meaning none. Work past it is stopped, its running slot is
-  freed even if it ignores the interrupt, and the page shows "The work took too long." No opcode or type tag was added:
-  the state travels on `0x17 SIGNAL_UPD` and only a browser that uses a slow call is sent anything.
-  See `docs/guides/slow-calls.md`. The `job-monitor` example's report is one.
 - **`TestConnection.call(Service.class, "method", args...)` calls a service through the real engine**
   and returns the answer, or throws with the server's sentence. `awaitSlowCall`, `slowCallState` and
   `cancelSlowCall` follow a slow call, and `TestServer.reconnect(connection)` opens the next connection
@@ -166,30 +199,9 @@ version now ships in the same jar, and the rules say which page to read before w
   `docs/UI_COMPONENTS.md` so it cannot drift. New rules cover the 30 second request timeout as a design
   rule, what `ThemeController` does not do, how a `Checkbox` is sized, and which Java calls pass
   `mvn compile` but fail the browser build.
-- **`docs/guides/persistence.md` has an "Observed behavior" section.** It records what applications
-  found, each marked as confirmed or reported: deleted data stays in the storage files, a version
-  field in the root cannot tell you the store is old, every stored object costs heap while the store
-  is open, `ZeroZDbNode` cannot declare a field rename, enum constants are stored by position and
-  not checked by `SchemaCompatibility`, `DbQuery` can return live objects, and per-tenant stores are
-  never closed before shutdown.
-- **`troubleshooting.md` explains missing `System.Logger` lines.** `zerozstack-server-helidon` brings
-  `slf4j-jdk-platform-logging`, which hands those lines to SLF4J. With no SLF4J provider they are
-  dropped without a message in the log other than three start-up lines. The example servers have
-  `slf4j-simple`; the archetype's server did not until the next entry. If your server log has no Helidon lines, add a
-  provider to the server module.
-- **`Theme`: light, dark and system, stored, in the library.** `Theme.start()` in `main` reads the
-  stored choice (`localStorage`, failure tolerated), sets `data-theme` on the `html` element and
-  follows the operating system live. `Theme.choose(Theme.Choice.LIGHT/DARK/SYSTEM)`, `Theme.choice()`
-  and `Theme.showing()` (read-only signals; `showing()` is light or dark also when the system decides)
-  and `Theme.configure(light, dark)` for an application's own DaisyUI theme names. The server's shell
-  reads the stored choice in a small inline script at the end of `<head>`, so a returning visitor
-  sees no flash; a shell that mentions `zeroz4j.theme` is left alone. An application's own CSS
-  follows with two selectors, `:root[data-theme="dark"]` and
-  `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }`, described in `UI_COMPONENTS.md`.
-- **`ThemeSelector`: Light, Dark, System in one control**, for a settings screen.
-- **The archetype calls `Theme.start()`**, and `todo-signals` and `components-showcase` use the new API.
-- **`slf4j-simple` in the archetype's server module** (2.0.12, as in the example servers), so a
-  generated project no longer loses `System.Logger` lines. The `troubleshooting.md` entry is updated.
+- **`Component.addGestureListener(type, listener)`** adds a listener on the click's own stack, which
+  the clipboard, the microphone and the install prompt need. A normal listener runs on a new thread
+  and the browser refuses them there.
 
 ### Changed
 
@@ -200,23 +212,25 @@ version now ships in the same jar, and the rules say which page to read before w
 - **The AUTH frame is protocol version 4.** One byte more, saying whether this connection came in on a
   session cookie and whether that cookie is due for renewal. A client and server from the same build
   are unaffected.
-
-- **`AGENTS.md` no longer says a query always returns values.** When a process owns the store,
-  `query` returns exactly what `execute` returned, with no copy, so changing it changes the graph. The
-  rule is now to return copies or plain values in every mode.
-- **`ThemeController` is driven by `Theme`.** The icon shows the theme that is showing now, also when
-  it comes from the system, and pressing it stores the choice. It no longer uses DaisyUI's
-  `theme-controller` class. Existing code compiles. `Js.setTheme` now sets `data-theme` on `html`
-  and removes one left on `body`; a `data-theme` on `body` overrides `html`, so take it out of
-  `index.html`.
-- **A timed-out call now fails with a sentence a screen can show.** `RequestTimeoutException` kept
-  its type, but its message used to read `RMI call Service#method (request 7) timed out: no answer
-  within 30000 ms`, and applications showed that to people. The message is now "The server did not
-  answer in time. Try again." and the call and the deadline go to the browser console. If you
-  matched the old text, catch `RequestTimeoutException` instead.
+- A generated project's `ServerApp` reads the port from `-Dzeroz.port` and falls back to 8080. The
+  examples with a fixed dark look set `data-theme` on `html`.
+- The `chat-events`, `chat-livesync`, `form-signup`, `inventory-crud` and `job-monitor` examples use
+  `Theme` through `ThemeController` and no longer set `data-theme` on `body`.
+- **`slf4j-simple` in the archetype's server module**, so a generated project no longer loses
+  `System.Logger` lines. It is 2.0.20 there and in every server module.
 
 ### Fixed
 
+- **A port already in use stops the server.** On Helidon the start logged the failure, then wrote
+  "listening on http://localhost:8080/" and kept running with nothing listening, so the page you
+  opened came from whatever owned the port. `Zeroz4jServer.start` now throws "Could not listen on port
+  8080. Another program is using it."
+- **`pwa-install`'s Install button shows the prompt.** It called `Pwa.promptInstall` from a new thread,
+  where the browser refuses it. It now uses `addGestureListener`.
+- **Copy buttons copy.** `CodeBlock` and `PropertyGrid` said "Copied" and put nothing on the
+  clipboard, because their listener ran on a new thread and the browser refuses the clipboard there.
+  The copy now runs inside the click, and the label says "Copied" only when the browser accepted it
+  and "Copy failed" otherwise. `Js.copyToClipboard(text, result)` reports the outcome.
 - **A sizing class on a `Checkbox` or `Toggle` no longer stretches the box.** `min-h-11`, `h-*`, `w-*`
   and `size-*` now go on the row around the box and its caption, so the row grows and the box keeps
   its shape. `getElement()` is still the input; `getOuterElement()` returns the row, the same wrapper
@@ -229,8 +243,25 @@ version now ships in the same jar, and the rules say which page to read before w
   `@DataModel` but has no `@DataModel` of its own is now a compile error naming the field. A nested
   model with validation annotations, `@LiveSync` or `@ClientWritable` is a compile error that tells
   you to move it to its own file.
-- **`Checkbox` documentation.** A sizing class such as `min-h-11` lands on the input and stretches the
-  box and its tick. The component list now says so and names `setThemeSize` instead.
+- `Js.eventKey` returned `undefined` as a broken String for events without a key; it now returns the
+  empty string.
+- `Js.localGet` and `Js.localSet` no longer throw when storage is blocked.
+
+### Documentation
+
+- **`docs/guides/persistence.md` has an "Observed behavior" section.** It records what applications
+  found, each marked as confirmed or reported: deleted data stays in the storage files, a version
+  field in the root cannot tell you the store is old, every stored object costs heap while the store
+  is open, `ZeroZDbNode` cannot declare a field rename, enum constants are stored by position and
+  not checked by `SchemaCompatibility`, `DbQuery` can return live objects, and per-tenant stores are
+  never closed before shutdown.
+- **`troubleshooting.md` explains missing `System.Logger` lines.** `zerozstack-server-helidon` brings
+  `slf4j-jdk-platform-logging`, which hands those lines to SLF4J. With no SLF4J provider they are
+  dropped without a message in the log other than three start-up lines. If your server log has no
+  Helidon lines, add a provider to the server module.
+- **`AGENTS.md` no longer says a query always returns values.** When a process owns the store,
+  `query` returns exactly what `execute` returned, with no copy, so changing it changes the graph. The
+  rule is now to return copies or plain values in every mode.
 
 ## [0.10.0] — 2026-10-12
 
@@ -3045,7 +3076,7 @@ Shared signals, server events, validation and the LiveSync up-direction; the `jo
 Initial public proof-of-concept: binary RMI over WebSocket, `@DataModel` serialization, EclipseStore
 persistence, and the TeaVM UI component library.
 
-[Unreleased]: https://github.com/ZeroZ4j/zerozstack/compare/v0.10.0...HEAD
+[0.11.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/ZeroZ4j/zerozstack/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/ZeroZ4j/zerozstack/compare/v0.8.0...v0.9.0

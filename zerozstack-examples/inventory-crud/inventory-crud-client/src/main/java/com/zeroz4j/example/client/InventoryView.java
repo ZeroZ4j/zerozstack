@@ -154,7 +154,7 @@ public class InventoryView extends Card {
         Div tableContainer = new Div();
         tableContainer.addClassName("w-full");
         tableContainer.addClassName("overflow-x-auto");
-        tableContainer.addClassName("bg-base-200");
+        tableContainer.addClassName("bg-base-100");
         tableContainer.addClassName("rounded-box");
         tableContainer.addClassName("p-2");
         masterPanel.add(tableContainer);
@@ -166,7 +166,7 @@ public class InventoryView extends Card {
         // --- DETAIL PANEL (Right) ---
         Card detailCard = new Card();
         detailCard.addClassName("w-5/12");
-        detailCard.addClassName("bg-base-200");
+        detailCard.addClassName("bg-base-100");
 
         CardTitle detailTitle = new CardTitle("Product Details");
         detailCard.add(detailTitle);

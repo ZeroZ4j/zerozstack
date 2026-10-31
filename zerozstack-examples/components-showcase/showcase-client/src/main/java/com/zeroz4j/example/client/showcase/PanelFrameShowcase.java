@@ -81,7 +81,7 @@ public class PanelFrameShowcase extends ComponentShowcase {
 
     private Div placeholder() {
         Div box = new Div();
-        box.addClassName("h-24 w-full rounded-lg bg-base-200");
+        box.addClassName("h-24 w-full rounded-lg bg-base-100");
         return box;
     }
 

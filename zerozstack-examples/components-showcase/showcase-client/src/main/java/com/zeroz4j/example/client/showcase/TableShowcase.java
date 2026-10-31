@@ -102,7 +102,7 @@ public class TableShowcase extends ComponentShowcase {
         Component thead = element("thead");
         // A header that stays put is furniture on the sticky tier. Nothing here picks a number.
         HasLayer.applyTo(thead, Layer.STICKY);
-        addClass(thead, "sticky top-0 bg-base-200");
+        addClass(thead, "sticky top-0 bg-base-100");
 
         addHeading(headRow, "#", 0);
         addHeading(headRow, "Name", 1);
@@ -118,7 +118,7 @@ public class TableShowcase extends ComponentShowcase {
         Component tfoot = element("tfoot");
         Component totalRow = element("tr");
         totalRow.setId("table-total-row");
-        addClass(totalRow, "font-semibold bg-base-200");
+        addClass(totalRow, "font-semibold bg-base-100");
         totalRow.getElement().appendChild(cell("td", "").getElement());
         totalRow.getElement().appendChild(cell("td", "Total of " + people.size() + " people")
                 .getElement());

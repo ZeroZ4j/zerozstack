@@ -31,7 +31,7 @@ public class Menu extends Component implements HasComponents, HasStyle {
     public Menu() {
         super("ul");
         addClassName("menu");
-        addClassName("bg-base-200");
+        addClassName("bg-base-100");
         addClassName("w-56");
         addClassName("rounded-box");
         // A menu never grows past what it was put in. Without this a single long word - a German
@@ -93,7 +93,7 @@ public class Menu extends Component implements HasComponents, HasStyle {
         details.add(new Summary(text));
         
         subMenu.removeClassName("menu");
-        subMenu.removeClassName("bg-base-200");
+        subMenu.removeClassName("bg-base-100");
         subMenu.removeClassName("w-56");
         subMenu.removeClassName("rounded-box");
         

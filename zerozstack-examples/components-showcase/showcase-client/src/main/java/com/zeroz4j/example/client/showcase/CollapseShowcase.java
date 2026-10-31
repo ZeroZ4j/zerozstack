@@ -28,7 +28,7 @@ public class CollapseShowcase extends ComponentShowcase {
 
         // Checkbox-controlled collapse (toggles state with click)
         Collapse collapse1 = new Collapse();
-        collapse1.addClassName("bg-base-200 border border-base-300 rounded-box w-full");
+        collapse1.addClassName("bg-base-100 border border-base-300 rounded-box w-full");
 
         Component input1 = new Component("input") {};
         input1.getElement().setAttribute("type", "checkbox");

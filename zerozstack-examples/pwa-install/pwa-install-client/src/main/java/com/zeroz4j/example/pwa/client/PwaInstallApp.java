@@ -70,7 +70,11 @@ public class PwaInstallApp {
 
         // ---- install ------------------------------------------------------
         Span installState = TextStyle.SECONDARY.span("");
-        Button install = button("Install this app", () -> Pwa.promptInstall(outcome ->
+        Button install = new Button("Install this app");
+        install.addClassName("btn-primary");
+        install.addClassName("w-fit");
+        // The browser shows the prompt only from the click's own stack, never from a new thread.
+        install.addGestureListener("click", event -> Pwa.promptInstall(outcome ->
                 installState.setText("accepted".equals(outcome)
                         ? "Installed. Launch it from your home screen or app list."
                         : "unavailable".equals(outcome)
@@ -142,7 +146,7 @@ public class PwaInstallApp {
     }
 
     private static Component panel(String title, Component value, Component action, String note) {
-        return box("flex flex-col gap-2 p-4 rounded bg-base-200",
+        return box("flex flex-col gap-2 p-4 rounded bg-base-100",
                 TextStyle.SECTION_TITLE.span(title),
                 value,
                 action,

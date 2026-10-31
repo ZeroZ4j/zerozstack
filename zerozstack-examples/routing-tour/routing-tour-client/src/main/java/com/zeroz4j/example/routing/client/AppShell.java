@@ -46,7 +46,7 @@ public class AppShell implements RouteLayout<Account> {
 
     @Override
     public Component render(Account account, RouteParams params, Component child) {
-        Component header = Ui.box("flex items-center gap-4 px-6 py-4 bg-base-200 border-b border-base-300",
+        Component header = Ui.box("flex items-center gap-4 px-6 py-4 bg-base-100 border-b border-base-300",
                 Ui.text("zeroz4j routing tour", TextStyle.SECTION_TITLE.getClassNames()),
                 Ui.box("flex-1"),
                 Ui.text(account.getDisplayName(), TextStyle.SECONDARY.getClassNames()),
@@ -60,7 +60,7 @@ public class AppShell implements RouteLayout<Account> {
                 Ui.routerLink("/admin", "Admin"),
                 Ui.routerLink("/nowhere", "A broken link"));
 
-        return Ui.box("min-h-screen bg-base-100 text-base-content",
+        return Ui.box("min-h-screen bg-base-200 text-base-content",
                 header,
                 nav,
                 Ui.box("p-6", child));

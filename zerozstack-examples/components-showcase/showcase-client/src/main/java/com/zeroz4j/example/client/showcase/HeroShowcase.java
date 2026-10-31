@@ -31,7 +31,7 @@ public class HeroShowcase extends ComponentShowcase {
 
         // Hero 1: Text only centered
         Hero textHero = new Hero();
-        textHero.addClassName("bg-base-200");
+        textHero.addClassName("bg-base-100");
         textHero.addClassName("p-8");
         textHero.addClassName("rounded-box");
 
