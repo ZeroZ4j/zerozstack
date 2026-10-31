@@ -30,6 +30,7 @@ public class ExampleClientApp {
     private static boolean started = false;
 
     public static void main(String[] args) {
+        com.zeroz4j.ui.theme.Theme.start();
         HTMLElement appRoot = Window.current().getDocument().getElementById("app-root");
 
         Login[] loginHolder = new Login[1];

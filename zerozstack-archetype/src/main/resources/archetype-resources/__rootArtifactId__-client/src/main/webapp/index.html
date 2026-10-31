@@ -18,8 +18,10 @@
         you install Tailwind, build one finished stylesheet and serve that, so visitors download CSS
         instead of a compiler. See "Where the styles come from" in the ZeroZ Stack documentation.
 
-        Colours come from daisyUI's light theme. Put data-theme="dark" on the body below for the
-        dark one, or any other daisyUI theme name.
+        Colours come from daisyUI's light and dark themes. Theme.start() in ClientApp keeps the
+        visitor's choice (light, dark or system) as data-theme on the html element, and the server
+        sets it from that choice before the page is drawn. Do not put data-theme on the body: it
+        would override the one on html.
     -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.16"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5.6.14/daisyui.css" rel="stylesheet" type="text/css" />

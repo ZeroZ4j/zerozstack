@@ -22,11 +22,15 @@ import com.zeroz4j.api.RmiSecurityContext;
 import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.component.Component;
 import com.zeroz4j.ui.theme.TextStyle;
+import com.zeroz4j.ui.theme.Theme;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
 
 public class ClientApp {
     public static void main(String[] args) {
+        // Light, dark or system, stored in this browser. Put a ThemeController (sun and moon) or a
+        // ThemeSelector (Light, Dark, System) on a screen to let people change it.
+        Theme.start();
         Zeroz4jClient.connect(getWebSocketUrl(), () -> {
             // onResolved fires once the server has answered, whether this connection ended up
             // authenticated or anonymous — it is the "connection is usable" signal, and what you

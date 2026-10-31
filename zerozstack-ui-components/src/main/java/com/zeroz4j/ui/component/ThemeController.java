@@ -17,12 +17,21 @@
  */
 package com.zeroz4j.ui.component;
 
+import com.zeroz4j.api.Disposable;
+import com.zeroz4j.signals.Effect;
+import com.zeroz4j.ui.theme.Theme;
 import org.teavm.jso.dom.html.HTMLInputElement;
 import org.teavm.jso.dom.events.Event;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.events.EventListener;
 import org.teavm.jso.dom.html.HTMLElement;
 
+/**
+ * The sun and moon button. Checked means dark. The icon shows the theme that is showing now, also
+ * when it comes from the operating system, and pressing it chooses the other one through
+ * {@link Theme}, which stores the choice. Setting the value from code or a bound signal chooses
+ * that theme too. For a Light, Dark, System choice use {@link ThemeSelector}.
+ */
 public class ThemeController extends AbstractField<ThemeController, Boolean> {
 
     /**
@@ -36,6 +45,7 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
     private static final String DEFAULT_NAME = "Dark theme";
 
     private final HTMLInputElement checkbox;
+    private Disposable follow;
 
     public ThemeController() {
         this(false);
@@ -48,12 +58,12 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
 
         checkbox = (HTMLInputElement) Window.current().getDocument().createElement("input");
         checkbox.setAttribute("type", "checkbox");
-        checkbox.setClassName("theme-controller");
         checkbox.setValue("dark");
         checkbox.setAttribute("aria-label", DEFAULT_NAME);
         
         EventListener<Event> changeListener = evt -> {
             setModelValue(checkbox.isChecked(), true);
+            Theme.choose(checkbox.isChecked() ? Theme.Choice.DARK : Theme.Choice.LIGHT);
         };
         checkbox.addEventListener("change", threaded(changeListener));
         getElement().appendChild(checkbox);
@@ -67,6 +77,21 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
         HTMLElement moonWrapper = Window.current().getDocument().createElement("div");
         moonWrapper.setInnerHTML("<svg aria-hidden=\"true\" class=\"swap-on " + sizeClass + " fill-current\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z\" /></svg>");
         getElement().appendChild(moonWrapper.getFirstChild());
+
+        setValue(Theme.showing().get() == Theme.Choice.DARK);
+    }
+
+    @Override
+    protected void onAttach() {
+        follow = Effect.create(() -> setValue(Theme.showing().get() == Theme.Choice.DARK));
+    }
+
+    @Override
+    protected void onDetach() {
+        if (follow != null) {
+            follow.dispose();
+            follow = null;
+        }
     }
 
     /**
@@ -105,6 +130,9 @@ public class ThemeController extends AbstractField<ThemeController, Boolean> {
         boolean b = value != null && value;
         if (b != checkbox.isChecked()) {
             checkbox.setChecked(b);
+        }
+        if (b != (Theme.showing().get() == Theme.Choice.DARK)) {
+            Theme.choose(b ? Theme.Choice.DARK : Theme.Choice.LIGHT);
         }
     }
 }

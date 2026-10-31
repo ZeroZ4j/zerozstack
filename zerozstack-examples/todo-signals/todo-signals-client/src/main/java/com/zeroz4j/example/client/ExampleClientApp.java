@@ -19,6 +19,7 @@ package com.zeroz4j.example.client;
 
 import com.zeroz4j.client.Zeroz4jClient;
 import com.zeroz4j.api.RmiSecurityContext;
+import com.zeroz4j.ui.theme.Theme;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.browser.Window;
 import org.teavm.jso.dom.html.HTMLElement;
@@ -26,6 +27,7 @@ import org.teavm.jso.dom.html.HTMLElement;
 public class ExampleClientApp {
 
     public static void main(String[] args) {
+        Theme.start();
         String wsUrl = getWebSocketUrl();
 
         Zeroz4jClient.connect(wsUrl, () -> {

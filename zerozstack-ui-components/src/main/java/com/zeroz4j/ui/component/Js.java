@@ -99,7 +99,17 @@ public final class Js {
         + "if (was && was.focus) { try { was.focus(); } catch (ignored) {} }")
     public static native void copyToClipboard(String text);
 
-    @JSBody(params = {"theme"}, script = "document.body.setAttribute('data-theme', theme);")
+    /**
+     * Sets {@code data-theme} on the {@code html} element, where DaisyUI and the application's own
+     * CSS read it, and removes any left on {@code body}, which would override it. Through 0.10.0
+     * this set it on {@code body}. Prefer {@link com.zeroz4j.ui.theme.Theme}, which also stores
+     * the choice.
+     *
+     * @param theme the theme name
+     */
+    @JSBody(params = {"theme"}, script =
+        "document.documentElement.setAttribute('data-theme', theme);"
+        + "if (document.body) { document.body.removeAttribute('data-theme'); }")
     public static native void setTheme(String theme);
 
     /**

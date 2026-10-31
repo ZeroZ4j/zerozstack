@@ -109,6 +109,7 @@ async function focusReport(page, containerId) {
 const KEYBOARD_CONTROLS = [
     { id: 'kb-button', what: 'Button', how: 'activate' },
     { id: 'kb-checkbox', what: 'Checkbox', how: 'activate' },
+    { id: 'kb-checkbox-tall', what: 'Checkbox with a sizing class', how: 'activate' },
     { id: 'kb-codeblock', what: 'CodeBlock (copy)', how: 'activate' },
     { id: 'kb-contextmenu', what: 'ContextMenu (target)', how: 'menukey' },
     { id: 'kb-diffview', what: 'DiffView (file header)', how: 'activate' },
@@ -134,6 +135,7 @@ const KEYBOARD_CONTROLS = [
     { id: 'kb-textarea', what: 'TextArea', how: 'value', key: 'x' },
     { id: 'kb-textfield', what: 'TextField', how: 'value', key: 'x' },
     { id: 'kb-themecontroller', what: 'ThemeController', how: 'activate' },
+    { id: 'kb-themeselector', what: 'ThemeSelector', how: 'activate' },
 ];
 
 // The three overlays that are driven at their own ids, in the overlays section.

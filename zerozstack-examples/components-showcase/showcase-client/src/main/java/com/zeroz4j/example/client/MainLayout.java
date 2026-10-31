@@ -33,7 +33,6 @@ import com.zeroz4j.ui.component.ThemeController;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import org.teavm.jso.browser.Window;
 
 public class MainLayout extends HorizontalLayout {
 
@@ -133,19 +132,10 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.addClassName("mt-auto"); // push to bottom if possible
         themeLayout.addClassName("justify-between");
         
-        Span themeLabel = new Span("Dark Mode");
+        Span themeLabel = new Span("Theme");
         themeLayout.add(themeLabel);
         
         ThemeController themeToggle = new ThemeController(true);
-        ValueSignal<Boolean> darkThemeSignal = new ValueSignal<>(true);
-        themeToggle.bindValue(darkThemeSignal);
-        
-        Effect.create(() -> {
-            Boolean isDark = darkThemeSignal.get();
-            String theme = (isDark != null && isDark) ? "dark" : "light";
-            Window.current().getDocument().getBody().setAttribute("data-theme", theme);
-        });
-        
         themeLayout.add(themeToggle);
         themeItem.getElement().appendChild(themeLayout.getElement());
         menu.add(themeItem);

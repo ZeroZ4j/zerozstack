@@ -47,6 +47,7 @@ import com.zeroz4j.ui.component.Tab;
 import com.zeroz4j.ui.component.TextArea;
 import com.zeroz4j.ui.component.TextField;
 import com.zeroz4j.ui.component.ThemeController;
+import com.zeroz4j.ui.component.ThemeSelector;
 import com.zeroz4j.ui.component.Toast;
 import com.zeroz4j.ui.component.Toggle;
 import com.zeroz4j.ui.component.Tooltip;
@@ -198,6 +199,14 @@ public final class KeyboardProofPage {
         checkbox.setId("kb-checkbox");
         rowFor(host, "Checkbox", checkbox.getOuterElement(), "kb-checkbox");
         recordsOn(checkbox.getElement(), "kb-checkbox", "change");
+
+        // A sizing class must make the row taller and leave the box square.
+        Checkbox tallBox = new Checkbox();
+        tallBox.addClassName("min-h-11 w-48");
+        tallBox.setLabel("Tall row");
+        tallBox.setId("kb-checkbox-tall");
+        rowFor(host, "Checkbox with min-h-11 w-48", tallBox.getOuterElement(), "kb-checkbox-tall");
+        recordsOn(tallBox.getElement(), "kb-checkbox-tall", "change");
 
         // -- CodeBlock ------------------------------------------------
         // The operable part is the copy button in its header, not the block itself.
@@ -388,6 +397,13 @@ public final class KeyboardProofPage {
         tabRow.add(tab, new Tab("History"));
         rowFor(host, "Tab", tabRow.getOuterElement(), "kb-tab");
         recordsOn(tab.getElement(), "kb-tab", "click");
+
+        // -- ThemeSelector --------------------------------------------
+        ThemeSelector themeSelector = new ThemeSelector();
+        rowFor(host, "ThemeSelector", themeSelector.getOuterElement(), "kb-themeselector");
+        HTMLElement lightButton = themeSelector.getElement().querySelector("button");
+        lightButton.setAttribute("id", "kb-themeselector");
+        recordsOn(lightButton, "kb-themeselector", "click");
 
         // -- TextArea -------------------------------------------------
         TextArea textArea = new TextArea();

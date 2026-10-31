@@ -24,13 +24,9 @@ import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.layout.VerticalLayout;
 import com.zeroz4j.ui.component.Menu;
 import com.zeroz4j.ui.component.ThemeController;
-import com.zeroz4j.signals.Effect;
-import com.zeroz4j.signals.ValueSignal;
-import org.teavm.jso.browser.Window;
 
 /**
- * Main application layout. The theme toggle is bound to a signal via
- * {@code bindValue} — components stay in sync with signal state in both directions.
+ * Main application layout. The sun and moon button follows {@code Theme}, which stores the choice.
  */
 public class MainLayout extends HorizontalLayout {
 
@@ -70,18 +66,10 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.addClassName("mt-auto");
         themeLayout.addClassName("justify-between");
         
-        Span themeLabel = new Span("Dark Mode");
+        Span themeLabel = new Span("Theme");
         themeLayout.add(themeLabel);
         
         ThemeController themeToggle = new ThemeController(true);
-        ValueSignal<Boolean> darkTheme = new ValueSignal<>(true);
-        themeToggle.bindValue(darkTheme);
-
-        Effect.create(() -> {
-            Boolean isDark = darkTheme.get();
-            Window.current().getDocument().getBody()
-                    .setAttribute("data-theme", isDark != null && isDark ? "dark" : "light");
-        });
 
         themeLayout.add(themeToggle);
         themeItem.getElement().appendChild(themeLayout.getElement());

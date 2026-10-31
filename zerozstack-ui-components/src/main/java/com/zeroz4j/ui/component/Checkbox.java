@@ -39,6 +39,55 @@ public class Checkbox extends AbstractField<Checkbox, Boolean> implements
         addDomEventListener("change", changeListener);
     }
 
+    /**
+     * Adds classes, sending the ones that size the space to the row around the box.
+     *
+     * <p>The box is the {@code input} itself, so {@code min-h-11}, {@code h-*}, {@code w-*} and
+     * {@code size-*} on it stretch the box and its tick out of shape. Those classes land on the
+     * row that holds the box and its caption instead, which gets taller or wider and leaves the
+     * box alone. {@code getElement()} is still the input. The row is the wrapper a caption
+     * already builds, so {@link #getOuterElement()} returns it from the first such class on, and
+     * containers that use {@code add(...)} place it without any change in the caller. Use
+     * {@code setThemeSize} to make the box itself larger.</p>
+     */
+    @Override
+    public void addClassName(String className) {
+        if (className == null || className.isEmpty()) {
+            return;
+        }
+        StringBuilder own = new StringBuilder();
+        StringBuilder row = new StringBuilder();
+        for (String name : className.split(" ")) {
+            (isSizing(name) ? row : own).append(name).append(' ');
+        }
+        if (own.length() > 0) {
+            super.addClassName(own.toString().trim());
+        }
+        if (row.length() > 0) {
+            addControlRowClassName(row.toString().trim());
+        }
+    }
+
+    @Override
+    public void removeClassName(String className) {
+        super.removeClassName(className);
+        if (className != null && !className.isEmpty()) {
+            removeControlRowClassName(className);
+        }
+    }
+
+    /** True for h-*, w-*, min-*, max-* and size-* utilities, with or without a variant prefix. */
+    static boolean isSizing(String name) {
+        String base = name.substring(name.lastIndexOf(':') + 1);
+        if (base.startsWith("-")) {
+            base = base.substring(1);
+        }
+        if (base.startsWith("min-") || base.startsWith("max-")) {
+            base = base.substring(4);
+        }
+        return base.startsWith("h-") || base.startsWith("w-") || base.startsWith("size-");
+    }
+
     /** A checkbox reads as "[x] Remember me": the caption follows the box on the same line. */
     @Override
     protected boolean labelFollowsControl() {
