@@ -142,8 +142,10 @@ What automatic recovery deliberately does **not** cover:
 
 - **Memory only.** A server restart loses running work and results, and nothing resumes.
 - **One server.** Work and results live in the process that started them.
-- **No time limit on the work.** Work that hangs and ignores its interrupt holds a place against
-  `zeroz.slowcall.maxRunningPerClient` and `zeroz.slowcall.maxRunning` until the server stops.
+- **No time limit unless you set one.** With `zeroz.slowcall.maxMinutes` unset, work that hangs and
+  ignores its interrupt holds a running slot until the server stops. With it set, the slot is freed,
+  and the thread itself runs on until it returns.
+- **Result size is not limited.** A result is held whole in memory and sent in one message.
 - **`getSessionId()` is null in the work,** so anything needing a session fails there.
 - **In a WAR the work gets a thread from your `SessionThreadFactoryProvider`, and nothing has been
   tested on a servlet container.** The context it carries is that factory's contract.

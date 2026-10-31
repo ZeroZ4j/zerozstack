@@ -27,7 +27,9 @@ version now ships in the same jar, and the rules say which page to read before w
   resume by hand, this replaces them. Results are in memory: 60 minutes
   (`zeroz.slowcall.keepMinutes`), 16 per owner (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner
   (`zeroz.slowcall.maxRunningPerClient`) and 1,000 per server (`zeroz.slowcall.maxRunning`). A restart
-  loses them, and a page that was following the work shows a sentence. No opcode or type tag was added:
+  loses them, and a page that was following the work shows a sentence. `zeroz.slowcall.maxMinutes` sets
+  a time limit, and it is 0 by default, meaning none. Work past it is stopped, its running slot is
+  freed even if it ignores the interrupt, and the page shows "The work took too long." No opcode or type tag was added:
   the state travels on `0x17 SIGNAL_UPD` and only a browser that uses a slow call is sent anything.
   See `docs/guides/slow-calls.md`. The `job-monitor` example's report is one.
 - **`TestConnection.call(Service.class, "method", args...)` calls a service through the real engine**

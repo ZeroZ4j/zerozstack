@@ -59,6 +59,9 @@ public final class FrameworkKeys {
     /** A slow call started while the whole server is at its limit. */
     public static final String SLOW_SERVER_BUSY = "slow.serverBusy";
 
+    /** A slow call stopped because it passed {@code zeroz.slowcall.maxMinutes}. */
+    public static final String SLOW_TIMED_OUT = "slow.timedOut";
+
     /** A slow call the server no longer has, after a restart or because its result expired. */
     public static final String SLOW_LOST = "slow.lost";
 

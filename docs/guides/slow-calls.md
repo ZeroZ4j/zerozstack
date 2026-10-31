@@ -140,7 +140,16 @@ On the client, `report.cancel()` asks the server to stop. It is an ordinary remo
 `DisconnectedException` while the connection is down. The work gets an interrupt, which ends any
 blocking call, and `job.isCanceled()` turns true. The state turns to canceled at once, even if the
 work ignores both, and whatever the work returns after that is dropped. Work that ignores both keeps
-its place against the limit until it ends.
+its running slot until it ends, or until it passes the time limit below.
+
+## Limit how long it runs
+
+Set `zeroz.slowcall.maxMinutes` to give every slow call a time limit. Unset or 0 means no limit.
+
+Work past the limit is stopped the way a cancel stops it: an interrupt, and `job.isCanceled()` turns
+true. The state turns to failed with the message "The work took too long." The running slot is free
+at once, even if the work ignores the interrupt, and a late return changes nothing. The check runs
+every five seconds, so work can run a few seconds past the limit.
 
 ## What the work can read
 
@@ -169,6 +178,7 @@ carries what that factory carries. See [limitations](../reference/limitations.md
 | The tab closes | The work runs on and the result waits for the time below |
 | The same person opens a second browser | It sees the same work, if they signed in |
 | The server restarts | Running work and results are lost. A page that was following the work shows "The server no longer has this work. Start it again." |
+| The work passes `zeroz.slowcall.maxMinutes` | It is stopped, and the page shows "The work took too long." |
 | The result expires | The same sentence, for a page that had not received it. A page holding the value keeps it |
 
 A page reloaded during a restart has nothing to compare with, so it shows `isIdle()`.
@@ -211,6 +221,7 @@ Two refusals come from the start call itself, as an ordinary RMI error, and noth
 | `zeroz.slowcall.maxKeptPerClient` | Ended slow calls kept per browser or user, oldest dropped first | **16** |
 | `zeroz.slowcall.maxRunningPerClient` | Slow calls one browser or user may run at once | **8** |
 | `zeroz.slowcall.maxRunning` | Slow calls this server runs at once, across everybody | **1,000** |
+| `zeroz.slowcall.maxMinutes` | How long one slow call may run; 0 means no limit | **0** |
 
 The server-wide limit exists because an anonymous visitor can drop its cookie and become a new
 browser.
@@ -247,12 +258,16 @@ state there, and `browser.cancelSlowCall(call)` asks the work to stop.
 - **Everything is in memory.** A server restart loses running work and results, and nothing resumes.
 - **One server.** Work and results live in the process that started them, so a sticky session is
   needed behind a load balancer.
-- **There is no time limit on the work.** Work that hangs and ignores its interrupt holds a place
-  against the limits until the server stops.
+- **No time limit unless you set one.** With `zeroz.slowcall.maxMinutes` unset, work that hangs and
+  ignores its interrupt holds a running slot until the server stops.
+- **A stopped thread may run on.** The limit frees the slot, but Java cannot end a thread that ignores
+  its interrupt, so that thread keeps its memory and whatever it holds until it returns.
 - **A kept result holds its objects.** Return a plain value or a copy, never a live graph object from
   [the store](persistence.md).
-- **The result is held whole in memory and sent in one message.** The size of a result is not limited
-  by these settings.
+- **Result size is not limited.** A result is held whole in memory and sent in one message, and none
+  of these settings bound its size.
+- **Roles are not checked again at fetch.** They are checked when the work starts. A user who loses a
+  role can still fetch a result of theirs until it expires.
 - **`T` is not checked at compile time.** A value that cannot cross the wire fails when the browser
   fetches it, with the reference sentence, and the log names the type.
 - **`find` knows only the key,** so the compiler does not check `T` against what the server started.

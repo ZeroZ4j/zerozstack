@@ -84,6 +84,7 @@ public final class FrameworkText {
             FrameworkKeys.UNKNOWN_LAZY_HANDLE,
             FrameworkKeys.SLOW_TOO_MANY,
             FrameworkKeys.SLOW_SERVER_BUSY,
+            FrameworkKeys.SLOW_TIMED_OUT,
             FrameworkKeys.SLOW_LOST,
             FrameworkKeys.LIVE_WRONG_TYPE,
             FrameworkKeys.LIVE_NOT_CLIENT_WRITABLE,
@@ -134,6 +135,8 @@ public final class FrameworkText {
                 return "Too many slow calls are running. Wait for one to finish.";
             case FrameworkKeys.SLOW_SERVER_BUSY:
                 return "The server is busy. Try again in a moment.";
+            case FrameworkKeys.SLOW_TIMED_OUT:
+                return "The work took too long.";
             case FrameworkKeys.SLOW_LOST:
                 return "The server no longer has this work. Start it again.";
             case FrameworkKeys.LIVE_WRONG_TYPE:
@@ -188,6 +191,11 @@ public final class FrameworkText {
     /** @return the refusal when the whole server is running as many slow calls as it may */
     public static Message slowCallServerBusy() {
         return new Message(CATALOG, FrameworkKeys.SLOW_SERVER_BUSY);
+    }
+
+    /** @return what a screen says about a slow call that passed the time limit */
+    public static Message slowCallTimedOut() {
+        return new Message(CATALOG, FrameworkKeys.SLOW_TIMED_OUT);
     }
 
     /** @return what a screen says about a slow call the server no longer has */

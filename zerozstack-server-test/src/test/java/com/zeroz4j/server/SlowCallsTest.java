@@ -59,6 +59,7 @@ class SlowCallsTest {
     private static final AtomicBoolean INTERRUPTED = new AtomicBoolean();
     private static final AtomicBoolean SAW_CANCELED_FLAG = new AtomicBoolean();
     private static final AtomicInteger STARTED = new AtomicInteger();
+    private static final AtomicInteger LATE_RETURN = new AtomicInteger();
 
     private static CountDownLatch gate(String name) {
         return GATES.computeIfAbsent(name, ignored -> new CountDownLatch(1));
@@ -82,6 +83,8 @@ class SlowCallsTest {
         SlowCall<String> blocksUntilCanceled();
 
         SlowCall<String> floodsProgress(int steps);
+
+        SlowCall<String> ignoresInterrupts(String key);
 
         void startsWithNoKey();
     }
@@ -179,6 +182,22 @@ class SlowCallsTest {
         }
 
         @Override
+        public SlowCall<String> ignoresInterrupts(String key) {
+            return slowCalls.start(key, job -> {
+                while (true) {
+                    try {
+                        gate(key).await();
+                        LATE_RETURN.incrementAndGet();
+                        return "late";
+                    } catch (InterruptedException ignored) {
+                        INTERRUPTED.set(true);
+                        SAW_CANCELED_FLAG.set(job.isCanceled());
+                    }
+                }
+            });
+        }
+
+        @Override
         public void startsWithNoKey() {
             slowCalls.start("", job -> "x");
         }
@@ -190,6 +209,7 @@ class SlowCallsTest {
         INTERRUPTED.set(false);
         SAW_CANCELED_FLAG.set(false);
         STARTED.set(0);
+        LATE_RETURN.set(0);
     }
 
     private static TestServer.Builder server() {
@@ -623,6 +643,125 @@ class SlowCallsTest {
             assertTrue(browser.slowCallState(call).isFailed());
             assertThrows(IllegalStateException.class,
                     () -> browser.call(SlowCallRpc.class, "collect", call.id()));
+        }
+    }
+
+    // ------------------------------------------------------------------ the time limit
+
+    private static long minutesFromNow(int minutes) {
+        return System.currentTimeMillis() + minutes * 60_000L;
+    }
+
+    @Test
+    void workPastTheLimitFailsWithAShortSentence() throws Exception {
+        try (TestServer server = server().set(ServerSettings.SLOW_CALL_MAX_MINUTES, 5).start();
+             TestConnection browser = server.connect("alice")) {
+
+            SlowCall<String> call = browser.call(ReportService.class, "blocksUntilCanceled");
+            while (STARTED.get() == 0) {
+                Thread.sleep(1);
+            }
+            SlowCallRegistry registry = server.runtime().slowCalls();
+
+            assertEquals(0, registry.sweep(minutesFromNow(4)), "not yet");
+            assertTrue(browser.slowCallState(call).isRunning());
+
+            assertEquals(1, registry.sweep(minutesFromNow(6)));
+
+            SlowCallState<String> end = browser.awaitSlowCall(call, WAIT);
+            assertTrue(end.isFailed());
+            assertEquals("The work took too long.", end.message());
+            long deadline = System.currentTimeMillis() + WAIT;
+            while (!INTERRUPTED.get() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(1);
+            }
+            assertTrue(INTERRUPTED.get(), "the work saw the interrupt");
+            assertTrue(SAW_CANCELED_FLAG.get(), "the work saw the flag");
+        }
+    }
+
+    @Test
+    void theSlotComesBackEvenIfTheWorkIgnoresTheInterruptAndItsLateReturnIsDropped()
+            throws Exception {
+        try (TestServer server = server().set(ServerSettings.SLOW_CALL_MAX_MINUTES, 5)
+                     .set(ServerSettings.SLOW_CALL_MAX_RUNNING_PER_CLIENT, 1).start();
+             TestConnection browser = server.connect("alice")) {
+
+            SlowCall<String> stuck = browser.call(ReportService.class, "ignoresInterrupts", "stuck");
+            assertThrows(IllegalStateException.class, () -> startGated(browser, "next"));
+
+            SlowCallRegistry registry = server.runtime().slowCalls();
+            registry.sweep(minutesFromNow(6));
+
+            long deadline = System.currentTimeMillis() + WAIT;
+            while (!INTERRUPTED.get() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(1);
+            }
+            assertTrue(INTERRUPTED.get(), "the work was interrupted, and took no notice");
+            assertEquals(0, registry.runningCount(), "the slot is free while the thread still runs");
+
+            SlowCall<String> next = startGated(browser, "next");
+            assertEquals(1, registry.runningCount());
+
+            gate("stuck").countDown();
+            while (LATE_RETURN.get() == 0) {
+                Thread.sleep(1);
+            }
+            Thread.sleep(50); // The thread is past its return, into the bookkeeping.
+
+            assertEquals(1, registry.runningCount(), "the late return gave back nobody's slot");
+            assertEquals("The work took too long.", browser.slowCallState(stuck).message());
+            assertThrows(IllegalStateException.class,
+                    () -> browser.call(SlowCallRpc.class, "collect", stuck.id()));
+
+            gate("next").countDown();
+            assertEquals("done next", browser.awaitSlowCall(next, WAIT).value());
+        }
+    }
+
+    @Test
+    void aCanceledJobThatIgnoresTheInterruptLosesItsSlotAtTheLimit() throws Exception {
+        try (TestServer server = server().set(ServerSettings.SLOW_CALL_MAX_MINUTES, 5).start();
+             TestConnection browser = server.connect("alice")) {
+
+            SlowCall<String> call = browser.call(ReportService.class, "ignoresInterrupts", "stuck");
+            browser.cancelSlowCall(call);
+            SlowCallRegistry registry = server.runtime().slowCalls();
+            assertEquals(1, registry.runningCount(), "cancel keeps the slot until the thread ends");
+
+            registry.sweep(minutesFromNow(6));
+
+            assertEquals(0, registry.runningCount());
+            assertTrue(browser.slowCallState(call).isCanceled(), "it stays canceled");
+            gate("stuck").countDown();
+        }
+    }
+
+    @Test
+    void zeroMeansNoLimit() {
+        try (TestServer server = server().set(ServerSettings.SLOW_CALL_MAX_MINUTES, 0).start();
+             TestConnection browser = server.connect("alice")) {
+
+            SlowCall<String> call = startGated(browser, "report-1");
+
+            assertEquals(0, server.runtime().slowCalls().sweep(minutesFromNow(100_000)));
+
+            assertTrue(browser.slowCallState(call).isRunning());
+            gate("report-1").countDown();
+        }
+    }
+
+    @Test
+    void leftUnsetThereIsNoLimit() {
+        try (TestServer server = server().start();
+             TestConnection browser = server.connect("alice")) {
+
+            SlowCall<String> call = startGated(browser, "report-1");
+
+            server.runtime().slowCalls().sweep(minutesFromNow(100_000));
+
+            assertTrue(browser.slowCallState(call).isRunning());
+            gate("report-1").countDown();
         }
     }
 

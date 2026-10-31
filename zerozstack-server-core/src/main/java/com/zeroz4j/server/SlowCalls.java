@@ -69,8 +69,8 @@ import java.util.logging.Logger;
  * <p>Results live in memory. A server restart loses them and any running work, and a browser that
  * was waiting is told so in a sentence. See {@link ServerSettings#SLOW_CALL_KEEP_MINUTES},
  * {@link ServerSettings#SLOW_CALL_MAX_KEPT_PER_CLIENT},
- * {@link ServerSettings#SLOW_CALL_MAX_RUNNING_PER_CLIENT} and
- * {@link ServerSettings#SLOW_CALL_MAX_RUNNING}.</p>
+ * {@link ServerSettings#SLOW_CALL_MAX_RUNNING_PER_CLIENT},
+ * {@link ServerSettings#SLOW_CALL_MAX_RUNNING} and {@link ServerSettings#SLOW_CALL_MAX_MINUTES}.</p>
  *
  * @since 0.11.0
  */

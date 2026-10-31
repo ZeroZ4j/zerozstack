@@ -413,7 +413,8 @@ Effect.create(() -> show(report.state()));                          // no timer,
 - Results are in memory: 60 minutes (`zeroz.slowcall.keepMinutes`), 16 per owner
   (`zeroz.slowcall.maxKeptPerClient`). 8 may run per owner (`zeroz.slowcall.maxRunningPerClient`) and
   1,000 per server (`zeroz.slowcall.maxRunning`). A restart loses them, and a page that was following
-  the work shows a sentence.
+  the work shows a sentence. `zeroz.slowcall.maxMinutes` (0, no limit) stops work past it and frees
+  its slot even if the work ignores the interrupt.
 - `ClientVisibleException` keeps its sentence. Anything else is the reference sentence with the real
   message in the log, the same as a failed call.
 

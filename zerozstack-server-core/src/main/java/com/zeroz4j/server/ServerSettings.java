@@ -164,6 +164,16 @@ public final class ServerSettings {
      */
     public static final String SLOW_CALL_MAX_RUNNING = "zeroz.slowcall.maxRunning";
 
+    /**
+     * How long one slow call may run, in minutes. Default 0, which means no limit.
+     *
+     * <p>Work past the limit is stopped the way a cancel stops it, its running slot is freed even if
+     * it ignores the interrupt, and the page shows it failed. Checked every few seconds.</p>
+     *
+     * @since 0.11.0
+     */
+    public static final String SLOW_CALL_MAX_MINUTES = "zeroz.slowcall.maxMinutes";
+
     // ------------------------------------------------------------------ language
 
     /**

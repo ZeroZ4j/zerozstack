@@ -27,6 +27,7 @@ import jakarta.websocket.Session;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,10 +56,11 @@ import java.util.logging.Logger;
  *
  * <h2>Bounded</h2>
  *
- * <p>Four limits, read from settings each time so a test can set them per server. Running work per
+ * <p>Five limits, read from settings each time so a test can set them per server. Running work per
  * owner is what keeps one browser from starting an unbounded number of model calls. Running work
  * per server is there because an anonymous visitor can throw its cookie away and become a new
- * owner. Results kept per owner and the minutes they are kept for bound the memory.</p>
+ * owner. Results kept per owner and the minutes they are kept for bound the memory. The time limit
+ * is optional, and it is what gives a place back when work hangs and ignores its interrupt.</p>
  *
  * <h2>Locks</h2>
  *
@@ -88,6 +90,9 @@ final class SlowCallRegistry {
 
     /** How often expired results are looked for. */
     private static final long SWEEP_MILLIS = 60_000L;
+
+    /** How often the time limit is looked at, when there is one. */
+    private static final long LIMIT_CHECK_MILLIS = 5_000L;
 
     /** Who a slow call belongs to: a user within a tenant, or a browser. Never both. */
     record Owner(String tenant, String user, String browser) {
@@ -129,8 +134,11 @@ final class SlowCallRegistry {
     /** Everything one owner has. */
     private static final class Book {
         private final Map<String, Job> byKey = new LinkedHashMap<>();
-        /** Threads still alive. A canceled job counts until its thread has really ended. */
-        private int threads;
+        /**
+         * The work holding a running slot. A canceled job stays here until its thread has really
+         * ended, or until it passes the time limit, which is the one thing that frees a slot early.
+         */
+        private final Set<Job> holdingSlot = new HashSet<>();
         private long lastPublishedMillis;
         private boolean flushWaiting;
     }
@@ -140,6 +148,8 @@ final class SlowCallRegistry {
         private final String id = UUID.randomUUID().toString();
         private final String key;
         private final Owner owner;
+        private final Locale locale;
+        private final long startedMillis = System.currentTimeMillis();
         private SlowCallStatus status = SlowCallStatus.RUNNING;
         private int percent = -1;
         private String text;
@@ -149,9 +159,10 @@ final class SlowCallRegistry {
         private long endedMillis;
         private volatile boolean canceled;
 
-        Job(String key, Owner owner) {
+        Job(String key, Owner owner, Locale locale) {
             this.key = key;
             this.owner = owner;
+            this.locale = locale;
         }
 
         @Override
@@ -233,7 +244,7 @@ final class SlowCallRegistry {
                 return new SlowCall<>(key, existing.id);
             }
             dropExpired(book, System.currentTimeMillis());
-            if (book.threads >= maxRunningPerClient()) {
+            if (book.holdingSlot.size() >= maxRunningPerClient()) {
                 discardIfEmpty(owner, book);
                 throw new ClientVisibleException(FrameworkText.slowCallTooMany());
             }
@@ -241,7 +252,7 @@ final class SlowCallRegistry {
                 discardIfEmpty(owner, book);
                 throw new ClientVisibleException(FrameworkText.slowCallServerBusy());
             }
-            job = new Job(key, owner);
+            job = new Job(key, owner, locale);
             Job finalJob = job;
             Thread thread = SessionThreads.factory().newThread(() -> {
                 RmiRequestContext.setContext(principal, roles, null, tenant, browser, locale);
@@ -254,9 +265,12 @@ final class SlowCallRegistry {
             job.thread = thread;
             book.byKey.remove(key);
             book.byKey.put(key, job);
-            book.threads++;
+            book.holdingSlot.add(job);
             runningThreads++;
             thread.start();
+            if (maxMinutes() > 0) {
+                startSweeperIfNeeded();
+            }
         }
         // Before the service method returns, so the board reaches the browser ahead of the handle.
         publish(owner);
@@ -275,13 +289,17 @@ final class SlowCallRegistry {
         Thread.interrupted();
         String sentence = failure == null ? null : describeFailure(job, failure, locale);
         synchronized (this) {
+            job.thread = null;
             Book book = books.get(job.owner);
             if (book == null) {
-                return; // Shut down while this ran.
+                return; // Shut down while this ran, or past the limit and its owner has gone.
             }
-            book.threads--;
-            runningThreads--;
-            job.thread = null;
+            // False for work that passed the limit: its slot went back then, and may be somebody
+            // else's by now. Its status is no longer RUNNING either, so this late return changes
+            // nothing the browser can see.
+            if (book.holdingSlot.remove(job)) {
+                runningThreads--;
+            }
             if (job.status == SlowCallStatus.RUNNING) {
                 job.status = failure == null ? SlowCallStatus.FINISHED : SlowCallStatus.FAILED;
                 job.value = failure == null ? result[0] : null;
@@ -485,26 +503,69 @@ final class SlowCallRegistry {
 
     /** Forgets an owner with nothing left. Guarded by {@code this}. */
     private void discardIfEmpty(Owner owner, Book book) {
-        if (book.byKey.isEmpty() && book.threads == 0) {
+        if (book.byKey.isEmpty() && book.holdingSlot.isEmpty()) {
             books.remove(owner, book);
         }
+    }
+
+    /**
+     * Stops work past the time limit and frees its slot, whether or not the work takes any notice.
+     * Guarded by {@code this}. The interrupts are left for the caller, outside the lock.
+     *
+     * @return true when this owner's board changed
+     */
+    private boolean stopOverLimit(Book book, long nowMillis, List<Thread> toInterrupt) {
+        int minutes = maxMinutes();
+        if (minutes <= 0) {
+            return false;
+        }
+        long cutoff = nowMillis - minutes * 60_000L;
+        boolean changed = false;
+        for (Iterator<Job> jobs = book.holdingSlot.iterator(); jobs.hasNext(); ) {
+            Job job = jobs.next();
+            if (job.startedMillis > cutoff) {
+                continue;
+            }
+            jobs.remove();
+            runningThreads--;
+            if (job.thread != null) {
+                toInterrupt.add(job.thread);
+            }
+            if (job.status == SlowCallStatus.RUNNING) {
+                job.canceled = true;
+                job.status = SlowCallStatus.FAILED;
+                job.percent = -1;
+                job.text = null;
+                job.message = ServerMessages.render(FrameworkText.slowCallTimedOut(), job.locale);
+                job.endedMillis = nowMillis;
+                changed = true;
+                LOG.warning("[zeroz4j] Slow call '" + job.key + "' passed the limit of " + minutes
+                        + " minutes (" + ServerSettings.SLOW_CALL_MAX_MINUTES + ") and was stopped.");
+            }
+        }
+        return changed;
     }
 
     /**
      * Sweeps every owner, as of a moment in time.
      *
      * @param nowMillis the time to sweep as of
-     * @return how many owners lost something
+     * @return how many owners lost something or had work stopped
      */
     int sweep(long nowMillis) {
         List<Owner> changed = new ArrayList<>();
+        List<Thread> toInterrupt = new ArrayList<>();
         synchronized (this) {
             for (Map.Entry<Owner, Book> entry : new ArrayList<>(books.entrySet())) {
-                if (dropExpired(entry.getValue(), nowMillis)) {
+                boolean stopped = stopOverLimit(entry.getValue(), nowMillis, toInterrupt);
+                if (dropExpired(entry.getValue(), nowMillis) | stopped) {
                     changed.add(entry.getKey());
                 }
                 discardIfEmpty(entry.getKey(), entry.getValue());
             }
+        }
+        for (Thread thread : toInterrupt) {
+            thread.interrupt();
         }
         for (Owner owner : changed) {
             publish(owner);
@@ -522,7 +583,8 @@ final class SlowCallRegistry {
     private void sweepLoop() {
         try {
             while (true) {
-                Thread.sleep(Math.min(SWEEP_MILLIS, keepMillis()));
+                Thread.sleep(maxMinutes() > 0
+                        ? LIMIT_CHECK_MILLIS : Math.min(SWEEP_MILLIS, keepMillis()));
                 sweep(System.currentTimeMillis());
                 synchronized (this) {
                     if (books.isEmpty() || shutDown) {
@@ -543,7 +605,7 @@ final class SlowCallRegistry {
         synchronized (this) {
             shutDown = true;
             for (Book book : books.values()) {
-                for (Job job : book.byKey.values()) {
+                for (Job job : book.holdingSlot) {
                     if (job.thread != null) {
                         running.add(job.thread);
                     }
@@ -569,6 +631,13 @@ final class SlowCallRegistry {
     /** @return how many threads are running slow calls on this server */
     synchronized int runningCount() {
         return runningThreads;
+    }
+
+    /** @return the time limit in minutes; 0, written out or left unset, means none */
+    private int maxMinutes() {
+        String configured = runtime.config().get(ServerSettings.SLOW_CALL_MAX_MINUTES);
+        return configured == null || "0".equals(configured.trim()) ? 0
+                : runtime.config().positiveInt(ServerSettings.SLOW_CALL_MAX_MINUTES, 0);
     }
 
     private long keepMillis() {

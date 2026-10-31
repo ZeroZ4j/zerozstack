@@ -222,6 +222,7 @@ default, and a fresh application needs none of them set.
 | `zeroz.slowcall.maxKeptPerClient` | Ended slow calls kept per browser or user, oldest dropped first | **16** |
 | `zeroz.slowcall.maxRunningPerClient` | Slow calls one browser or user may run at once | **8** |
 | `zeroz.slowcall.maxRunning` | Slow calls this server runs at once, across everybody | **1,000** |
+| `zeroz.slowcall.maxMinutes` | How long one slow call may run; 0 means no limit | **0** |
 
 ### File uploads
 
