@@ -153,8 +153,8 @@ implementations).
    `bg-base-100 border border-base-300 shadow-sm rounded-box` on a box. A surface draws its edge and
    shadow from the text color, so it reads in light and dark, also on a theme of an application's
    own. It sets no padding and no layout. **The page is `base-200` and a box is `base-100`** (0.11.0+):
-   `com.zeroz4j.api.ThemeBase` sets those colors for `light` and `dark`, and the server adds them to
-   every shell. Never use `bg-base-200` for a box or a sidebar: that is the page color. Do not write a
+   `com.zeroz4j.api.ThemeBase` sets those colors for `light` and `dark`, gives every surface and
+   every daisyUI `card` a `base-300` border, and the server adds it to every shell. Never use `bg-base-200` for a box or a sidebar: that is the page color. Do not write a
    theme file only to get a page and panels that differ.
 
 ## Starting the server: one call, any container

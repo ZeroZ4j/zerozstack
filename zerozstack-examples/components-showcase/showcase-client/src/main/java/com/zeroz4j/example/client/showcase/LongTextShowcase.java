@@ -174,7 +174,7 @@ public class LongTextShowcase extends ComponentShowcase {
 
         Menu menu = new Menu();
         menu.setId("long-text-menu");
-        menu.addClassName("bg-base-100 rounded-box w-full");
+        menu.addClassName("bg-base-100 border border-base-300 rounded-box w-full");
         menu.addTitle(GERMAN);
         menu.addItem(GERMAN_LONGER, e -> readout.setText("Chosen: " + GERMAN_LONGER));
         menu.addItem(JAPANESE, e -> readout.setText("Chosen: " + JAPANESE));

@@ -35,8 +35,9 @@ class. And the text of a timed-out call changed, so code that matches the old wo
   application so far wrote a theme file to tell them apart. The library now sets those colors for
   `light` and `dark` in every shell the server sends: a gray page (`#E7EBF0`), white panels and a
   visible hairline, and in dark a near-black page, lighter panels and a hairline lighter than both.
+  Every surface and every daisyUI `card` has that hairline as a border.
   The page is drawn in `base-200` whatever class is on `body`. If you painted a box or a sidebar
-  `bg-base-200`, use `Surface.PANEL.applyTo(box)` or `bg-base-100`. If you have your own theme file
+  `bg-base-200`, use `Surface.PANEL.applyTo(box)` or `bg-base-100 border border-base-300`. If you have your own theme file
   outside a cascade layer, nothing changes, and a theme with any other name is not touched. `Menu`,
   `Drawer`, `ContextMenu` and `Login` are now `base-100`, and so is every panel in the examples.
   See `docs/UI_COMPONENTS.md`.

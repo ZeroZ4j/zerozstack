@@ -32,7 +32,7 @@ public class StatShowcase extends ComponentShowcase {
         Div statsContainer = new Div();
         statsContainer.addClassName("stats");
         statsContainer.addClassName("shadow");
-        statsContainer.addClassName("bg-base-100");
+        statsContainer.addClassName("bg-base-100 border border-base-300");
 
         // Stat 1: Downloads
         Stat stat1 = new Stat();

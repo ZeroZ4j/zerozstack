@@ -277,8 +277,9 @@ you are writing a chart of your own on top of `ChartBase`; the shipped charts al
 
 Without any theme of your own, the `light` and `dark` themes have a page and panels that are clearly
 different. The page is `base-200`, a panel on it is `base-100`, and a hairline is `base-300`. In dark
-the panel is lighter than the page, and `base-300` is lighter than the panel. Primary, accent and the
-status colors stay daisyUI's.
+the panel is lighter than the page, and `base-300` is lighter than the panel. Every surface and every
+daisyUI `card` has the hairline as a one pixel border. Primary, accent and the status colors stay
+daisyUI's.
 
 | | Page (`base-200`) | Panel (`base-100`) | Hairline (`base-300`) |
 |---|---|---|---|
@@ -286,8 +287,8 @@ status colors stay daisyUI's.
 | dark | `oklch(15.5% 0.012 255)` | `oklch(25.5% 0.014 255)` | `oklch(38% 0.016 255)` |
 
 The server adds these to the page as a small style element, `com.zeroz4j.api.ThemeBase`, and draws the
-page in `base-200` whatever class is on `body`. So use `bg-base-100` for a box, or better a surface,
-and never `bg-base-200`, which is the page.
+page in `base-200` whatever class is on `body`. So use a surface for a box, or `bg-base-100 border
+border-base-300`, and never `bg-base-200`, which is the page.
 
 Your own theme file wins in any order, as long as it is not inside a cascade layer: set
 `--color-base-100` and the others in it. A theme with any other name, set with `Theme.configure`, is

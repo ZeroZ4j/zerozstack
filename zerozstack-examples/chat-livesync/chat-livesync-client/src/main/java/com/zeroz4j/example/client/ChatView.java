@@ -117,7 +117,7 @@ public class ChatView extends Card {
 
         messageListContainer = new Div();
         messageListContainer.addClassName("flex-1");
-        messageListContainer.addClassName("bg-base-100");
+        messageListContainer.addClassName("bg-base-100 border border-base-300");
         messageListContainer.addClassName("rounded-box");
         messageListContainer.addClassName("p-4");
         messageListContainer.addClassName("mb-4");

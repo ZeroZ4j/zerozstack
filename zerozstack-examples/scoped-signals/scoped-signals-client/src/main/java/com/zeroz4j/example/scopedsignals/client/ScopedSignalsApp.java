@@ -102,7 +102,7 @@ public class ScopedSignalsApp {
     }
 
     private static Component panel(String title, Component value, Component action, String note) {
-        return box("flex flex-col gap-2 p-4 rounded bg-base-100",
+        return box("flex flex-col gap-2 p-4 rounded bg-base-100 border border-base-300",
                 TextStyle.SECTION_TITLE.span(title),
                 value,
                 action,

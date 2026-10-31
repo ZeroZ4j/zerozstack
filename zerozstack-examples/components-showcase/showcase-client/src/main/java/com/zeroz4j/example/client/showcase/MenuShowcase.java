@@ -61,7 +61,7 @@ public class MenuShowcase extends ComponentShowcase {
     private Component flat() {
         Menu menu = new Menu();
         menu.setId("menu-flat");
-        menu.addClassName("bg-base-100 rounded-box w-64");
+        menu.addClassName("bg-base-100 border border-base-300 rounded-box w-64");
         menu.addTitle("Workspace");
         menu.addItem("Dashboard", e -> pressed("Dashboard"));
         menu.addItem("Customers", e -> pressed("Customers"));
@@ -74,7 +74,7 @@ public class MenuShowcase extends ComponentShowcase {
     private Component nested() {
         Menu root = new Menu();
         root.setId("menu-nested");
-        root.addClassName("bg-base-100 rounded-box w-72");
+        root.addClassName("bg-base-100 border border-base-300 rounded-box w-72");
         root.setAccordion(true);
         root.addTitle("Everything");
 
@@ -104,7 +104,7 @@ public class MenuShowcase extends ComponentShowcase {
     private static Component withLinks() {
         Menu menu = new Menu();
         menu.setId("menu-links");
-        menu.addClassName("bg-base-100 rounded-box w-64");
+        menu.addClassName("bg-base-100 border border-base-300 rounded-box w-64");
         menu.addTitle("Documentation");
         // Every one of these has a destination; without one the browser will not focus it.
         menu.addLink("What the components do", "#menu-links");
@@ -118,7 +118,7 @@ public class MenuShowcase extends ComponentShowcase {
         host.addClassName("flex flex-wrap items-start gap-4 w-full");
         for (String size : new String[] { "menu-xs", "menu-sm", "menu-md", "menu-lg" }) {
             Menu menu = new Menu();
-            menu.addClassName("bg-base-100 rounded-box w-44 " + size);
+            menu.addClassName("bg-base-100 border border-base-300 rounded-box w-44 " + size);
             menu.addTitle(size.substring("menu-".length()).toUpperCase());
             menu.addItem("One", e -> pressed(size + " one"));
             menu.addItem("Two", e -> pressed(size + " two"));
