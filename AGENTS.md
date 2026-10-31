@@ -59,6 +59,13 @@ bug**, which is exactly how the connection bar below shipped broken twice. The o
 shape users receive is `routing-tour`'s client, which alone takes `-Pproduction`, and
 `tools/navigation-proof` runs its browser test against that build as well as the ordinary one.
 
+In a generated application `-Pproduction` also replaces the two CDN style tags in `index.html` with one
+finished, minified local stylesheet, built by the pinned Tailwind standalone executable (downloaded
+once, SHA-256 checked, cached in `~/.zeroz4j/cache`). The script and the library's class list live in
+`zerozstack-ui-components` (`src/main/css`, `src/build`), the wiring is in the archetype's client and
+server `pom.xml`. **The repository's examples stay on the CDN tags**; none of them takes this step.
+See docs/guides/packaging.md.
+
 ## Module map
 
 | Module | Contains |

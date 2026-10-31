@@ -61,4 +61,48 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <resources>
+            <!-- Declaring <resources> replaces the default src/main/resources, so it is listed too. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The class list written by the exec step below. -->
+            <resource>
+                <directory>${project.build.directory}/generated-resources</directory>
+            </resource>
+            <!-- The production stylesheet step a generated application runs; see
+                 docs/guides/packaging.md. Not compiled: it is not under src/main/java. -->
+            <resource>
+                <directory>src/main/css</directory>
+                <targetPath>META-INF/zeroz4j/css</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- Lists every CSS class name the components can put on a page, from their sources.
+                 A plain JDK source-file launch: nothing is downloaded. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>library-class-list</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>${project.basedir}/src/build/ClassListGenerator.java</argument>
+                                <argument>${project.build.directory}/generated-resources/META-INF/zeroz4j/css/library-classes.txt</argument>
+                                <argument>${project.basedir}/src/main/java</argument>
+                                <argument>${project.basedir}/../zerozstack-client/src/main/java</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

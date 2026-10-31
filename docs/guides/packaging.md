@@ -47,6 +47,57 @@ Two consequences worth planning around:
     through it, and read the browser console. Combine it with the shapes below —
     `mvn verify -Pproduction,package`.
 
+## A finished stylesheet for production
+
+An ordinary build styles the page with two CDN tags: Tailwind running **in the browser** and daisyUI's
+whole stylesheet. That is right while you develop and wrong in what you ship, because every visitor
+downloads a compiler and a stylesheet of about 1 MB, and the page waits for both.
+
+In a generated application, `mvn install -Pproduction` replaces both with **one minified local
+stylesheet** containing only the classes the application uses. The ordinary build is unchanged and
+downloads nothing.
+
+What `-Pproduction` does, in the client module:
+
+1. Unpacks the class list and the build script from `zerozstack-ui-components`.
+2. Downloads the Tailwind standalone executable for the machine running the build (Windows, Linux or
+   macOS; x64 or arm64; Linux on Alpine gets the musl one) and daisyUI's `daisyui.mjs` and
+   `daisyui-theme.mjs`, **once**, into `~/.zeroz4j/cache`. Each file is checked against a SHA-256 value
+   pinned in the script (Tailwind 4.1.16 from the release's `sha256sums.txt`, daisyUI 5.6.14 from
+   jsDelivr's data API). A mismatch deletes the file and fails the build. The cached copy is checked
+   again on every build. This is the only step that needs the network, and the only thing the build
+   downloads and runs apart from Maven's own plugins.
+3. Runs Tailwind with `--minify` over the library's class list, the client's Java sources and
+   `index.html`.
+4. Writes `<app>-client/target/webapp-production/`: a copy of `src/main/webapp` whose `index.html`
+   links `css/app-<hash>.css` in place of the CDN tags.
+
+The server module serves `webapp-production` instead of `src/main/webapp` when `-Pproduction` is on,
+so it applies to Helidon, Vidocq, the Docker build and `-Ppackage` alike. Combine them as before:
+`mvn verify -Pproduction,package`. Build the client and the server in the same run; `-pl` on the
+server alone leaves the folder missing and the server without an `index.html`.
+
+**Light and dark.** The stylesheet contains daisyUI's `light` and `dark` themes. `Theme.start()` sets
+`data-theme` on `html`, and the stylesheet answers it, as the CDN one does. If you call
+`Theme.configure(...)` with other theme names, set the same names in the client's
+`zeroz4j.css.themes` property, for example `corporate --default, business --prefersdark`.
+
+**Which classes are included.** The library's classes are not in your sources, so the library ships a
+list of them, written at its build from its own sources. Classes the components build by joining
+words, such as `btn-` plus a color or a size, are listed in full. Your own classes are found in
+`src/main/java` and `src/main/webapp`. A class you assemble from pieces in your own code is not found:
+write it out whole somewhere in your sources. Text you ask for by name (`TextStyle`, `Surface`,
+`Layer`) carries its own styles and does not depend on the list.
+
+**Your own CSS.** Put it in `src/main/tailwind/app.css` and it is imported into the build (`@apply`
+and `@theme` work there). Stylesheets you link yourself outside the two comments in `index.html` are
+left as they are.
+
+**Keep the two `zeroz4j:styles` comments in `index.html`.** The production build replaces everything
+between them and fails if they are missing.
+
+**The repository's examples stay on the CDN tags.** Only a generated application takes this step.
+
 ## Shape 1: the development layout (what the archetype builds)
 
 `mvn package` produces the server jar plus every dependency in `target/libs/`. Launch with a

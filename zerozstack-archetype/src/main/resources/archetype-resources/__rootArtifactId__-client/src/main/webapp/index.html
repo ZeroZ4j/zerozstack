@@ -15,16 +15,23 @@
 
         Tailwind is doing its work here in the browser, as the page loads. That is right while you
         are building - nothing to install, nothing to run - and wrong for something you ship, where
-        you install Tailwind, build one finished stylesheet and serve that, so visitors download CSS
-        instead of a compiler. See "Where the styles come from" in the ZeroZ Stack documentation.
+        you build one finished stylesheet and serve that, so visitors download CSS instead of a
+        compiler. `mvn install -Pproduction` does exactly that: it replaces everything between the
+        two zeroz4j:styles comments below with a link to a finished, minified local stylesheet, in a
+        copy of this page that the server serves in place of this one. Keep the two comments and keep
+        the two tags between them; the production build fails if the comments are missing. Other
+        stylesheets and scripts you add outside them stay as they are. See "A finished stylesheet for
+        production" in docs/guides/packaging.md.
 
         Colours come from daisyUI's light and dark themes. Theme.start() in ClientApp keeps the
         visitor's choice (light, dark or system) as data-theme on the html element, and the server
         sets it from that choice before the page is drawn. Do not put data-theme on the body: it
         would override the one on html.
     -->
+    <!-- zeroz4j:styles:begin -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.16"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5.6.14/daisyui.css" rel="stylesheet" type="text/css" />
+    <!-- zeroz4j:styles:end -->
 </head>
 <body class="bg-base-100 text-base-content min-h-screen m-0 p-0">
     <div id="app-root">Loading&hellip;</div>
