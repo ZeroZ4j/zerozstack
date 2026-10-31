@@ -42,6 +42,30 @@ public class Select extends AbstractField<Select, String> implements
         addDomEventListener("change", changeListener);
     }
     
+    /**
+     * Replaces the options with ones whose shown text differs from the value they carry.
+     *
+     * <p>The value of the field is the key of the chosen entry. A change by the person calls
+     * the listeners added with {@code addValueChangeListener}.</p>
+     *
+     * @param options value to shown text, in the order they are listed
+     */
+    public void setOptions(java.util.Map<String, String> options) {
+        HTMLSelectElement select = getElement().cast();
+        while (select.getLastChild() != null) {
+            select.removeChild(select.getLastChild());
+        }
+        for (java.util.Map.Entry<String, String> entry : options.entrySet()) {
+            HTMLOptionElement option = (HTMLOptionElement) Window.current().getDocument().createElement("option");
+            option.setValue(entry.getKey());
+            option.setText(entry.getValue());
+            select.appendChild(option);
+        }
+        if (getValue() != null) {
+            setPresentationValue(getValue());
+        }
+    }
+
     public void setItems(List<String> items) {
         HTMLSelectElement select = getElement().cast();
         // Clear existing options

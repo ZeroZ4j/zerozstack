@@ -22,6 +22,12 @@ import com.zeroz4j.ui.layout.Span;
 /**
  * Inline SVG glyphs (24×24 viewBox, stroke-based, currentColor) — no icon font, no CDN.
  * Usage: {@code Icon.of("gear")} or {@code Icon.of("play", "w-6 h-6 text-success")}.
+ *
+ * <p>Names include {@code lock}, {@code mic}, {@code calendar}, {@code bell}, {@code user},
+ * {@code users}, {@code mail}, {@code phone}, {@code download}, {@code paperclip}, {@code eye},
+ * {@code check-circle}, {@code help}, {@code log-out}, {@code sun}, {@code moon}, {@code more},
+ * {@code credit-card}, {@code trending-up} and {@code switch}. For a shape not in the set, use
+ * {@link #ofShapes(String, String)}.</p>
  */
 public final class Icon extends Span {
 
@@ -39,6 +45,20 @@ public final class Icon extends Span {
 
     public static Icon of(String name, String sizeClasses) {
         return new Icon(paths(name), sizeClasses);
+    }
+
+    /**
+     * An icon drawn from SVG shapes of your own, stroked in the current text color.
+     *
+     * <p>The shapes are written into the page as markup, so they must be written in code, never
+     * built from text a person typed.</p>
+     *
+     * @param shapes      SVG elements on a 24 by 24 grid, for example {@code "&lt;path d='M4 12h16'/&gt;"}
+     * @param sizeClasses the size, for example {@code "w-4 h-4"}
+     * @return the icon
+     */
+    public static Icon ofShapes(String shapes, String sizeClasses) {
+        return new Icon(shapes, sizeClasses);
     }
 
     private static String paths(String name) {
@@ -77,6 +97,26 @@ public final class Icon extends Span {
             case "inbox" -> "<polyline points='22 12 16 12 14 15 10 15 8 12 2 12'/><path d='M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'/>";
             case "dot" -> "<circle cx='12' cy='12' r='4' fill='currentColor' stroke='none'/>";
             case "grip" -> "<circle cx='9' cy='6' r='1' fill='currentColor'/><circle cx='15' cy='6' r='1' fill='currentColor'/><circle cx='9' cy='12' r='1' fill='currentColor'/><circle cx='15' cy='12' r='1' fill='currentColor'/><circle cx='9' cy='18' r='1' fill='currentColor'/><circle cx='15' cy='18' r='1' fill='currentColor'/>";
+            case "lock" -> "<rect x='3' y='11' width='18' height='11' rx='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/>";
+            case "mic" -> "<rect x='9' y='2' width='6' height='12' rx='3'/><path d='M5 11a7 7 0 0 0 14 0'/><line x1='12' y1='18' x2='12' y2='22'/>";
+            case "calendar" -> "<rect x='3' y='4' width='18' height='18' rx='2'/><path d='M16 2v4M8 2v4M3 10h18'/>";
+            case "bell" -> "<path d='M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7'/><path d='M13.7 20a2 2 0 0 1-3.4 0'/>";
+            case "user" -> "<circle cx='12' cy='8' r='4'/><path d='M4 21a8 8 0 0 1 16 0'/>";
+            case "users" -> "<circle cx='9' cy='8' r='3.5'/><path d='M2 20a7 7 0 0 1 14 0'/><path d='M16.5 5.5a3.5 3.5 0 0 1 0 6.5M17 20a7 7 0 0 0-2-4.9'/>";
+            case "mail" -> "<rect x='3' y='5' width='18' height='14' rx='2'/><path d='m3.5 6.5 8.5 6.5 8.5-6.5'/>";
+            case "phone" -> "<path d='M5 4h3.5l1.5 4.5-2.2 1.5a11 11 0 0 0 6.2 6.2l1.5-2.2L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4Z'/>";
+            case "download" -> "<path d='M12 3v12'/><path d='m7.5 10.5 4.5 4.5 4.5-4.5'/><path d='M4 20h16'/>";
+            case "paperclip" -> "<path d='M20.5 12.5 12 21a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 19a2 2 0 0 1-3-3l7-7'/>";
+            case "eye" -> "<path d='M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z'/><circle cx='12' cy='12' r='2.75'/>";
+            case "check-circle" -> "<circle cx='12' cy='12' r='9'/><path d='m8.5 12 2.5 2.5 4.5-5'/>";
+            case "help" -> "<circle cx='12' cy='12' r='9'/><path d='M9.6 9.3a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.2-2.45 3.6'/><path d='M12 17h.01'/>";
+            case "log-out" -> "<path d='M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3'/><path d='M10 17l-5-5 5-5'/><path d='M5 12h11'/>";
+            case "sun" -> "<circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/>";
+            case "moon" -> "<path d='M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z'/>";
+            case "more" -> "<circle cx='5' cy='12' r='1.4' fill='currentColor'/><circle cx='12' cy='12' r='1.4' fill='currentColor'/><circle cx='19' cy='12' r='1.4' fill='currentColor'/>";
+            case "credit-card" -> "<rect x='2' y='5' width='20' height='14' rx='2'/><path d='M2 10h20'/>";
+            case "trending-up" -> "<path d='M3 17l5-5 3.5 3.5L21 6'/><path d='M15 6h6v6'/>";
+            case "switch" -> "<path d='M17 3l4 4-4 4'/><path d='M21 7H8'/><path d='M7 21l-4-4 4-4'/><path d='M3 17h13'/>";
             default -> "<circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='16'/><line x1='8' y1='12' x2='16' y2='12'/>";
         };
     }

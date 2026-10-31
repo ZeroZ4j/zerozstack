@@ -73,9 +73,11 @@ public final class CodeBlock extends Div {
         // wondering whether anything happened.
         copyLabel.getElement().setAttribute("aria-live", "polite");
         copyButton.getElement().appendChild(copyLabel.getElement());
-        copyButton.getElement().addEventListener("click", threaded(e -> {
-            Js.copyToClipboard(code);
-            copyLabel.setText("Copied");
+        // On the click's own stack: the browser refuses the clipboard from a listener on a new
+        // thread. "Copied" is only said once the browser has said it worked.
+        copyButton.addGestureListener("click", e -> Js.copyToClipboard(code == null ? "" : code, copied -> {
+            copyLabel.setText(copied ? "Copied" : "Copy failed");
+            Window.setTimeout(() -> copyLabel.setText("Copy"), 2000);
         }));
         header.getElement().appendChild(langChip.getElement());
         header.add(copyButton);

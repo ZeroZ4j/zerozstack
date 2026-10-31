@@ -24,11 +24,9 @@ import com.zeroz4j.ui.layout.HorizontalLayout;
 import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.layout.VerticalLayout;
 import com.zeroz4j.signals.Effect;
-import com.zeroz4j.signals.ValueSignal;
 import com.zeroz4j.ui.component.LanguageSelector;
 import com.zeroz4j.ui.component.Menu;
 import com.zeroz4j.ui.component.ThemeController;
-import org.teavm.jso.browser.Window;
 
 /**
  * Main application layout.
@@ -80,14 +78,6 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.add(themeLabel);
         
         ThemeController themeToggle = new ThemeController(true);
-        ValueSignal<Boolean> darkThemeSignal = new ValueSignal<>(true);
-        themeToggle.bindValue(darkThemeSignal);
-        
-        Effect.create(() -> {
-            Boolean isDark = darkThemeSignal.get();
-            String theme = (isDark != null && isDark) ? "dark" : "light";
-            Window.current().getDocument().getBody().setAttribute("data-theme", theme);
-        });
         
         themeLayout.add(themeToggle);
         themeItem.getElement().appendChild(themeLayout.getElement());

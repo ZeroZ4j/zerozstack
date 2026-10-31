@@ -441,6 +441,9 @@ vocabulary they share.
 ### Layout Components
 Used for structuring the application and organizing other components.
 - **Div**: A generic block-level container.
+- **El**: A plain element of any tag, `new El("section", "p-4")`, with `attr(name, value)`. For markup
+  the library has no component for, such as `ul`, `li`, `img` or `form`. Use a **Button** for anything
+  pressed.
 - **Span**: A generic inline container.
 - **VerticalLayout**: Arranges child components in a vertical column.
 - **HorizontalLayout**: Arranges child components in a horizontal row.
@@ -459,6 +462,13 @@ All of these carry a caption, an explanation, a required mark and a message line
 - **TextField**: Standard single-line text input. The single-argument constructor sets the
   placeholder; `withLabel` sets the caption.
 - **TextArea**: Multi-line text input area. Same two, same meanings.
+- **DateField**: A date entry with the browser's own picker. The value is a `LocalDate`, null while
+  empty or incomplete; `setMin` and `setMax` limit it. `withLabel`, `setHelperText`,
+  `setRequiredIndicatorVisible` and `setErrorMessage` work as on `TextField`. No date library.
+- **TimeField**: A time entry with the browser's own input. The value is a `LocalTime`, null while
+  empty or incomplete. Same four field methods as `DateField`.
+- **NumberField**: A number entry. The value is a `Double`, null while empty; `getIntValue()` gives a
+  whole number, and `setMin`, `setMax` and `setStep` limit it. Same four field methods.
 - **Checkbox**: A standard boolean toggle for individual options. Its caption is a `<label>` tied
   to the box, so clicking the words ticks it. A sizing class (`min-h-11`, `h-*`, `w-*`, `size-*`,
   with or without a variant prefix) goes on the row around the box and its caption, so the row gets
@@ -466,7 +476,9 @@ All of these carry a caption, an explanation, a required mark and a message line
   `getOuterElement()`, which containers use when you `add(...)` the checkbox. Size the box itself
   with `setThemeSize(ThemeSize.LG)`. `Toggle` does the same.
 - **RadioButtonGroup**: A set of mutually exclusive radio options.
-- **Select**: A dropdown list for selecting a single item from a collection.
+- **Select**: A dropdown list for selecting a single item from a collection. `setItems` takes
+  strings; `setOptions` takes a map of value to shown text. React to a change with
+  `addValueChangeListener`, which runs on a green thread, so a remote call may be made in it.
 - **Range**: A slider for selecting numeric values within a defined range.
 - **Rating**: An interactive star-based rating selector.
 - **Toggle**: A switch component, often used as an alternative to a checkbox.
@@ -502,6 +514,9 @@ Components that trigger actions or navigate between views.
   Enter presses it; `setSelected(true)` colors it and says it is the one showing, in one call,
   so the color and the announcement cannot drift apart. **Changed in 0.8.0** — it used to be an
   `<a>` with nowhere to go, which the browser leaves out of the tab order entirely.
+- **RouteLink**: In `com.zeroz4j.client.router`. A **Link** to a route in the application:
+  `new RouteLink("/orders", "Orders")`. It carries `data-route` so the router takes the click, an
+  `href` with the application's base path, and `setCurrent(boolean)` for `aria-current="page"`.
 - **Link**: A hyperlink. **Give it a destination** — `new Link("Read the guide", "/docs/guide")`,
   or `setHref` / `withHref` later. An `<a>` with no address is not a link: the browser leaves it
   out of the tab order, so it cannot be reached by keyboard, and a screen reader reads it as
@@ -568,10 +583,18 @@ Components used to present data, alerts, and content to the user.
   submitted, and `showError("...")` reports a failed attempt, re-enables the form and speaks the
   message to a screen reader as well as showing it.
 - **Hero**: A large, prominent banner often used at the top of landing pages.
-- **Icon**: A scalable vector icon component.
+- **Icon**: A scalable vector icon component. Besides the original set it has `lock`, `mic`,
+  `calendar`, `bell`, `user`, `users`, `mail`, `phone`, `download`, `paperclip`, `eye`,
+  `check-circle`, `help`, `log-out`, `sun`, `moon`, `more`, `credit-card`, `trending-up` and
+  `switch`. `Icon.ofShapes(svgShapes, sizeClasses)` draws one from SVG shapes of your own.
 - **Indicator**: A visual marker, often attached to other elements (like badges on icons).
 - **Join**: A layout utility for seamlessly connecting grouped elements.
 - **Js**: A component wrapper for embedding custom JavaScript execution.
+- **Browser**: In `com.zeroz4j.ui`. Static helpers that tolerate the browser refusing:
+  `storageGet`, `storageSet`, `storageRemove` (blocked storage gives null or false, never an
+  exception), `open(url)` for a new tab, `goTo(url)` for a full page load, `path()`,
+  `scrollToBottom(element)` and `scrollIntoView(element)` (both wait for layout), `download(url)`
+  through a hidden link, and `warn(message)` for the console.
 - **Kbd**: Represents keyboard input visually (e.g., styling for `Ctrl+C`).
 - **KeyedList**: An optimized list component that efficiently manages DOM nodes based on keys.
 - **KpiTile**: A dashboard stat tile: label, big value with an optional unit, a computed movement
@@ -708,7 +731,9 @@ switching `data-theme` recolors every chart with no redraw and no listener.
   healthy/unhealthy.
 - **Scales**: Nice tick selection, local-time tick alignment, and TeaVM-safe number formatting
   (`String.format` does not exist in the TeaVM classlib).
-- **Palette**: DaisyUI token series colors plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`).
+- **Palette**: DaisyUI token series colors plus perceptual ramps (`HEAT`, `VIRIDIS`, `BLUES`). Series
+  colors read `--color-chart-1` to `--color-chart-8` first, so an application's theme CSS can set its
+  own, one set for light and one for dark, and fall back to the DaisyUI colors where it does not.
 - **ChartBase / CartesianChart**: Measure-then-draw lifecycle, SVG factories, tooltip, legend, empty
   state; axes, grid, threshold bands and crosshair. Extend these to add a chart type.
 - **PlotText**: The four kinds of words a chart draws inside its own picture, by name — `FIGURE`,

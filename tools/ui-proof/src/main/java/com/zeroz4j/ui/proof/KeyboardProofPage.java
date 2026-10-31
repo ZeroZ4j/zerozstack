@@ -22,6 +22,9 @@ import com.zeroz4j.ui.binding.Binder;
 import com.zeroz4j.ui.component.AbstractField;
 import com.zeroz4j.ui.component.Button;
 import com.zeroz4j.ui.component.Checkbox;
+import com.zeroz4j.ui.component.DateField;
+import com.zeroz4j.ui.component.NumberField;
+import com.zeroz4j.ui.component.TimeField;
 import com.zeroz4j.ui.component.CodeBlock;
 import com.zeroz4j.ui.component.ContextMenu;
 import com.zeroz4j.ui.component.Dialog;
@@ -418,6 +421,22 @@ public final class KeyboardProofPage {
         textField.setId("kb-textfield");
         rowFor(host, "TextField", textField.getOuterElement(), "kb-textfield");
         recordsOn(textField.getElement(), "kb-textfield", "input");
+
+        // -- DateField, TimeField, NumberField ------------------------
+        DateField dateField = new DateField().withLabel("Due date");
+        dateField.setId("kb-datefield");
+        rowFor(host, "DateField", dateField.getOuterElement(), "kb-datefield");
+        recordsOn(dateField.getElement(), "kb-datefield", "input");
+
+        TimeField timeField = new TimeField().withLabel("Start time");
+        timeField.setId("kb-timefield");
+        rowFor(host, "TimeField", timeField.getOuterElement(), "kb-timefield");
+        recordsOn(timeField.getElement(), "kb-timefield", "input");
+
+        NumberField numberField = new NumberField().withLabel("Quantity");
+        numberField.setId("kb-numberfield");
+        rowFor(host, "NumberField", numberField.getOuterElement(), "kb-numberfield");
+        recordsOn(numberField.getElement(), "kb-numberfield", "input");
 
         // -- ThemeController ------------------------------------------
         ThemeController theme = new ThemeController();

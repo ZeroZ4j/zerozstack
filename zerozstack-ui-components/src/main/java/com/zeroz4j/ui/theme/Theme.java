@@ -19,6 +19,7 @@ package com.zeroz4j.ui.theme;
 
 import com.zeroz4j.signals.Signal;
 import com.zeroz4j.signals.ValueSignal;
+import com.zeroz4j.ui.Browser;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
@@ -175,26 +176,13 @@ public final class Theme {
     }
 
     private static String read(String key) {
-        try {
-            return localGet(key);
-        } catch (RuntimeException failure) {
-            return null;
-        }
+        return Browser.storageGet(key);
     }
 
     private static void write(String key, String value) {
-        try {
-            localSet(key, value);
-        } catch (RuntimeException failure) {
-            // Storage is blocked or full: the choice still holds for this page.
-        }
+        // Storage is blocked or full: the choice still holds for this page.
+        Browser.storageSet(key, value);
     }
-
-    @JSBody(params = {"key"}, script = "return window.localStorage.getItem(key);")
-    private static native String localGet(String key);
-
-    @JSBody(params = {"key", "value"}, script = "window.localStorage.setItem(key, value);")
-    private static native void localSet(String key, String value);
 
     @JSBody(script = "return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);")
     private static native boolean systemPrefersDark();

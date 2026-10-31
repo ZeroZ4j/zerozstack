@@ -384,3 +384,9 @@ The processor refuses, at compile time:
 * **A superseded navigation's call in flight is not canceled.** The server still runs it; only its
   answer is ignored. Overtaking a navigation stops it before its next loader, not during the current
   one.
+
+## Links
+
+`new RouteLink("/orders", "Orders")` is an `<a data-route>` with the application's base path in its
+`href`, so the router takes the click and a new tab still works. `setCurrent(true)` sets
+`aria-current="page"` on the entry for the page on screen.

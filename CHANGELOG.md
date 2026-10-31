@@ -16,6 +16,43 @@ version now ships in the same jar, and the rules say which page to read before w
 
 ### Added
 
+- **Copy buttons copy.** `CodeBlock` and `PropertyGrid` said "Copied" and put nothing on the
+  clipboard, because their listener ran on a new thread and the browser refuses the clipboard there.
+  The copy now runs inside the click, and the label says "Copied" only when the browser accepted it
+  and "Copy failed" otherwise. `Component.addGestureListener(type, listener)` is the supported way
+  to add a listener that needs the click's own stack (clipboard, microphone, install prompt), and
+  `Js.copyToClipboard(text, result)` reports the outcome.
+- **`Background`** (`com.zeroz4j.client`): `run(task)` runs a remote call from a timer, a callback or
+  an `Effect`; `after(millis, task)` runs it once later; `every(millis, task)` polls, starts the next
+  run after the last one ends, survives a failure, and returns a `Disposable` that stops it.
+- **`Browser`** (`com.zeroz4j.ui`): storage that tolerates being blocked, `open`, `goTo`, `path`,
+  `scrollToBottom`, `scrollIntoView`, `download` through a hidden link, and `warn`. `Theme` now uses
+  its storage.
+- **`DateField`, `TimeField`, `NumberField`**: values as `LocalDate`, `LocalTime` and `Double`, with
+  `withLabel` and the other three field methods, and no date library.
+- **`El`**, a plain element component of any tag, and **`RouteLink`**, a link the router takes over
+  with `setCurrent(boolean)` for `aria-current`.
+- **Icons**: `lock`, `mic`, `calendar`, `bell`, `user`, `users`, `mail`, `phone`, `download`,
+  `paperclip`, `eye`, `check-circle`, `help`, `log-out`, `sun`, `moon`, `more`, `credit-card`,
+  `trending-up`, `switch`, and `Icon.ofShapes(...)` for your own shapes.
+- **`Select.setOptions(map)`** for options whose value differs from their text.
+- **Chart series colors from the theme.** `Palette` reads `--color-chart-1` to `--color-chart-8`
+  and falls back to the DaisyUI colors.
+- **`Pwa.pushState()`** (unsupported, iOS not installed, denied, granted, ask) and
+  **`Pwa.deviceLabel()`**.
+
+### Fixed
+
+- `Js.eventKey` returned `undefined` as a broken String for events without a key; it now returns the
+  empty string.
+- `Js.localGet` and `Js.localSet` no longer throw when storage is blocked.
+
+### Changed
+
+- The `chat-events`, `chat-livesync`, `form-signup`, `inventory-crud` and `job-monitor` examples use
+  `Theme` through `ThemeController` and no longer set `data-theme` on `body`.
+- `slf4j-simple` is 2.0.20 in the archetype and in every server module.
+
 - **Slow calls: work that can pass the 30 second limit on a remote call.** Declare the service method
   as `SlowCall<T> writeReport()`, implement it with `@Inject SlowCalls slowCalls` and
   `return slowCalls.start(key, job -> work)`, and read `call.state()` inside an `Effect`. The screen

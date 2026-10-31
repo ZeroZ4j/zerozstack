@@ -24,7 +24,6 @@ import com.zeroz4j.ui.layout.Div;
 import com.zeroz4j.ui.layout.HorizontalLayout;
 import com.zeroz4j.ui.layout.Span;
 import com.zeroz4j.ui.layout.VerticalLayout;
-import org.teavm.jso.browser.Window;
 
 /**
  * Main application layout for the job monitor example.
@@ -71,10 +70,6 @@ public class MainLayout extends HorizontalLayout {
         themeLayout.add(themeLabel);
 
         ThemeController themeToggle = new ThemeController(true);
-        themeToggle.setValue(true);
-        applyTheme(true);
-        themeToggle.addValueChangeListener(event ->
-                applyTheme(event.getValue() != null && event.getValue()));
 
         themeLayout.add(themeToggle);
         themeItem.getElement().appendChild(themeLayout.getElement());
@@ -91,9 +86,5 @@ public class MainLayout extends HorizontalLayout {
 
         contentArea.add(jobMonitorView);
         add(contentArea);
-    }
-
-    private static void applyTheme(boolean isDark) {
-        Window.current().getDocument().getBody().setAttribute("data-theme", isDark ? "dark" : "light");
     }
 }

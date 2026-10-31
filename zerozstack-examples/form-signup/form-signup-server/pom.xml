@@ -89,7 +89,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>2.0.12</version>
+            <version>2.0.20</version>
         </dependency>
         <!-- The in-process test server. Test scope only: it starts a bean container, so it must
              never reach a production classpath. See docs/guides/testing.md. -->

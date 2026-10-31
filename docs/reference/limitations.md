@@ -421,7 +421,12 @@ WebAssembly today.
   DOM event handler, a `setTimeout` callback, or a WebSocket frame handler fails with "suspension
   point reached from non-threading context". The router hits this on every navigation and handles it
   by running each navigation on a green thread; application code fetching from such a callback must
-  do the same.
+  do the same, with `Background.run(...)`, or `Background.every(millis, task)` for polling, which
+  returns a `Disposable`.
+- **The clipboard, the microphone and the install prompt need the click's own stack.** A listener
+  added with `addDomEventListener` runs on a new thread, and the browser refuses these calls there.
+  Add the listener with `addGestureListener` instead; it runs inside the event and must not call the
+  server itself.
 
 ## User interface
 

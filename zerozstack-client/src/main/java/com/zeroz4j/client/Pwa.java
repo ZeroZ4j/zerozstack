@@ -81,6 +81,20 @@ public final class Pwa {
 
     private Pwa() {}
 
+    /** What this browser can do about web push right now. */
+    public enum PushState {
+        /** No service worker, no push or no notifications in this browser. */
+        UNSUPPORTED,
+        /** An iPhone or iPad browser tab. Push works only in the app added to the Home Screen. */
+        IOS_NOT_INSTALLED,
+        /** The person refused notifications. Only the browser's site settings can change that. */
+        DENIED,
+        /** Allowed. */
+        GRANTED,
+        /** Not asked yet; {@link Pwa#subscribeToPush} will ask. */
+        ASK
+    }
+
     /** Receives the outcome of the install prompt. */
     @JSFunctor
     public interface InstallOutcome extends JSObject {
@@ -210,6 +224,45 @@ public final class Pwa {
     }
 
     /**
+     * What this browser can do about web push, to decide what a settings screen offers before
+     * asking for anything.
+     *
+     * @return the state; {@link PushState#IOS_NOT_INSTALLED} means to tell the person to add the
+     *         app to the Home Screen first
+     */
+    public static PushState pushState() {
+        switch (pushStateName()) {
+            case "ios-not-installed":
+                return PushState.IOS_NOT_INSTALLED;
+            case "denied":
+                return PushState.DENIED;
+            case "granted":
+                return PushState.GRANTED;
+            case "default":
+                return PushState.ASK;
+            default:
+                return PushState.UNSUPPORTED;
+        }
+    }
+
+    /**
+     * A short name for this device, to label a push subscription in a list: {@code iPhone},
+     * {@code iPad}, {@code Android phone}, {@code Mac}, {@code Windows PC} or {@code This browser}.
+     * Coarse on purpose, since a full user agent is unreadable and more than needs storing.
+     *
+     * @return the label
+     */
+    @JSBody(params = {}, script =
+        "var ua = navigator.userAgent;"
+        + "if (/iPhone/.test(ua)) { return 'iPhone'; }"
+        + "if (/iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) { return 'iPad'; }"
+        + "if (/Android/.test(ua)) { return 'Android phone'; }"
+        + "if (/Macintosh/.test(ua)) { return 'Mac'; }"
+        + "if (/Windows/.test(ua)) { return 'Windows PC'; }"
+        + "return 'This browser';")
+    public static native String deviceLabel();
+
+    /**
      * Subscribes this browser to web push.
      *
      * <p>Requires the service worker to be registered, and prompts for notification permission if it
@@ -258,6 +311,19 @@ public final class Pwa {
         + "  console.warn('[zeroz4j] Service worker registration failed: ' + failure);"
         + "});")
     private static native void registerServiceWorker(String path);
+
+    @JSBody(params = {}, script =
+        "var ua = navigator.userAgent;"
+        + "var ios = /iPhone|iPad|iPod/.test(ua)"
+        + "    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);"
+        + "var standalone = window.navigator.standalone === true"
+        + "    || window.matchMedia('(display-mode: standalone)').matches;"
+        + "var canPush = ('serviceWorker' in navigator) && ('PushManager' in window)"
+        + "    && ('Notification' in window);"
+        + "if (ios && !standalone && !canPush) { return 'ios-not-installed'; }"
+        + "if (!canPush) { return 'unsupported'; }"
+        + "return Notification.permission;")
+    private static native String pushStateName();
 
     @JSBody(params = {}, script = "return !!(window.__zeroz4jInstall && window.__zeroz4jInstall.offer);")
     private static native boolean hasInstallPrompt();
