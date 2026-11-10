@@ -58,7 +58,7 @@
                 reaches an assistant working in somebody else's project: it reads the version the
                 project actually depends on, offline, with no documentation service in the loop.
 
-                Generated from context7.json rather than written, so there is one source and drift
+                Generated from tools/agent-rules/agent-rules.json rather than written, so there is one source and drift
                 is impossible. The version is passed as an argument instead of being substituted by
                 resource filtering: filtering would have to run over a Markdown file full of ${...}
                 and @...@ examples, and the one thing that needs substituting is already on the
@@ -83,7 +83,7 @@
                             <executable>${java.home}/bin/java</executable>
                             <arguments>
                                 <argument>${project.basedir}/../tools/agent-rules/GenerateAgentRules.java</argument>
-                                <argument>${project.basedir}/../context7.json</argument>
+                                <argument>${project.basedir}/../tools/agent-rules/agent-rules.json</argument>
                                 <argument>${project.build.directory}/generated-resources/agent-rules/META-INF/zeroz4j/AGENTS.md</argument>
                                 <argument>${project.version}</argument>
                                 <argument>${project.basedir}/..</argument>

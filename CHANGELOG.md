@@ -10,6 +10,13 @@ upgrading.
 
 ## [Unreleased]
 
+### Changed
+
+- The assistant rules moved from `context7.json` to `tools/agent-rules/agent-rules.json`. The
+  build reads them from there into `META-INF/zeroz4j/AGENTS.md`, so the jar is unchanged.
+  `context7.json` now holds only Context7's crawl settings and the library claim, because Context7
+  refused the long rule strings.
+
 ## [0.11.0] — 2026-10-31
 
 This release fills in what three real applications kept building for themselves. Signing in with a

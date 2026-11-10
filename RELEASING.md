@@ -52,7 +52,7 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    Maven coordinate somebody types, such as the archetype smoke test's `-DarchetypeVersion=`: that
    has to be the exact version on the jar, `-SNAPSHOT` and all, and its page says so.
 5. **Read the four documents an AI coding assistant reads, and correct the version in each.**
-   `AGENTS.md`, `llms.txt`, `context7.json` and [`docs/AGENT_PROMPTS.md`](docs/AGENT_PROMPTS.md)
+   `AGENTS.md`, `llms.txt`, `tools/agent-rules/agent-rules.json` and [`docs/AGENT_PROMPTS.md`](docs/AGENT_PROMPTS.md)
    state the version in prose, and nothing in `${revision}` reaches them. This step exists because
    `llms.txt` was once found two releases stale — naming a version long superseded and still calling
    the router unimplemented — and nobody had noticed.
@@ -65,10 +65,9 @@ How a maintainer cuts a release. Not needed to *use* the framework — see
    being prepared. The check is built around that distinction and will not report a sentence that
    says when.
 
-   `context7.json` and `llms.txt` are also where a rule can go quietly out of date, which no check
-   can catch. Read the rules you changed this cycle. The rule list in `context7.json` is now
-   copied into `zerozstack-shared-api.jar` at build time, so it reaches applications as well as
-   the documentation index.
+   `agent-rules.json` and `llms.txt` are also where a rule can go quietly out of date, which no check
+   can catch. Read the rules you changed this cycle. The rule list in `agent-rules.json` is
+   copied into `zerozstack-shared-api.jar` at build time, so it reaches every application.
 6. **The text check runs itself** — `PublishedArtifactTextTest` in `zerozstack-store-eclipsestore`
    reads the text of everything this build publishes: the strings baked into compiled classes, the
    resource files, the generated sources, and the project template inside the archetype. It fails

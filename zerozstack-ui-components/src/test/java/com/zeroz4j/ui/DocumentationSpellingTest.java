@@ -39,7 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The documentation is written in American English, as the style guide requires.
  *
- * <p>Every Markdown file in the checkout, plus {@code llms.txt} and {@code context7.json}, is read
+ * <p>Every Markdown file in the checkout, plus {@code llms.txt}, {@code context7.json} and
+ * {@code agent-rules.json}, is read
  * and any British spelling in its prose fails the build, naming the file, the line and the word to
  * use instead. Before this check the guide said "American spelling" and every page ever written was
  * British — a rule that survives on one person's memory is not a rule.</p>
@@ -246,7 +247,8 @@ class DocumentationSpellingTest {
 
     private static boolean isDocumentation(Path p) {
         String name = p.getFileName().toString();
-        return name.endsWith(".md") || name.equals("llms.txt") || name.equals("context7.json");
+        return name.endsWith(".md") || name.equals("llms.txt") || name.equals("context7.json")
+                || name.equals("agent-rules.json");
     }
 
     private static boolean isIgnoredLocation(Path root, Path p) {

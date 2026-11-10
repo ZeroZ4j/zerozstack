@@ -85,7 +85,7 @@ nothing and make retrieval much better:
   answer well.
 - **Stable headings.** They anchor retrieval and inbound links. Do not rename them casually.
 
-Keep [`context7.json`](https://github.com/ZeroZ4j/zerozstack/blob/main/context7.json)'s `rules` array
+Keep the `rules` array in [`agent-rules.json`](https://github.com/ZeroZ4j/zerozstack/blob/main/tools/agent-rules/agent-rules.json)
 and [`llms.txt`](https://github.com/ZeroZ4j/zerozstack/blob/main/llms.txt) in sync with
 [`AGENTS.md`](https://github.com/ZeroZ4j/zerozstack/blob/main/AGENTS.md). Those two files are the
 compressed projection of that page, and they are how guidance reaches agents working in other
@@ -99,9 +99,13 @@ alone, as long as the sentence says it is about the past: `(0.6.0+)`, `since 0.5
 `added in 0.6.0`. Write one of those forms when you mean history, because a version with no such
 marker is read as a claim about the version you are on, and has to be that one.
 
-The `rules` array in `context7.json` is now also copied into `zerozstack-shared-api.jar` during the
+The `rules` array in `agent-rules.json` is copied into `zerozstack-shared-api.jar` during the
 build, so applications can read the rules for the exact version they depend on. Editing that array
 changes what ships; nothing else has to be touched.
+
+`context7.json` at the repository root is only Context7's claim and crawl settings: which folders to
+index, plus the library URL and public key. Keep rules out of it: Context7 refuses long strings, and
+the rules that lived there before 0.12.0 stopped the library being claimed.
 
 ## Markdown
 

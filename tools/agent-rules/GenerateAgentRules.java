@@ -33,14 +33,15 @@ import java.util.stream.Stream;
  * <p>Maven runs it as a single-file source program — JDK 21 runs a {@code .java} file directly, so
  * there is nothing to compile first and nothing added to the build's dependencies:</p>
  *
- * <pre>java GenerateAgentRules.java &lt;context7.json&gt; &lt;output.md&gt; &lt;version&gt; &lt;repository root&gt;</pre>
+ * <pre>java GenerateAgentRules.java &lt;agent-rules.json&gt; &lt;output.md&gt; &lt;version&gt; &lt;repository root&gt;</pre>
  *
  * <h2>Why generate rather than write</h2>
  *
- * <p>{@code context7.json} already carries the rule list and is the best-maintained assistant
- * document in the repository. A second, hand-written copy would be a second release cycle, and a
- * document describing a version of the framework nobody is running is worse than no document at
- * all. So there is exactly one source, and this program projects it into the jar.</p>
+ * <p>{@code tools/agent-rules/agent-rules.json} carries the rule list and is the best-maintained
+ * assistant document in the repository. It lived in {@code context7.json} before 0.12.0, when
+ * Context7 refused rules that long and the file had to shrink so the library could be claimed.
+ * A second, hand-written copy would be a second release cycle, and a document describing a
+ * version of the framework nobody is running is worse than no document at all. So there is exactly one source, and this program projects it into the jar.</p>
  *
  * <h2>The documentation copy</h2>
  *
@@ -65,7 +66,7 @@ public final class GenerateAgentRules {
 
     public static void main(String[] args) throws IOException {
         if (args.length != 4) {
-            fail("usage: GenerateAgentRules <context7.json> <output.md> <version> <repository root>");
+            fail("usage: GenerateAgentRules <agent-rules.json> <output.md> <version> <repository root>");
         }
         Path source = Path.of(args[0]);
         Path target = Path.of(args[1]);
@@ -326,9 +327,9 @@ public final class GenerateAgentRules {
         line(out, "");
         line(out, "---");
         line(out, "");
-        line(out, "Generated during the framework build from `context7.json` and `docs/UI_COMPONENTS.md` in the");
-        line(out, "ZeroZ Stack repository, which are the single source of these rules. Editing this copy changes");
-        line(out, "nothing; it is written again on every build.");
+        line(out, "Generated during the framework build from `tools/agent-rules/agent-rules.json` and");
+        line(out, "`docs/UI_COMPONENTS.md` in the ZeroZ Stack repository, which are the single source of these");
+        line(out, "rules. Editing this copy changes nothing; it is written again on every build.");
         return out.toString();
     }
 

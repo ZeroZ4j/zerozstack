@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Every sentence that says which version this framework is must say the version this build is.
  *
  * <p>The four documents an AI coding assistant reads — {@code AGENTS.md}, {@code llms.txt},
- * {@code context7.json} and {@code docs/AGENT_PROMPTS.md} — each state the version in prose, and
+ * {@code agent-rules.json} and {@code docs/AGENT_PROMPTS.md} — each state the version in prose, and
  * the release checklist used to mention none of them. {@code llms.txt} was found claiming 0.4.0
  * and describing the router as unimplemented: two releases stale, and nothing had noticed. This
  * check is what noticing looks like now. It reads every Markdown file in the checkout as well, so
@@ -360,7 +360,8 @@ class VersionStatementTest {
 
     private static boolean isDocumentation(Path p) {
         String name = p.getFileName().toString();
-        return name.endsWith(".md") || name.equals("llms.txt") || name.equals("context7.json");
+        return name.endsWith(".md") || name.equals("llms.txt") || name.equals("context7.json")
+                || name.equals("agent-rules.json");
     }
 
     private static boolean isOutOfScope(Path root, Path p) {

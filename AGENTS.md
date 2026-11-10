@@ -762,9 +762,9 @@ This page is for working **on** the framework. Two other documents are for worki
 application built on it, and neither is written by hand:
 
 - **`META-INF/zeroz4j/AGENTS.md` inside `zerozstack-shared-api`.** Generated during this build from
-  the `rules` array in `context7.json`, stamped with this build's version. Every application
+  the `rules` array in `tools/agent-rules/agent-rules.json`, stamped with this build's version. Every application
   resolves that artifact, so an assistant gets rules for the version the project actually depends
-  on rather than for whatever a documentation index is currently serving. Change `context7.json`
+  on rather than for whatever a documentation index is currently serving. Change `tools/agent-rules/agent-rules.json`
   and the jar follows; there is nothing else to edit. The same build copies `docs/**/*.md`,
   `README.md`, `CHANGELOG.md` and `llms.txt` into `META-INF/zeroz4j/docs/` in that jar
   (`tools/agent-rules/GenerateAgentRules.java`), rewrites links to `main` on GitHub into relative

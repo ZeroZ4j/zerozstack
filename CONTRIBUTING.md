@@ -124,7 +124,7 @@ Two habits prevent it entirely:
 `license`, `center`.
 
 `DocumentationSpellingTest` enforces it on every build. It reads every Markdown file in the checkout
-plus `llms.txt` and `context7.json`, and fails naming the file, the line, the word you wrote and the
+plus `llms.txt`, `context7.json` and `agent-rules.json`, and fails naming the file, the line, the word you wrote and the
 word to use. The rule was in the style guide from the beginning and every page ever written broke it,
 which is what a rule with nothing behind it is worth.
 
