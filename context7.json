@@ -1,4 +1,7 @@
 {
+  "url": "https://context7.com/zeroz4j/zerozstack",
+  "public_key": "pk_ji469Rilk6cJm7F3TZAhg",
+  
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "ZeroZ Stack",
   "description": "Pure-Java full-stack framework: Java UI compiled for the browser by TeaVM, binary RPC over a persistent WebSocket, and EclipseStore object-graph persistence. You write no JavaScript, JSON, REST routes or SQL.",
